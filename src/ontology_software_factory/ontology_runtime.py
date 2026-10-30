@@ -244,7 +244,6 @@ def build_agent_task_contract(
             "evidenceRef": f"{'workflow-input' if entity_type == 'Requirement' else 'upstream-agent-artifact'}:{run_id}",
         } for entity_type in input_types],
         "expectedOutputEntityTypes": list(role["outputEntityTypes"]),
-        "skillRefs": skill_refs,
         "acceptanceCriteria": [{
             "id": "AC-ONTOLOGY-BOUND-OUTPUT",
             "description": "Output must match the Role's typed output contract and the pinned ontology version. "
@@ -289,7 +288,6 @@ def validate_agent_task_contract(
         "ontologyDigest": verified["digest"],
         "ontologySchemaVersion": verified["schemaVersion"],
         "expectedOutputEntityTypes": list(role["outputEntityTypes"]),
-        "skillRefs": skill_refs,
     }
     for key, value in expected.items():
         if contract.get(key) != value:
@@ -380,6 +378,7 @@ def validate_agent_result_contract(
     )
     expected = {
         "roleId": role["roleId"],
+        "skillRefs": skill_refs,
         "ontologyVersion": verified["ontologyVersion"],
         "ontologySnapshotId": verified["snapshotId"],
         "ontologyDigest": verified["digest"],
