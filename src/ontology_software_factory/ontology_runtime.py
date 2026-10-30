@@ -148,6 +148,74 @@ def validate_role_ontology_contract(
     return skill_contracts
 
 
+def build_runtime_contract_lock(
+    project_root: str | Path, workflow_definition: dict[str, Any], binding: dict[str, Any]
+) -> dict[str, Any]:
+    """Capture Role and Skill digests once, before a Workflow Run is created."""
+    verified = validate_ontology_binding(binding)
+    root = Path(project_root).resolve()
+    role_ids = sorted({str(step.get("roleId")) for step in workflow_definition.get("steps", [])
+                       if step.get("roleId")})
+    roles: dict[str, Any] = {}
+    for role_id in role_ids:
+        role_path = root / "agents" / "roles" / f"{role_id}.json"
+        try:
+            role_path.resolve().relative_to(root)
+            if role_path.is_symlink():
+                raise OSError("Role definition cannot be a symlink")
+            role = json.loads(role_path.read_text(encoding="utf-8"))
+            skills = validate_role_ontology_contract(role, verified, root)
+            refs = _skill_reference_records(root, skills)
+        except (OSError, json.JSONDecodeError, OntologyBindingError) as exc:
+            raise OntologyBindingError(f"cannot lock Role/Skill contract for {role_id}") from exc
+        roles[role_id] = {
+            "roleDigest": hashlib.sha256(canonical_json(role).encode("utf-8")).hexdigest(),
+            "skillRefs": refs,
+        }
+    lock = {
+        "schemaVersion": "1.0.0",
+        "workflowId": str(workflow_definition.get("id", "")),
+        "workflowVersion": str(workflow_definition.get("version", "")),
+        "ontologySnapshotId": verified["snapshotId"],
+        "ontologyDigest": verified["digest"],
+        "roles": roles,
+    }
+    lock["digest"] = hashlib.sha256(canonical_json(lock).encode("utf-8")).hexdigest()
+    return lock
+
+
+def validate_runtime_contract_lock(
+    project_root: str | Path, lock: dict[str, Any], role_id: str, binding: dict[str, Any]
+) -> dict[str, Any]:
+    """Reject Role or Skill drift between Run creation and any later Agent step."""
+    if not isinstance(lock, dict) or not isinstance(lock.get("roles"), dict):
+        raise OntologyBindingError("Workflow Run is missing its Role/Skill lock")
+    unsigned = {key: value for key, value in lock.items() if key != "digest"}
+    expected_digest = hashlib.sha256(canonical_json(unsigned).encode("utf-8")).hexdigest()
+    if lock.get("digest") != expected_digest:
+        raise OntologyBindingError("Workflow Role/Skill lock digest mismatch")
+    verified = validate_ontology_binding(binding)
+    if lock.get("ontologySnapshotId") != verified["snapshotId"] or lock.get("ontologyDigest") != verified["digest"]:
+        raise OntologyBindingError("Workflow Role/Skill lock is bound to a different ontology snapshot")
+    entry = lock["roles"].get(role_id)
+    if not isinstance(entry, dict):
+        raise OntologyBindingError(f"Role is not included in Workflow Run lock: {role_id}")
+    root = Path(project_root).resolve()
+    role_path = root / "agents" / "roles" / f"{role_id}.json"
+    try:
+        role = json.loads(role_path.read_text(encoding="utf-8"))
+        skills = validate_role_ontology_contract(role, verified, root)
+        refs = _skill_reference_records(root, skills)
+    except (OSError, json.JSONDecodeError, OntologyBindingError) as exc:
+        raise OntologyBindingError(f"cannot verify locked Role/Skill files for {role_id}") from exc
+    role_digest = hashlib.sha256(canonical_json(role).encode("utf-8")).hexdigest()
+    if entry.get("roleDigest") != role_digest or entry.get("skillRefs") != refs:
+        raise OntologyBindingError(
+            f"Role/Skill content drift detected for {role_id}; this Run is pinned to its creation-time contract"
+        )
+    return {"role": role, "skills": skills, "skillRefs": refs, "roleDigest": role_digest}
+
+
 def _skill_reference_records(project_root: str | Path, skills: list[dict[str, Any]]) -> list[dict[str, str]]:
     root = Path(project_root)
     refs = []
