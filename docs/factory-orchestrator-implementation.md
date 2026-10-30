@@ -32,6 +32,14 @@
 - Extended the transactional Worker Outbox to emit terminal Factory Assignment results. `WorkflowOutboxRelay` routes these events to `WorkflowEngine.apply_factory_assignment_event()`; the Workflow Inbox deduplicates deliveries.
 - Added `factory_assignment_results` persistence and `factory.assignment.succeeded` / `factory.assignment.failed` / `factory.assignment.dead_letter` Workflow events. Event payloads retain identifiers, evidence types and artifact digests; result payloads and evidence descriptors are stored separately.
 - Paused Workflow Runs defer result delivery; terminal Workflow Runs consume late results as ignored events without reviving the run.
+
+### Harness Tool Gateway integration
+
+- `OpenAIAgentsRuntime` now constructs a per-execution `ToolRegistry` and `HarnessRuntime` using trusted in-process handlers. Agent-visible tool functions call the Harness gateway; they no longer execute their handler body directly.
+- Tool availability is the intersection of Role declarations, runtime tool implementations and `policies/tool-permissions.json`. ToolRegistry validates each input against `tools/registry.json` before invoking the trusted handler.
+- The gateway applies per-Agent-task tool-call budgets, approval checks, the configured file Kill Switch and metadata-only audit records. Shared context fields are assembled under the Role context allowlist and included in the pinned Agent context.
+- The gateway covers the tools exposed by the OpenAI Agents SDK adapter, including workspace tools when an isolated workspace is present. Other Agent providers and non-Agent connector execution paths are not yet routed through this gateway.
+- Current budgets are in-memory and scoped to an Agent execution. Actual provider token usage is not yet sampled into Harness, and budget usage is not shared across multiple Assignments in one Workflow Run. The default audit path is `.local-runs/harness-audit.jsonl`; `FACTORY_HARNESS_AUDIT` and `FACTORY_HARNESS_KILL_SWITCH` can override the audit and Kill Switch paths.
 - High/critical plans or any plan with `requiresHumanApproval=true` are not dispatched by this endpoint. A separate independent approval workflow is still required before such plans can execute.
 - Existing fixed-stage Agent Proposal workflow and its outbox/inbox path remain unchanged.
 
@@ -58,7 +66,7 @@ make test
 
 ## Explicit implementation boundaries
 
-The `factory-orchestrator` Agent Role is not yet automatically invoked to produce a plan. A submitted plan can now instantiate Assignment Worker tasks through an explicit dispatch API. The dispatcher derives Phase progress from Worker task records; Phase state is not yet an independently persisted Workflow state machine. Multi-process scheduling coordination, automated plan generation, independent approval records and Harness-wide tool-call mediation remain pending. Plan submission is a recorded planning artifact; it is not an approval or authorization to execute.
+The `factory-orchestrator` Agent Role is not yet automatically invoked to produce a plan. A submitted plan can now instantiate Assignment Worker tasks through an explicit dispatch API. The dispatcher derives Phase progress from Worker task records; Phase state is not yet an independently persisted Workflow state machine. Multi-process scheduling coordination, automated plan generation, independent approval records, cross-Agent persistent budgets, actual model token accounting and mediation for non-OpenAI Agent/connector execution paths remain pending. Plan submission is a recorded planning artifact; it is not an approval or authorization to execute.
 
 The ontology module manifest is not yet a module package manager. It does not independently publish module releases, resolve external module dependencies, migrate instances or update a graph database. Existing ontology snapshots, digest approvals and consumer-impact analysis remain the operational governance mechanisms.
 
