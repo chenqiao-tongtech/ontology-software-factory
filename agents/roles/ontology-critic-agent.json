@@ -2,20 +2,86 @@
   "roleId": "ontology-critic-agent",
   "displayName": "本体独立评审 Agent",
   "purpose": "独立检查候选本体中的重复概念、关系过度推断、证据缺失、术语歧义与能力问题覆盖缺口，输出带影响对象的审查发现。",
-  "inputEntityTypes": ["Artifact", "OntologyCandidate"],
-  "outputEntityTypes": ["Artifact"],
-  "skillIds": ["ontology-critic-review"],
-  "toolIds": ["ontology.candidate.read", "ontology.candidate.validate", "ontology.candidate.evaluate", "documents.read"],
-  "allowedActions": ["ontology.candidate.read", "ontology.candidate.validate", "ontology.candidate.evaluate", "artifact.read", "documents.read"],
-  "forbiddenActions": ["ontology.publish", "ontology.discovery.run", "ontology.candidate.write", "repository.merge.protected_branch", "production.deploy", "secrets.read.raw", "policy.modify", "agent.approve_self", "cross_tenant.read"],
+  "inputEntityTypes": [
+    "Artifact",
+    "OntologyCandidate"
+  ],
+  "outputEntityTypes": [
+    "Artifact"
+  ],
+  "skillIds": [
+    "ontology-critic-review"
+  ],
+  "toolIds": [
+    "documents.read",
+    "ontology.candidate.evaluate",
+    "ontology.candidate.read",
+    "ontology.candidate.validate",
+    "ontology.definition.read",
+    "source.catalog.read"
+  ],
+  "allowedActions": [
+    "ontology.candidate.read",
+    "ontology.candidate.validate",
+    "ontology.candidate.evaluate",
+    "artifact.read",
+    "documents.read"
+  ],
+  "forbiddenActions": [
+    "ontology.publish",
+    "ontology.discovery.run",
+    "ontology.candidate.write",
+    "repository.merge.protected_branch",
+    "production.deploy",
+    "secrets.read.raw",
+    "policy.modify",
+    "agent.approve_self",
+    "cross_tenant.read"
+  ],
   "contextPolicy": {
-    "sharedContextFields": ["task_id", "tenant_id", "project_id", "candidate_id", "candidate_digest", "source_manifest"],
-    "taskLocalContextFields": ["review_findings", "duplicate_clusters", "unsupported_relation_report", "coverage_gaps"],
-    "restrictedContextFields": ["raw_passwords", "API_keys", "production_credentials", "other_tenant_source_code"],
+    "sharedContextFields": [
+      "task_id",
+      "tenant_id",
+      "project_id",
+      "candidate_id",
+      "candidate_digest",
+      "source_manifest"
+    ],
+    "taskLocalContextFields": [
+      "review_findings",
+      "duplicate_clusters",
+      "unsupported_relation_report",
+      "coverage_gaps"
+    ],
+    "restrictedContextFields": [
+      "raw_passwords",
+      "API_keys",
+      "production_credentials",
+      "other_tenant_source_code"
+    ],
     "tenantBoundary": "same_tenant_and_project_only",
-    "untrustedInputs": ["candidate_json", "external_documents", "repository_files", "tool_outputs"]
+    "untrustedInputs": [
+      "candidate_json",
+      "external_documents",
+      "repository_files",
+      "tool_outputs"
+    ]
   },
-  "humanApprovalRequiredFor": ["ontology_acceptance", "ontology_version_promotion", "policy_candidate"],
-  "handoffRequirements": ["审查结果必须指出受影响的 termId/relationId 和原因。", "发现 blocker 或证据冲突时不得建议自动发布。", "Critic 不能批准自己的输入候选，也不能覆盖候选文件。"],
-  "escalationConditions": [{"condition": "存在阻断级语义冲突或来源无法确认", "handoffToRoleId": "human-domain-owner", "severity": "blocking"}]
+  "humanApprovalRequiredFor": [
+    "ontology_acceptance",
+    "ontology_version_promotion",
+    "policy_candidate"
+  ],
+  "handoffRequirements": [
+    "审查结果必须指出受影响的 termId/relationId 和原因。",
+    "发现 blocker 或证据冲突时不得建议自动发布。",
+    "Critic 不能批准自己的输入候选，也不能覆盖候选文件。"
+  ],
+  "escalationConditions": [
+    {
+      "condition": "存在阻断级语义冲突或来源无法确认",
+      "handoffToRoleId": "human-domain-owner",
+      "severity": "blocking"
+    }
+  ]
 }
