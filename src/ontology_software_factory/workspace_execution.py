@@ -60,7 +60,10 @@ class WorkspaceManager:
     def open(self, run_id: str) -> Path:
         if not RUN_ID_RE.fullmatch(run_id):
             raise WorkspacePolicyError("invalid workflow run ID")
-        target = (self.workspace_root / run_id).resolve()
+        raw_target = self.workspace_root / run_id
+        if raw_target.is_symlink():
+            raise WorkspacePolicyError("workspace root cannot be a symlink")
+        target = raw_target.resolve()
         if self.workspace_root not in target.parents:
             raise WorkspacePolicyError("workspace path escaped workspace root")
         if not target.exists():
@@ -81,7 +84,10 @@ class WorkspaceExecution:
                  run_id: str, max_file_bytes: int = 128_000,
                  max_write_bytes: int = 1_000_000, max_output_chars: int = 100_000):
         self.project_root = Path(project_root).resolve()
-        self.root = Path(workspace_path).resolve()
+        raw_workspace = Path(workspace_path)
+        if raw_workspace.is_symlink():
+            raise WorkspacePolicyError("workspace root cannot be a symlink")
+        self.root = raw_workspace.resolve()
         self.run_id = run_id
         if not RUN_ID_RE.fullmatch(run_id):
             raise WorkspacePolicyError("invalid workflow run ID")
