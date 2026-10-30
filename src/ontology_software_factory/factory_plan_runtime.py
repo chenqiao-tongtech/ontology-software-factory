@@ -152,6 +152,12 @@ class FactoryPlanDispatcher:
         by_key = {item["idempotencyKey"]: item for item in current_tasks}
         projection = _phase_projection(plan, by_key)
         phase_status = {item["phaseId"]: item["status"] for item in projection}
+        if self.workflow_store is not None:
+            persisted_phase_status = {
+                item["phaseId"]: item["status"]
+                for item in self.workflow_store.list_factory_plan_phases(run["id"], plan["planId"])
+            }
+            phase_status.update(persisted_phase_status)
         active_count = sum(1 for item in current_tasks if item["status"] in {"queued", "running", "retry_wait"}
                            and item.get("payload", {}).get("factoryPlanId") == plan["planId"])
         slots = max(0, int(plan["limits"]["maxParallelAssignments"]) - active_count)
