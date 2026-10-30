@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
+from .ontology_runtime import build_agent_task_contract, load_active_ontology_binding
+
 
 class AgentRunner(Protocol):
     def run_agent(self, role_id: str, task_input: dict[str, Any]) -> dict[str, Any]: ...
@@ -58,8 +60,11 @@ class SoftwareFactoryPipeline:
 
     STAGES = ["requirement-analyst", "solution-architect", "implementation-agent", "test-agent", "security-reviewer"]
 
-    def __init__(self, agent_runner: AgentRunner, *, artifact_root: str | Path):
+    def __init__(self, agent_runner: AgentRunner, *, artifact_root: str | Path,
+                 ontology_binding: dict[str, Any] | None = None):
         self.agent_runner = agent_runner
+        self.project_root = Path(getattr(agent_runner, "project_root", Path(__file__).resolve().parents[2])).resolve()
+        self.ontology_binding = ontology_binding
         self.artifact_root = Path(artifact_root).resolve()
 
     def run(self, requirement: str, *, run_id: str | None = None) -> PipelineResult:
@@ -91,7 +96,22 @@ class SoftwareFactoryPipeline:
         try:
             for role_id in self.STAGES:
                 payload = self._stage_input(role_id, common, outputs, proposed_files)
-                execution = self.agent_runner.run_agent(role_id, payload)
+                if hasattr(self.agent_runner, "project_root"):
+                    binding = self.ontology_binding or load_active_ontology_binding(self.project_root)
+                    role_path = self.project_root / "agents" / "roles" / f"{role_id}.json"
+                    role = json.loads(role_path.read_text(encoding="utf-8"))
+                    task_contract = build_agent_task_contract(
+                        self.project_root, role=role, binding=binding, run_id=safe_run_id,
+                        step_id=role_id, attempt=1, objective=requirement.strip(),
+                        timeout_seconds=1800, max_attempts=3,
+                        idempotency_key=f"pipeline:{safe_run_id}:{role_id}:1",
+                    )
+                    execution = self.agent_runner.run_agent(
+                        role_id, payload, ontology_binding=binding, task_contract=task_contract
+                    )
+                else:
+                    # Deterministic test doubles and legacy protocol adapters remain usable in tests.
+                    execution = self.agent_runner.run_agent(role_id, payload)
                 output = execution.get("output")
                 if not isinstance(output, dict):
                     raise PipelineValidationError(f"Agent {role_id} did not return a JSON object")
