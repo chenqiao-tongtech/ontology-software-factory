@@ -24,22 +24,32 @@
     export AGENT_TRACE_ENABLED=false
     make agent-workflow-console
 
-先在 Portal 中建立并批准活动本体快照，再在 Agent Workflow Console 中创建运行。工作区会在第一次 Agent 步骤执行时按 run ID 创建，并在同一 Workflow Run 后续步骤中复用。
+先在 Portal 中建立并批准活动本体快照，再在 Agent Workflow Console 中创建运行。创建 Run 时会同时计算所有 Agent Role JSON、关联 Skill JSON 和 SKILL.md 的 SHA-256，并将 Workflow ID/版本、本体快照 ID/摘要及 Role/Skill 摘要写入 Run 的 runtimeContractLock。每个 Worker 步骤执行前重新核验；任一 Role/Skill 内容发生变化，当前 Run 会 fail closed，不会静默使用新版本。修改后需创建新 Run。该摘要是完整性校验，不是由外部 KMS 签名的供应链证明。
 
 ## 测试执行开关
 
-**默认不在宿主机执行 Agent 生成的代码。** tests.run 在未显式开启时返回 blocked，不会启动子进程。
+**默认不执行 Agent 生成的代码。** 推荐使用 Docker 容器执行固定测试套件。先构建项目测试镜像：
 
-只有在可信本地演示环境中、理解代码执行风险后，才可显式开启：
+    docker build -f runners/container/Dockerfile.test-runner -t ontology-software-factory-test-runner:py311-v1 .
+
+确认 Docker Engine 可用且本地已有该镜像后，在可信开发环境显式开启：
+
+    export FACTORY_ENABLE_CONTAINER_EXECUTION=1
+
+容器使用 `--network=none`、只读 rootfs、丢弃 Linux capabilities、`no-new-privileges`、PID/内存/CPU 限制、非 root 数字 UID/GID，并且只挂载当前 Run 工作区。镜像使用 `--pull=never`，运行时不会自动下载镜像。镜像构建阶段需要按企业镜像策略联网安装 Python 包；生产部署建议将基础镜像固定到 digest，并在 CI 构建、签名和扫描后推送到内部 Registry。
+
+仅当 Docker 不可用、且确认代码完全可信时，才允许本地演示模式（不推荐）：
 
     export FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION=1
+
+如果同时设置了容器和宿主机开关，容器执行优先。
 
 允许的 suite ID：
 
 - kafka-profile-regression：运行 Kafka 配置验证回归测试。
 - python-unit-tests：运行工作区中的完整 unittest 测试集。
 
-执行器使用固定 argv、shell=False、最小化环境变量、无 stdin 和最长 120 秒超时；结果包含 suite ID、退出码、耗时、命令标识、日志与 JSON 报告 SHA-256。模型不能提交自定义 shell 字符串。
+执行器使用固定 argv、shell=False、无 stdin 和最长 120 秒超时；结果包含 suite ID、退出码、耗时、执行后端、日志与 JSON 报告 SHA-256。模型不能提交自定义 shell 字符串。Docker 镜像缺失时返回 incomplete，不会自动 pull，也不会回退到宿主机执行。
 
 **重要：固定命令和独立目录并不等于 OS 沙箱。** 目前宿主机进程仍可访问该用户有权访问的文件和系统资源。不要在生产机或含敏感凭据的开发机上开启此开关执行不可信代码。生产执行必须先接入容器/微虚机沙箱、只读基础镜像、资源配额、网络隔离、短期凭据和审计。
 
@@ -75,11 +85,20 @@
 
 实际文件只在相应工具执行后产生。上面是目录示意，不表示每次运行都会有所有报告。JSON 报告和日志各自计算 SHA-256；报告中的 status 仅代表本地工具执行状态，不自动等同于质量门禁最终 PASS。
 
+## Git Worktree 候选分支
+
+默认仍使用独立仓库副本。若项目根目录是 Git 仓库且 Git CLI 已安装，可显式切换为真实本地 Worktree 和每 Run 本地分支：
+
+    export FACTORY_WORKSPACE_BACKEND=git-worktree
+
+创建后会得到 `agent/run-<run-id>` 本地分支。Agent 的候选写入落在该 Worktree 中，Patch 仍会保存为可审查证据。该能力不 push、不创建 GitHub/GitLab PR、不 commit，也不 merge；运行时不暴露 Git 任意命令。若分支或 Worktree 已存在但与预期不一致，会拒绝复用。
+
 ## 当前未实现的边界
 
-- 尚未创建真实 Git worktree/分支，也没有 push、PR 或 merge 能力；repository.branch.write 是隔离副本内的候选文件写入工具。
-- 尚未把测试和扫描进程放入容器/微虚机；默认关闭宿主机执行。
-- 尚未实现 run 级 Skill 文件锁；Ontology Snapshot 已在 Run 级固定，Skill digest 仍按 Task/Result 记录。
+- Git Worktree 目前只创建本地分支；尚未实现受控 commit、远程 push、PR 创建和审批后合并。
+- Docker 隔离已覆盖固定 Python 测试套件；Semgrep/Gitleaks/Trivy 仍是显式启用的本机 CLI 扫描器，不应把它们描述为容器内扫描。
+- 尚未把扫描报告自动接入所有产品交付 Quality Gate；Agent Workflow 会保存测试/扫描报告摘要，最终放行策略仍需由独立质量门禁消费。
+- Run 级 Role/Skill 锁定当前通过内容摘要检测漂移；不把 Skill 历史文件内容复制进 Run，也不提供外部签名或 KMS 证明。
 - 尚未把扫描报告自动接入所有产品交付 Quality Gate；当前工具输出可作为证据输入，仍需策略层消费并判定。
 - 工作区位于本机临时目录，不是多租户生产存储；清理和保留周期由本地操作员负责。
 
