@@ -59,7 +59,7 @@ def _walk_enums(value: Any):
 
 def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None = None) -> dict:
     """Build a verifiable graph from repository definitions and explicit typed fields."""
-    mapping = reference_map or DEFAULT_REFERENCE_MAP
+    mapping = reference_map or _read_json(root / "ontology" / "consumer-reference-map.json") or DEFAULT_REFERENCE_MAP
     classes = set()
     for item in ontology.get("classes", []):
         if isinstance(item, dict) and item.get("name"):
