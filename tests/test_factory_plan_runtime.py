@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 import unittest
@@ -94,6 +95,13 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         self.assertEqual([item["assignmentId"] for item in second["enqueued"]], ["design-solution"])
         self.assertEqual(second["execution"]["phases"][0]["status"], "succeeded")
         self.assertEqual(second["execution"]["phases"][1]["status"], "running")
+
+    def test_dispatch_rejects_mutated_persisted_plan_payload(self):
+        tampered = copy.deepcopy(self.plan_record)
+        tampered["plan"]["objective"] = "tampered after persistence"
+        with self.assertRaisesRegex(ValueError, "digest mismatch"):
+            self.dispatcher.dispatch_ready(self.run, tampered)
+        self.assertEqual(self.task_store.list_tasks(), [])
 
     def test_dispatch_is_idempotent_and_parallelism_is_bounded(self):
         first = self.dispatcher.dispatch_ready(self.run, self.plan_record)
