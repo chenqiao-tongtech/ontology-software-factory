@@ -13,7 +13,7 @@ from ontology_software_factory.integration import WorkflowOutboxRelay
 from ontology_software_factory.ontology_runtime import build_runtime_contract_lock
 from ontology_software_factory.ontology_versioning import create_snapshot
 from ontology_software_factory.task_runtime import SQLiteTaskStore, TaskWorker
-from ontology_software_factory.workflow_engine import WorkflowEngine
+from ontology_software_factory.workflow_engine import WorkflowEngine, WorkflowError
 from ontology_software_factory.workflow_store import SQLiteWorkflowStore
 
 ROOT = Path(__file__).resolve().parents[1]
