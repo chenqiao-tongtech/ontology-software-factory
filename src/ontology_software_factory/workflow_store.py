@@ -80,7 +80,8 @@ class SQLiteWorkflowStore:
               ON factory_assignment_results(run_id, plan_id);
             CREATE TABLE IF NOT EXISTS factory_plan_approvals (
                 plan_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, plan_digest TEXT NOT NULL,
-                status TEXT NOT NULL, requested_at TEXT NOT NULL, decided_at TEXT, actor TEXT, reason TEXT
+                status TEXT NOT NULL, requested_at TEXT NOT NULL, requested_by TEXT NOT NULL DEFAULT 'factory-orchestrator',
+                decided_at TEXT, actor TEXT, reason TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_factory_plan_approvals_run
               ON factory_plan_approvals(run_id, requested_at);
@@ -108,6 +109,13 @@ class SQLiteWorkflowStore:
             CREATE INDEX IF NOT EXISTS idx_harness_usage_events_run
               ON harness_usage_events(run_id, occurred_at);
         """)
+        approval_columns = {
+            row["name"] for row in self._conn.execute("PRAGMA table_info(factory_plan_approvals)").fetchall()
+        }
+        if "requested_by" not in approval_columns:
+            self._conn.execute(
+                "ALTER TABLE factory_plan_approvals ADD COLUMN requested_by TEXT NOT NULL DEFAULT 'factory-orchestrator'"
+            )
         usage_columns = {
             row["name"] for row in self._conn.execute("PRAGMA table_info(harness_usage_events)").fetchall()
         }
@@ -237,8 +245,8 @@ class SQLiteWorkflowStore:
                     return {"planId": plan_id, "workflowRunId": run_id, "status": "submitted", "digest": digest, "createdAt": existing["created_at"], "plan": json.loads(existing["payload_json"])}, False
                 self._conn.execute("INSERT INTO factory_orchestrator_plans(plan_id,run_id,payload_sha256,payload_json,created_at) VALUES(?,?,?,?,?)", (plan_id, run_id, digest, plan_json, event["at"]))
                 self._conn.execute(
-                    "INSERT INTO factory_plan_approvals(plan_id,run_id,plan_digest,status,requested_at) VALUES(?,?,?,'pending',?)",
-                    (plan_id, run_id, digest, event["at"]),
+                    "INSERT INTO factory_plan_approvals(plan_id,run_id,plan_digest,status,requested_at,requested_by) VALUES(?,?,?,'pending',?,?)",
+                    (plan_id, run_id, digest, event["at"], str(event.get("actor", "factory-orchestrator"))),
                 )
                 for phase in plan.get("phases", []):
                     self._conn.execute(
@@ -271,7 +279,7 @@ class SQLiteWorkflowStore:
     def get_factory_plan_approval(self, plan_id: str) -> dict[str, Any] | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT plan_id,run_id,plan_digest,status,requested_at,decided_at,actor,reason "
+                "SELECT plan_id,run_id,plan_digest,status,requested_at,requested_by,decided_at,actor,reason "
                 "FROM factory_plan_approvals WHERE plan_id=?", (plan_id,)
             ).fetchone()
         if row is None:
@@ -279,21 +287,21 @@ class SQLiteWorkflowStore:
         return {
             "planId": row["plan_id"], "workflowRunId": row["run_id"],
             "planDigest": row["plan_digest"], "status": row["status"],
-            "requestedAt": row["requested_at"], "decidedAt": row["decided_at"],
-            "actor": row["actor"], "reason": row["reason"],
+            "requestedAt": row["requested_at"], "requestedBy": row["requested_by"],
+            "decidedAt": row["decided_at"], "actor": row["actor"], "reason": row["reason"],
         }
 
     def list_factory_plan_approvals(self, run_id: str) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT plan_id,run_id,plan_digest,status,requested_at,decided_at,actor,reason "
+                "SELECT plan_id,run_id,plan_digest,status,requested_at,requested_by,decided_at,actor,reason "
                 "FROM factory_plan_approvals WHERE run_id=? ORDER BY requested_at,plan_id", (run_id,)
             ).fetchall()
         return [{
             "planId": row["plan_id"], "workflowRunId": row["run_id"],
             "planDigest": row["plan_digest"], "status": row["status"],
-            "requestedAt": row["requested_at"], "decidedAt": row["decided_at"],
-            "actor": row["actor"], "reason": row["reason"],
+            "requestedAt": row["requested_at"], "requestedBy": row["requested_by"],
+            "decidedAt": row["decided_at"], "actor": row["actor"], "reason": row["reason"],
         } for row in rows]
 
     def decide_factory_plan_approval(
@@ -312,7 +320,7 @@ class SQLiteWorkflowStore:
             try:
                 self._conn.execute("BEGIN IMMEDIATE")
                 row = self._conn.execute(
-                    "SELECT run_id,plan_digest,status FROM factory_plan_approvals WHERE plan_id=?",
+                    "SELECT run_id,plan_digest,status,requested_by FROM factory_plan_approvals WHERE plan_id=?",
                     (plan_id,),
                 ).fetchone()
                 if row is None or row["run_id"] != run_id:
@@ -321,6 +329,9 @@ class SQLiteWorkflowStore:
                 if row["status"] != "pending":
                     self._conn.rollback()
                     raise ValueError(f"plan approval is already {row['status']}")
+                if actor == row["requested_by"]:
+                    self._conn.rollback()
+                    raise ValueError("Plan submitter cannot approve or reject the same Plan")
                 self._conn.execute(
                     "UPDATE factory_plan_approvals SET status=?,decided_at=?,actor=?,reason=? WHERE plan_id=? AND status='pending'",
                     (decision, event["at"], actor, reason, plan_id),
