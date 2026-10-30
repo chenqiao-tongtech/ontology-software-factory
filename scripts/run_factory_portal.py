@@ -32,6 +32,8 @@ from ontology_software_factory.source_connectors import (
     SourceConnectorError,
     SourceConnectorRegistry,
 )
+from ontology_software_factory.remote_connectors import RemoteRepositoryConnector
+from ontology_software_factory.database_connectors import PostgreSQLSchemaConnector, MySQLSchemaConnector
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps" / "factory-portal" / "index.html"
@@ -174,87 +176,57 @@ def _remote_json(url: str, headers: dict[str, str]) -> tuple[int, object]:
 
 
 def scan_remote_repository(source: dict, result: dict) -> dict:
-    parsed = urlparse(str(source.get("url", "")))
-    if parsed.scheme != "https" or parsed.username or parsed.password or parsed.query or parsed.fragment:
-        result.update(status="invalid-url", message="Remote connector requires a credential-free HTTPS repository URL")
-        return result
-    segments = [x for x in parsed.path.strip("/").split("/") if x]
-    provider = source["type"]
-    if provider == "github":
-        if parsed.hostname not in {"github.com", "www.github.com"} or len(segments) != 2:
-            result.update(status="invalid-url", message="GitHub source must look like https://github.com/owner/repository")
-            return result
-        owner, repo = segments
-        repo = repo.removesuffix(".git")
-        api_root = f"https://api.github.com/repos/{quote(owner, safe='')}/{quote(repo, safe='')}"
-        headers = {"Accept": "application/vnd.github+json", "User-Agent": "ontology-software-factory-local-portal", "X-GitHub-Api-Version": "2022-11-28"}
-        token = os.getenv(str(source.get("tokenEnv", "GITHUB_TOKEN")))
-        if token: headers["Authorization"] = f"Bearer {token}"
-        try:
-            status, info = _remote_json(api_root, headers)
-            if status != 200 or not isinstance(info, dict):
-                state = "auth-required" if status in {401, 404} and not token else ("rate-limited" if status == 403 else "unavailable")
-                result.update(status=state, message=f"GitHub API returned HTTP {status}; check repository visibility, token permissions or rate limit", details={"httpStatus": status, "provider": "github"})
-                return result
-            branch = info.get("default_branch") or "main"
-            tree_status, tree = _remote_json(f"{api_root}/git/trees/{quote(branch, safe='')}?recursive=1", headers)
-            if tree_status != 200 or not isinstance(tree, dict):
-                result.update(status="unavailable", message=f"GitHub tree API returned HTTP {tree_status}", details={"httpStatus": tree_status, "provider": "github"})
-                return result
-            items = [item for item in tree.get("tree", []) if item.get("type") == "blob" and Path(item.get("path", "")).suffix.lower() in ALLOWED_SUFFIXES and not any(part in SKIP_DIRS or part.startswith(".") for part in item.get("path", "").split("/"))]
-            result.update(status="connected", assetCount=len(items), assets=[{"path": i.get("path"), "kind": Path(i.get("path", "")).suffix.lower().lstrip("."), "bytes": i.get("size", 0)} for i in items[:50]], details={"provider": "github", "defaultBranch": branch, "visibility": info.get("visibility", "unknown"), "private": info.get("private"), "lastPushedAt": info.get("pushed_at"), "treeTruncated": bool(tree.get("truncated")), "tokenConfigured": bool(token), "mode": "repository/file metadata only; no full clone"}, message="GitHub repository metadata and file tree fetched over HTTPS")
-            return result
-        except ConnectionError as exc:
-            result.update(status="unavailable", message=f"GitHub API connection failed ({exc}); check network/proxy configuration", details={"provider": "github"})
-            return result
-    if provider == "gitlab":
-        if parsed.hostname != "gitlab.com" or len(segments) < 2:
-            result.update(status="invalid-url", message="GitLab.com source must be https://gitlab.com/group/project; self-hosted instances are not yet configured")
-            return result
-        project_path = "/".join(segments).removesuffix(".git")
-        api_root = f"https://gitlab.com/api/v4/projects/{quote(project_path, safe='')}"
-        headers = {"Accept": "application/json", "User-Agent": "ontology-software-factory-local-portal"}
-        token = os.getenv(str(source.get("tokenEnv", "GITLAB_TOKEN")))
-        if token: headers["PRIVATE-TOKEN"] = token
-        try:
-            status, info = _remote_json(api_root, headers)
-            if status != 200 or not isinstance(info, dict):
-                state = "auth-required" if status in {401, 403, 404} and not token else "unavailable"
-                result.update(status=state, message=f"GitLab API returned HTTP {status}; check project visibility or GITLAB_TOKEN", details={"httpStatus": status, "provider": "gitlab"})
-                return result
-            branch = info.get("default_branch") or "main"
-            tree_items = []
-            for page in range(1, 7):
-                url = f"{api_root}/repository/tree?recursive=true&per_page=100&page={page}&ref={quote(branch, safe='')}"
-                tree_status, listing = _remote_json(url, headers)
-                if tree_status != 200 or not isinstance(listing, list): break
-                tree_items.extend(listing)
-                if len(listing) < 100: break
-            items = [item for item in tree_items if item.get("type") == "blob" and Path(item.get("path", "")).suffix.lower() in ALLOWED_SUFFIXES and not any(part in SKIP_DIRS or part.startswith(".") for part in item.get("path", "").split("/"))]
-            result.update(status="connected", assetCount=len(items), assets=[{"path": i.get("path"), "kind": Path(i.get("path", "")).suffix.lower().lstrip("."), "bytes": None} for i in items[:50]], details={"provider": "gitlab", "defaultBranch": branch, "visibility": info.get("visibility", "unknown"), "lastActivityAt": info.get("last_activity_at"), "tokenConfigured": bool(token), "mode": "repository/file metadata only; no full clone"}, message="GitLab.com project metadata and file tree fetched over HTTPS")
-            return result
-        except ConnectionError as exc:
-            result.update(status="unavailable", message=f"GitLab API connection failed ({exc}); check network/proxy configuration", details={"provider": "gitlab"})
-            return result
-    result.update(status="unsupported", message="Unsupported remote provider")
+    """Use the common connector registry for GitHub and GitLab metadata scans."""
+    try:
+        registry = build_source_connector_registry(ROOT, remote_fetcher=_remote_json, source=source)
+        scanned = registry.scan(source["type"], source["id"], source.get("url", ""))
+        assets = [{"path": asset.locator, "kind": (asset.metadata or {}).get("suffix", "").lstrip("."),
+                   "bytes": asset.size_bytes, "assetId": asset.asset_id,
+                   "sourceRevision": (asset.metadata or {}).get("sourceRevision")} for asset in scanned.assets[:50]]
+        first_meta = scanned.assets[0].metadata if scanned.assets else {}
+        token_env = str(source.get("tokenEnv") or ("GITHUB_TOKEN" if source["type"] == "github" else "GITLAB_TOKEN"))
+        result.update(status=scanned.status, assetCount=len(scanned.assets), assets=assets,
+            details={"provider": source["type"], "connector": "RemoteRepositoryConnector",
+                     "defaultBranch": (first_meta or {}).get("defaultBranch"),
+                     "sourceRevision": (first_meta or {}).get("sourceRevision"),
+                     "tokenConfigured": bool(os.getenv(token_env)), "warnings": list(scanned.warnings),
+                     "mode": "repository/file metadata only; no file bodies downloaded"},
+            message="Remote repository metadata fetched through SourceConnector registry")
+    except SourceConnectorError as exc:
+        message = str(exc)
+        status = "invalid-url" if "HTTPS" in message or "path is invalid" in message else "unavailable"
+        result.update(status=status, message=message, details={"provider": source["type"], "connector": "RemoteRepositoryConnector"})
+    except ConnectionError as exc:
+        result.update(status="unavailable", message=f"Remote provider connection failed ({type(exc).__name__})", details={"provider": source["type"]})
     return result
 
 
-def build_source_connector_registry(allowed_root: Path) -> SourceConnectorRegistry:
-    """Build the explicit local connector registry used by Portal source scans."""
+def build_source_connector_registry(allowed_root: Path, *, remote_fetcher=None, source: dict | None = None) -> SourceConnectorRegistry:
+    """Build the explicit connector registry used by Portal source scans."""
     registry = SourceConnectorRegistry()
     registry.register(LocalDirectoryConnector([allowed_root], source_type="repository", max_files=600, max_file_bytes=1_500_000))
     registry.register(LocalDirectoryConnector([allowed_root], source_type="documents", max_files=600, max_file_bytes=1_500_000))
     registry.register(SQLiteSchemaConnector([allowed_root]))
+    if remote_fetcher is not None:
+        for provider in ("github", "gitlab"):
+            token_default = "GITHUB_TOKEN" if provider == "github" else "GITLAB_TOKEN"
+            token_env = str((source or {}).get("tokenEnv") or token_default) if (source or {}).get("type") == provider else token_default
+            registry.register(RemoteRepositoryConnector(provider, remote_fetcher, token_env=token_env, max_assets=600))
+    if source:
+        allowed_hosts = source.get("allowedHosts", [])
+        if source.get("type") == "postgresql" and allowed_hosts:
+            registry.register(PostgreSQLSchemaConnector(allowed_hosts=allowed_hosts))
+        if source.get("type") == "mysql" and allowed_hosts:
+            registry.register(MySQLSchemaConnector(allowed_hosts=allowed_hosts))
     return registry
 
 
 def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
     path_label = source.get("url", source.get("path", ""))
     result = {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": str(path_label), "enabled": bool(source.get("enabled", True)), "fixture": bool(source.get("fixture")), "lastSyncAt": now_iso(), "status": "error", "assetCount": 0, "assets": [], "details": {}}
-    if source.get("type") in {"github", "gitlab"}:
+    if source.get("type") in {"github", "gitlab", "postgresql", "mysql"}:
         if not allow_remote:
-            result.update(status="not-synced", message="Remote repository is not queried by background refresh; use explicit Sync to fetch metadata")
+            result.update(status="not-synced", message="Remote repository/database is not queried by background refresh; use explicit Sync to fetch metadata")
             return result
         if not source.get("enabled", True):
             result.update(status="disabled", message="Source disabled")
@@ -270,6 +242,8 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
             tables = [
                 {
                     "name": asset.name,
+                    "assetId": asset.asset_id,
+                    "path": asset.locator,
                     "kind": asset.kind,
                     "columns": [
                         {
@@ -299,6 +273,22 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
         except (SourceConnectorError, OSError, ValueError) as exc:
             result["message"] = f"SQLite metadata read failed: {type(exc).__name__}"
             return result
+    if source["type"] in {"postgresql", "mysql"}:
+        try:
+            registry = build_source_connector_registry(ROOT, source=source)
+            scanned = registry.scan(source["type"], source["id"], str(source.get("connectionEnv", "")))
+            tables = [{"name": asset.name, "kind": asset.kind, "path": asset.locator,
+                       "schema": (asset.metadata or {}).get("schema"),
+                       "columns": (asset.metadata or {}).get("columns", []), "assetId": asset.asset_id}
+                      for asset in scanned.assets]
+            result.update(status=scanned.status, assetCount=len(tables), assets=tables[:30],
+                details={"tables": tables, "connector": "PostgreSQLSchemaConnector" if source["type"] == "postgresql" else "MySQLSchemaConnector",
+                         "mode": "read-only information_schema metadata", "warnings": list(scanned.warnings)},
+                message="Database schema metadata read in read-only mode; business rows were not queried")
+            return result
+        except (SourceConnectorError, OSError, ValueError) as exc:
+            result.update(status="error", message=f"Database schema scan failed: {type(exc).__name__}")
+            return result
     if source["type"] not in {"repository", "documents"}:
         result["message"] = f"Unsupported local source type: {source['type']}"
         return result
@@ -310,6 +300,7 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
                 "kind": (asset.metadata or {}).get("suffix", "").lstrip("."),
                 "bytes": asset.size_bytes,
                 "sha256": asset.content_sha256,
+                "assetId": asset.asset_id,
             }
             for asset in scanned.assets[:30]
         ]
@@ -351,8 +342,8 @@ def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> l
                 cache_fresh = False
         if cache_fresh:
             result = cached
-        elif source.get("type") in {"github", "gitlab"} and not allow_remote:
-            result = cached or {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": source.get("url", ""), "enabled": source.get("enabled", True), "fixture": False, "lastSyncAt": None, "status": "not-synced", "assetCount": 0, "assets": [], "details": {}, "message": "Remote repository is not queried by background refresh; use explicit Sync to fetch metadata"}
+        elif source.get("type") in {"github", "gitlab", "postgresql", "mysql"} and not allow_remote:
+            result = cached or {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": source.get("url", source.get("connectionEnv", "")), "enabled": source.get("enabled", True), "fixture": False, "lastSyncAt": None, "status": "not-synced", "assetCount": 0, "assets": [], "details": {}, "message": "Remote repository/database is not queried by background refresh; use explicit Sync to fetch metadata"}
         else:
             result = scan_source(source, allow_remote=allow_remote)
             updated_cache[source["id"]] = result
@@ -410,6 +401,20 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
     """Extract a small, deterministic candidate term set; no document bodies are returned to UI."""
     terms: dict[str, dict] = {}
     source_cfg = next((s for s in source_configs() if s["id"] == scan["id"]), {"path": "."})
+    scan_details = scan.get("details", {}) if isinstance(scan.get("details"), dict) else {}
+    def evidence_record(path: str, kind: str, asset: dict) -> dict:
+        return {
+            "sourceId": scan["id"],
+            "sourceName": source_cfg.get("name"),
+            "sourceType": source_cfg.get("type"),
+            "provider": scan_details.get("provider"),
+            "path": path,
+            "kind": kind,
+            "assetId": asset.get("assetId"),
+            "contentSha256": asset.get("sha256"),
+            "sourceRevision": asset.get("sourceRevision") or scan_details.get("sourceRevision"),
+            "scannedAt": scan.get("lastSyncAt"),
+        }
     for asset in scan.get("assets", []):
         if source_cfg.get("type") == "sqlite":
             table_name = str(asset.get("name", "")).strip()
@@ -424,7 +429,7 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
                     if len(label) < 3 or len(label) > 90:
                         continue
                     key = label.lower()
-                    evidence = {"sourceId": scan["id"], "path": f"sqlite:{table_name}", "kind": kind}
+                    evidence = evidence_record(asset.get("path", f"sqlite:{table_name}"), kind, asset)
                     if key in terms:
                         if evidence not in terms[key]["evidence"]:
                             terms[key]["evidence"].append(evidence)
@@ -446,7 +451,7 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
                 label = label.strip()
                 if len(label) >= 3 and label.lower() not in {"index", "main", "init", "test", "spec", "readme"}:
                     key = label.lower()
-                    evidence = {"sourceId": scan["id"], "path": rel, "kind": "remote-file-path"}
+                    evidence = evidence_record(rel, "remote-file-path", asset)
                     if key in terms:
                         if evidence not in terms[key]["evidence"]: terms[key]["evidence"].append(evidence)
                     else:
@@ -473,7 +478,7 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
                     continue
                 key = label.lower()
                 existing = terms.get(key)
-                evidence = {"sourceId": scan["id"], "path": rel, "kind": kind}
+                evidence = evidence_record(rel, kind, asset)
                 if existing:
                     if evidence not in existing["evidence"]: existing["evidence"].append(evidence)
                 else:
