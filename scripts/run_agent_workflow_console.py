@@ -161,7 +161,6 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                 requirement = body.get("requirement", run_input.get("requirement", ""))
                 result = self.orchestrator_service.generate_and_submit(
                     self.engine, run, requirement=str(requirement),
-                    requested_by=str(body.get("requestedBy", run.get("requestedBy", "local-operator"))),
                 )
                 self._json(201, result)
                 return
