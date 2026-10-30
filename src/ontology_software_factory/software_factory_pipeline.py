@@ -14,7 +14,8 @@ from .ontology_runtime import build_agent_task_contract, load_active_ontology_bi
 
 
 class AgentRunner(Protocol):
-    def run_agent(self, role_id: str, task_input: dict[str, Any], *,\n                  ontology_binding: dict[str, Any], task_contract: dict[str, Any]) -> dict[str, Any]: ...
+    def run_agent(self, role_id: str, task_input: dict[str, Any], *,
+                  ontology_binding: dict[str, Any], task_contract: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class PipelineValidationError(RuntimeError):
