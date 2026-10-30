@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .factory_orchestration import validate_factory_plan
 from .ontology_runtime import (
     build_agent_task_contract,
     build_agent_result_contract,
@@ -96,11 +97,24 @@ class FactoryPlanDispatcher:
 
     def dispatch_ready(self, run: dict[str, Any], plan_record: dict[str, Any]) -> dict[str, Any]:
         plan = plan_record["plan"]
+        if _digest(plan) != plan_record.get("digest"):
+            raise ValueError("persisted Factory AgentPlan digest mismatch")
         if run.get("id") != plan.get("workflowRunId"):
             raise ValueError("plan and Workflow Run IDs do not match")
         if run.get("status") != "running":
             raise ValueError("only a running Workflow Run can dispatch Factory assignments")
         binding = validate_ontology_binding(run.get("ontologyBinding") or {})
+        validate_factory_plan(self.project_root, plan, ontology_binding=binding)
+        ontology = binding["ontology"]
+        extensions = ontology.get("operationalExtensions", {}) if isinstance(ontology.get("operationalExtensions"), dict) else {}
+        pinned_classes = {
+            item["name"] for item in ontology.get("classes", []) + extensions.get("classes", [])
+            if isinstance(item, dict) and item.get("name")
+        }
+        for phase in plan["phases"]:
+            for assignment in phase["assignments"]:
+                if not set(assignment["outputEntityTypes"]) <= pinned_classes:
+                    raise ValueError("assignment output types are not present in the pinned ontology snapshot")
         if plan.get("riskAssessment", {}).get("requiresHumanApproval"):
             return {"status": "approval_required", "enqueued": [], "execution": get_factory_plan_execution(self.task_store, plan_record)}
         for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion"):
