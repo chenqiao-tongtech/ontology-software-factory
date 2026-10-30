@@ -203,7 +203,7 @@ flowchart TB
 - Tool Registry：工具定义与权限交集；
 - Harness：统一策略、上下文、预算、凭据、隔离和证据控制。
 
-**现状：** 团队拓扑、角色文件、Skill 文件、Skill Schema、Agent SDK 适配器、结构化输出和工具权限交集已有实现。本阶段新增 SkillRegistry，支持 Skill Schema 校验、角色/能力目录引用校验、指令文件读取及内容摘要锁；该 Registry 尚未接入 Agent Workflow 的运行时加载链路。新增 HarnessRuntime 本地参考实现，提供按角色字段白名单组装上下文、租户/项目绑定、工具调用预算、模型 Token 预算、独立审批回调、元数据审计和文件型 Kill Switch。HarnessRuntime 当前由调用方显式注入 ToolRegistry，尚未成为 OpenAIAgentsRuntime 的默认中介，也未提供企业 PDP、Secret Broker 或分布式预算存储。
+**现状：** 团队拓扑、角色文件、Skill 文件、Skill Schema、Agent SDK 适配器、结构化输出和工具权限交集已有实现。Agent Runtime 新增本体定义只读、连接器目录只读和依赖声明只读三类工具，并通过角色 Tool ID 与策略矩阵限制可见范围。本阶段新增 SkillRegistry，支持 Skill Schema 校验、角色/能力目录引用校验、指令文件读取及内容摘要锁；该 Registry 尚未接入 Agent Workflow 的运行时加载链路。新增 HarnessRuntime 本地参考实现，提供按角色字段白名单组装上下文、租户/项目绑定、工具调用预算、模型 Token 预算、独立审批回调、元数据审计和文件型 Kill Switch。HarnessRuntime 当前由调用方显式注入 ToolRegistry，尚未成为 OpenAIAgentsRuntime 的默认中介，也未提供企业 PDP、Secret Broker 或分布式预算存储。
 
 **执行约束：** Agent 最大轮次受配置限制；默认工具范围有限；SDK tracing 默认关闭；生产部署、秘密读取、策略修改、自我审批和跨租户读取为全局拒绝动作。
 
@@ -262,13 +262,13 @@ flowchart TB
 
 **职责：** 采集模型用量、运行状态、任务事件、质量状态、证据引用、同步状态和本地成本估算。
 
-**现状：** 本地 JSONL/SQLite 聚合和只读监控视图已有实现；未知费率保留 unknown。OpenTelemetry 采集、分布式 Trace、指标时序库、告警路由、SLO、租户隔离和防篡改审计仍待建设。
+**现状：** 本地 JSONL/SQLite 聚合和只读监控视图已有实现；未知费率保留 unknown。Portal 统一监控 API 已增加 Harness 与 Connector 审计 JSONL 的元数据聚合，前端显示调用总量、状态分布和操作分布。审计路径通过 FACTORY_HARNESS_AUDIT 与 FACTORY_CONNECTOR_AUDIT 配置，默认位于 .local-runs。OpenTelemetry 采集、分布式 Trace、指标时序库、告警路由、SLO、租户隔离和防篡改审计仍待建设。
 
 ### 4.11 S11 横切安全治理
 
 **组件：** Agent Permission Matrix、Tool Permissions、Context Policy、Quality Policy、Connector Policy、Approval Records、Secret References。
 
-**现状：** 角色工具权限、默认拒绝动作、来源访问边界、审批检查和凭据环境变量引用已有局部实现。企业 IAM、OIDC、统一 PDP、Secret Broker、租户级策略、密钥轮换和集中审计服务仍待建设。
+**现状：** 角色工具权限、默认拒绝动作、来源访问边界、审批检查和凭据环境变量引用已有局部实现。HarnessRuntime 提供本地上下文/预算/工具审计和 Kill Switch 参考实现；企业 IAM、OIDC、统一 PDP、Secret Broker、租户级策略、密钥轮换和集中审计服务仍待建设。
 
 ## 5. 核心数据对象与持久化
 
