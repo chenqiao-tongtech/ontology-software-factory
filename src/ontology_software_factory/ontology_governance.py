@@ -73,6 +73,13 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
     issues: list[dict] = []
+    dependencies = mapping.get("dependencyFields", {})
+    role_skill_field = dependencies.get("roleSkills", "skillIds")
+    role_tool_field = dependencies.get("roleTools", "toolIds")
+    skill_role_field = dependencies.get("skillCompatibleRoles", "compatibleRoleIds")
+    skill_tool_field = dependencies.get("skillTools", "requiredToolIds")
+    workflow_role_field = dependencies.get("workflowRole", "roleId")
+    workflow_skill_field = dependencies.get("workflowSkill", "skillId")
     roles: dict[str, dict] = {}
     skills: dict[str, dict] = {}
     tools: dict[str, dict] = {}
@@ -100,9 +107,9 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
                 issues.append({"code": "unknown-ontology-class", "consumer": node_id, "class": name})
             else:
                 add_edge("class:" + name, node_id, "consumes-ontology-class")
-        for skill_id in data.get("skillIds", []):
+        for skill_id in data.get(role_skill_field, []):
             add_edge(node_id, "skill:" + str(skill_id), "uses-skill")
-        for tool_id in data.get("toolIds", []):
+        for tool_id in data.get(role_tool_field, []):
             add_edge(node_id, "tool:" + str(tool_id), "uses-tool")
 
     for path in sorted(root.glob(str(mapping["skillGlob"]))):
@@ -120,11 +127,11 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
                 issues.append({"code": "unknown-ontology-class", "consumer": node_id, "class": name})
             else:
                 add_edge("class:" + name, node_id, "consumes-ontology-class")
-        for role_id in data.get("compatibleRoleIds", []):
+        for role_id in data.get(skill_role_field, []):
             add_edge(node_id, "role:" + str(role_id), "compatible-with-role")
             if role_id not in roles:
                 issues.append({"code": "unknown-compatible-role", "consumer": node_id, "target": role_id})
-        for tool_id in data.get("requiredToolIds", []):
+        for tool_id in data.get(skill_tool_field, []):
             add_edge(node_id, "tool:" + str(tool_id), "requires-tool")
 
     for path in sorted(root.glob(str(mapping["workflowGlob"]))):
@@ -138,8 +145,8 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
             step_node = workflow_node + "/step:" + str(step.get("id", "unknown"))
             add_node(step_node, "workflow-step", step.get("name", step.get("id", "step")), str(path.relative_to(root)))
             add_edge(workflow_node, step_node, "contains-step")
-            role_id = step.get("roleId")
-            skill_id = step.get("skillId")
+            role_id = step.get(workflow_role_field)
+            skill_id = step.get(workflow_skill_field)
             if role_id:
                 role_target = ("human-role:" if step.get("executionMode") == "human" else "role:") + str(role_id)
                 if step.get("executionMode") == "human":
