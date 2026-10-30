@@ -17,12 +17,13 @@
     "test-evidence-collection"
   ],
   "toolIds": [
-    "catalog.read",
-    "workspace.read",
-    "tests.run",
     "artifacts.read",
+    "catalog.read",
+    "contract.validate",
+    "source.catalog.read",
     "test-report.write",
-    "contract.validate"
+    "tests.run",
+    "workspace.read"
   ],
   "allowedActions": [
     "requirement.read",
