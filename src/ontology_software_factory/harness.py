@@ -258,9 +258,9 @@ class HarnessRuntime:
                     raise HarnessDenied("valid independent approval record is required")
             with self._lock:
                 usage = self._usage_for(run_id)
-                if usage.tool_calls >= self.budget.max_tool_calls:
+                if usage.tool_calls >= min(self.budget.max_tool_calls, self.budget.max_run_tool_calls):
                     status = "budget_exceeded"
-                    raise HarnessBudgetExceeded("per-Agent tool call budget exceeded")
+                    raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
             if self.usage_store is not None:
                 recorded = self._record_usage(
                     run_id=run_id, task_id=task_id, event_type="tool.invoked",
