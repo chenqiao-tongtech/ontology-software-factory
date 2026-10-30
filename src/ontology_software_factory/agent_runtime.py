@@ -358,13 +358,22 @@ class OpenAIAgentsRuntime:
         harness_context = harness.assemble_context(
             principal, run_id=run_id, task_id=task_id,
             shared={
+                "workflow_run_id": run_id,
                 "tenant_id": principal.tenant_id, "project_id": principal.project_id,
                 "task_id": task_id, "ontology_version": binding["ontologyVersion"],
+                "ontology_snapshot_id": binding["snapshotId"],
                 "acceptance_criteria": task_input.get("acceptance_criteria", []),
+                "workflow_state": task_input.get("workflow_state", "running"),
+                "budget": task_input.get("budget") or task_input.get("run_budget", {}),
             },
             task_local={
                 "source_request_excerpt": str(task_input.get("source_requirement") or task_input.get("objective") or "")[:4000],
                 "candidate_acceptance_criteria": task_input.get("acceptance_criteria", []),
+                "planning_assumptions": task_input.get("planning_assumptions", []),
+                "phase_candidates": task_input.get("phase_candidates", []),
+                "assignment_candidates": task_input.get("assignment_candidates", []),
+                "risk_assessment": task_input.get("risk_assessment", {}),
+                "escalation_reasons": task_input.get("escalation_reasons", []),
             },
             evidence_refs=[str(item) for item in task_input.get("evidence_refs", [])],
         )
