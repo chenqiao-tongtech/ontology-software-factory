@@ -136,7 +136,7 @@ class FactoryPlanDispatcher:
                     "execution": get_factory_plan_execution(self.task_store, plan_record, self.workflow_store)}
         if approval.get("status") != "approved":
             return {"status": "approval_required", "enqueued": [],
-                    "execution": get_factory_plan_execution(self.task_store, plan_record)}
+                    "execution": get_factory_plan_execution(self.task_store, plan_record, self.workflow_store)}
         for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion"):
             if plan.get("ontologyBinding", {}).get(key) != binding.get(key):
                 raise ValueError(f"plan is not pinned to this Workflow Run: {key}")
