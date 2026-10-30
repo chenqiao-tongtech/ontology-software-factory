@@ -57,7 +57,8 @@ def _walk_enums(value: Any):
             yield from _walk_enums(child)
 
 
-def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None = None,\n                         additional_ontologies: list[dict] | None = None) -> dict:
+def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None = None,
+                         additional_ontologies: list[dict] | None = None) -> dict:
     """Build a verifiable graph from repository definitions and explicit typed fields."""
     mapping = reference_map or _read_json(root / "ontology" / "consumer-reference-map.json") or DEFAULT_REFERENCE_MAP
     classes = set()
