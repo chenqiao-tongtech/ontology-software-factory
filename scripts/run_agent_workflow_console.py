@@ -188,6 +188,24 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                 )
                 self._json(201 if result["created"] else 200, result)
                 return
+            if path.endswith("/orchestrator-plan/retry-phase") and path.startswith("/api/runs/"):
+                run_id = unquote(path[len("/api/runs/"):-len("/orchestrator-plan/retry-phase")].strip("/"))
+                phase = self.engine.retry_factory_orchestrator_phase(
+                    run_id, str(body.get("planId", "")), str(body.get("phaseId", "")),
+                    actor=str(body.get("actor", "")), reason=str(body.get("reason", "")),
+                )
+                run = self.engine.get_run(run_id)
+                detail = self.engine.get_run_detail(run_id)
+                plan_record = next(
+                    (item for item in detail["orchestratorPlans"] if item["planId"] == str(body.get("planId", ""))),
+                    None,
+                )
+                if plan_record is None:
+                    self._json(404, {"error": "orchestrator plan not found"})
+                    return
+                dispatch = self.plan_dispatcher.dispatch_ready(run, plan_record)
+                self._json(200, {"phase": phase, "dispatch": dispatch})
+                return
             if path.endswith("/orchestrator-plan/dispatch") and path.startswith("/api/runs/"):
                 run_id = unquote(path[len("/api/runs/"):-len("/orchestrator-plan/dispatch")].strip("/"))
                 run = self.engine.get_run(run_id)
