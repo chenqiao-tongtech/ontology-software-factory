@@ -86,7 +86,7 @@ def load_active_ontology_binding(project_root: str | Path, snapshot_id: str | No
 
 
 def _semver(value: Any) -> bool:
-    return isinstance(value, str) and re.fullmatch(r"[0-9]+\\.[0-9]+\\.[0-9]+", value) is not None
+    return isinstance(value, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value) is not None
 
 
 def validate_role_ontology_contract(
