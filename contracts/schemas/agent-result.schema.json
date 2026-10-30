@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ontology-software-factory/agent-result.schema.json",
+  "title": "Agent Result Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "taskId",
+    "roleId",
+    "status",
+    "summary",
+    "outputs",
+    "evidenceRefs",
+    "humanReviewRequired",
+    "errors",
+    "completedAt"
+  ],
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "pattern": "^sf:task:[A-Za-z0-9._-]+$"
+    },
+    "roleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]+$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "succeeded",
+        "blocked",
+        "failed",
+        "needs_human_review"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entityId",
+          "entityType",
+          "schemaVersion"
+        ],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "Requirement",
+              "Product",
+              "Component",
+              "Version",
+              "Artifact",
+              "Build",
+              "TestRun",
+              "Vulnerability",
+              "Release",
+              "Deployment",
+              "Incident"
+            ]
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "uri": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceType",
+          "refId"
+        ],
+        "properties": {
+          "evidenceType": {
+            "type": "string",
+            "enum": [
+              "tool_run",
+              "test_report",
+              "schema_validation",
+              "review_record",
+              "artifact_digest",
+              "log_ref"
+            ]
+          },
+          "refId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "humanReviewRequired": {
+      "type": "boolean"
+    },
+    "approvalRequestId": {
+      "type": "string"
+    },
+    "blockedReasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "proposedNextRoleId": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ontology-software-factory/catalog/asset-catalog.schema.json",
+  "title": "Software Factory Asset Catalog",
+  "description": "Catalog contract for reusable software assets. Semantic relations are additionally checked by the Python validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["catalogId", "catalogSchemaVersion", "generatedAt", "products", "components", "artifacts", "compatibilityRules", "customerConfigurations", "customPatches"],
+  "properties": {
+    "catalogId": {"$ref": "#/$defs/id"},
+    "catalogSchemaVersion": {"$ref": "#/$defs/semver"},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "products": {"type": "array", "items": {"$ref": "#/$defs/product"}},
+    "components": {"type": "array", "items": {"$ref": "#/$defs/component"}},
+    "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "compatibilityRules": {"type": "array", "items": {"$ref": "#/$defs/compatibilityRule"}},
+    "customerConfigurations": {"type": "array", "items": {"$ref": "#/$defs/customerConfiguration"}},
+    "customPatches": {"type": "array", "items": {"$ref": "#/$defs/customPatch"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"},
+    "semver": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$"},
+    "lifecycleStatus": {"type": "string", "enum": ["active", "deprecated", "eol", "archived"]},
+    "license": {
+      "type": "object", "additionalProperties": false,
+      "required": ["spdxId", "reviewStatus"],
+      "properties": {
+        "spdxId": {"type": "string", "minLength": 1},
+        "reviewStatus": {"type": "string", "enum": ["pending", "approved", "rejected", "not_applicable"]},
+        "reviewedBy": {"type": "string", "minLength": 1},
+        "reviewedAt": {"type": "string", "format": "date-time"},
+        "obligations": {"type": "array", "items": {"type": "string"}},
+        "notes": {"type": "string"}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceType", "uri"],
+      "properties": {
+        "sourceType": {"type": "string", "enum": ["upstream", "vendor", "internal", "mirror", "customer"]},
+        "uri": {"type": "string", "format": "uri"},
+        "revision": {"type": "string", "minLength": 1},
+        "retrievedAt": {"type": "string", "format": "date-time"},
+        "verifiedBy": {"type": "string", "minLength": 1},
+        "notes": {"type": "string"}
+      }
+    },
+    "dependency": {
+      "type": "object", "additionalProperties": false,
+      "required": ["componentId", "versionConstraint", "resolvedVersionId", "scope", "optional"],
+      "properties": {
+        "componentId": {"$ref": "#/$defs/id"},
+        "versionConstraint": {"type": "string", "minLength": 1, "description": "MVP supports exact SemVer, ^, ~, and comma-separated comparison ranges."},
+        "resolvedVersionId": {"$ref": "#/$defs/id"},
+        "scope": {"type": "string", "enum": ["runtime", "build", "test", "development", "optional"]},
+        "optional": {"type": "boolean"},
+        "declaredBy": {"type": "string", "enum": ["maintainer", "manifest", "scanner", "inferred"]},
+        "evidenceArtifactIds": {"type": "array", "items": {"$ref": "#/$defs/id"}}
+      }
+    },
+    "version": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "channel", "lifecycleStatus", "publishedAt", "sourceRevision", "integrityDigest", "artifactIds", "dependencies"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "version": {"$ref": "#/$defs/semver"},
+        "channel": {"type": "string", "enum": ["stable", "preview", "beta", "legacy"]},
+        "lifecycleStatus": {"$ref": "#/$defs/lifecycleStatus"},
+        "publishedAt": {"type": "string", "format": "date-time"},
+        "sourceRevision": {"type": "string", "minLength": 1},
+        "integrityDigest": {"$ref": "#/$defs/sha256"},
+        "artifactIds": {"type": "array", "items": {"$ref": "#/$defs/id"}},
+        "sbomArtifactId": {"$ref": "#/$defs/id"},
+        "provenanceArtifactId": {"$ref": "#/$defs/id"},
+        "dependencies": {"type": "array", "items": {"$ref": "#/$defs/dependency"}},
+        "supportedPlatforms": {"type": "array", "items": {"type": "string"}},
+        "notes": {"type": "string"}
+      }
+    },
+    "product": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "owner", "lifecycleStatus", "componentIds"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "name": {"type": "string", "minLength": 1},
+        "owner": {"type": "string", "minLength": 1},
+        "lifecycleStatus": {"$ref": "#/$defs/lifecycleStatus"},
+        "componentIds": {"type": "array", "items": {"$ref": "#/$defs/id"}, "minItems": 1, "uniqueItems": true},
+        "description": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "component": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "kind", "owner", "lifecycleStatus", "source", "license", "versions"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "name": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "enum": ["middleware", "library", "service", "template", "tool", "base-image", "extension", "configuration"]},
+        "owner": {"type": "string", "minLength": 1},
+        "lifecycleStatus": {"$ref": "#/$defs/lifecycleStatus"},
+        "source": {"$ref": "#/$defs/source"},
+        "license": {"$ref": "#/$defs/license"},
+        "versions": {"type": "array", "items": {"$ref": "#/$defs/version"}, "minItems": 1},
+        "defaultVersionId": {"$ref": "#/$defs/id"},
+        "description": {"type": "string"},
+        "supportPolicy": {"type": "string", "enum": ["community", "vendor", "internal", "best-effort"]}
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "uri", "digest", "mediaType", "createdAt", "verificationStatus", "originType"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {"type": "string", "enum": ["source-archive", "binary-package", "container-image", "config-bundle", "documentation", "test-report", "security-report", "sbom", "provenance", "patch-package", "other"]},
+        "uri": {"type": "string", "format": "uri"},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "mediaType": {"type": "string", "minLength": 1},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "verificationStatus": {"type": "string", "enum": ["pending", "verified", "failed", "not-applicable"]},
+        "originType": {"type": "string", "enum": ["upstream", "vendor", "internal-build", "customer", "manual"]},
+        "sourceUri": {"type": "string", "format": "uri"},
+        "sourceRevision": {"type": "string"},
+        "producer": {"type": "string"},
+        "notes": {"type": "string"}
+      }
+    },
+    "compatibilityRule": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sourceVersionId", "targetVersionId", "status", "evidenceArtifactIds"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "sourceVersionId": {"$ref": "#/$defs/id"},
+        "targetVersionId": {"$ref": "#/$defs/id"},
+        "status": {"type": "string", "enum": ["compatible", "incompatible", "untested"]},
+        "evidenceArtifactIds": {"type": "array", "items": {"$ref": "#/$defs/id"}},
+        "testedAt": {"type": "string", "format": "date-time"},
+        "notes": {"type": "string"}
+      }
+    },
+    "override": {
+      "type": "object", "additionalProperties": false,
+      "required": ["key", "value"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"},
+        "value": {"type": ["string", "number", "integer", "boolean"]},
+        "reason": {"type": "string"}
+      }
+    },
+    "customerConfiguration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "tenantId", "productId", "configurationVersion", "status", "owner", "createdAt", "baseVersionIds", "overrides", "secretRefs", "customPatchIds"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "tenantId": {"type": "string", "minLength": 1},
+        "productId": {"$ref": "#/$defs/id"},
+        "configurationVersion": {"$ref": "#/$defs/semver"},
+        "status": {"type": "string", "enum": ["draft", "validated", "approved", "deprecated"]},
+        "owner": {"type": "string", "minLength": 1},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "baseVersionIds": {"type": "array", "items": {"$ref": "#/$defs/id"}, "minItems": 1, "uniqueItems": true},
+        "overrides": {"type": "array", "items": {"$ref": "#/$defs/override"}},
+        "secretRefs": {"type": "array", "items": {"type": "string", "pattern": "^(vault|secretmanager|aws-secretsmanager|azure-keyvault)://[^\\s]+$"}},
+        "customPatchIds": {"type": "array", "items": {"$ref": "#/$defs/id"}},
+        "approvedBy": {"type": "string"},
+        "approvedAt": {"type": "string", "format": "date-time"},
+        "notes": {"type": "string"}
+      }
+    },
+    "customPatch": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "tenantId", "componentId", "baseVersionId", "patchVersion", "sourceRepoUri", "commitId", "owner", "status", "securityReviewStatus", "artifactId", "testEvidenceArtifactIds"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "tenantId": {"type": "string", "minLength": 1},
+        "componentId": {"$ref": "#/$defs/id"},
+        "baseVersionId": {"$ref": "#/$defs/id"},
+        "patchVersion": {"$ref": "#/$defs/semver"},
+        "sourceRepoUri": {"type": "string", "format": "uri"},
+        "commitId": {"type": "string", "pattern": "^[A-Fa-f0-9]{7,64}$"},
+        "owner": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "enum": ["draft", "tested", "approved", "deprecated"]},
+        "securityReviewStatus": {"type": "string", "enum": ["pending", "pass", "waived", "fail"]},
+        "artifactId": {"$ref": "#/$defs/id"},
+        "testEvidenceArtifactIds": {"type": "array", "items": {"$ref": "#/$defs/id"}},
+        "notes": {"type": "string"}
+      }
+    }
+  }
+}

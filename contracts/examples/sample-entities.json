@@ -1,0 +1,280 @@
+[
+  {
+    "id": "sf:requirement:REQ-001",
+    "entityType": "Requirement",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-intake",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "ticket:REQ-001"
+    },
+    "name": "事件服务部署配置支持多副本",
+    "description": "演示需求；不表示任何生产环境已部署。",
+    "status": "approved",
+    "priority": "p1",
+    "acceptanceCriteria": [
+      {
+        "id": "AC-001",
+        "description": "副本数不少于 3，且配置语法校验通过。",
+        "verificationMethod": "integration",
+        "required": true
+      }
+    ],
+    "targetProductId": "sf:product:event-platform"
+  },
+  {
+    "id": "sf:product:event-platform",
+    "entityType": "Product",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "asset-catalog",
+      "recordedAt": "2026-10-27T08:00:00Z"
+    },
+    "name": "示例事件平台交付包",
+    "owner": "platform-team",
+    "lifecycleStatus": "active",
+    "componentIds": [
+      "sf:component:event-broker"
+    ]
+  },
+  {
+    "id": "sf:component:event-broker",
+    "entityType": "Component",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "asset-catalog",
+      "recordedAt": "2026-10-27T08:00:00Z"
+    },
+    "name": "示例事件代理组件",
+    "kind": "middleware",
+    "owner": "platform-team",
+    "lifecycleStatus": "active",
+    "currentVersionId": "sf:version:event-broker-1.0.0",
+    "licenseSpdx": "Apache-2.0"
+  },
+  {
+    "id": "sf:version:event-broker-1.0.0",
+    "entityType": "Version",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "asset-catalog",
+      "recordedAt": "2026-10-27T08:00:00Z"
+    },
+    "componentId": "sf:component:event-broker",
+    "version": "1.0.0",
+    "channel": "stable",
+    "sourceUri": "https://example.invalid/demo-source"
+  },
+  {
+    "id": "sf:artifact:package-001",
+    "entityType": "Artifact",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-build",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "build:BUILD-001"
+    },
+    "artifactKind": "binary_package",
+    "mediaType": "application/octet-stream",
+    "uri": "artifact://demo/package-001",
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "createdByBuildId": "sf:build:BUILD-001"
+  },
+  {
+    "id": "sf:artifact:test-report-001",
+    "entityType": "Artifact",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-test-run",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "test:TEST-001"
+    },
+    "artifactKind": "test_report",
+    "mediaType": "application/json",
+    "uri": "artifact://demo/test-report-001",
+    "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "createdByBuildId": "sf:build:BUILD-001"
+  },
+  {
+    "id": "sf:artifact:security-report-001",
+    "entityType": "Artifact",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-security",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "scan:SEC-001"
+    },
+    "artifactKind": "security_report",
+    "mediaType": "application/json",
+    "uri": "artifact://demo/security-report-001",
+    "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  {
+    "id": "sf:build:BUILD-001",
+    "entityType": "Build",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-runner",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "run:BUILD-001"
+    },
+    "componentId": "sf:component:event-broker",
+    "versionId": "sf:version:event-broker-1.0.0",
+    "sourceRevision": "0123456789abcdef0123456789abcdef01234567",
+    "status": "succeeded",
+    "startedAt": "2026-10-27T08:00:00Z",
+    "completedAt": "2026-10-27T08:02:00Z",
+    "artifactIds": [
+      "sf:artifact:package-001",
+      "sf:artifact:test-report-001"
+    ],
+    "runner": "local-demo",
+    "logsUri": "logs://demo/BUILD-001"
+  },
+  {
+    "id": "sf:test-run:TEST-001",
+    "entityType": "TestRun",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-test-run",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "run:TEST-001"
+    },
+    "buildId": "sf:build:BUILD-001",
+    "suite": "baseline-integration",
+    "status": "passed",
+    "total": 12,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "executedAt": "2026-10-27T08:03:00Z",
+    "reportArtifactId": "sf:artifact:test-report-001"
+  },
+  {
+    "id": "sf:vulnerability:VULN-001",
+    "entityType": "Vulnerability",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-scanner",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "finding:VULN-001"
+    },
+    "componentId": "sf:component:event-broker",
+    "affectedVersionIds": [
+      "sf:version:event-broker-1.0.0"
+    ],
+    "severity": "low",
+    "status": "fixed",
+    "finding": {
+      "scanner": "demo-scanner",
+      "database": "demo-feed",
+      "detectedAt": "2026-10-27T08:00:00Z"
+    },
+    "findingId": "DEMO-LOW-001",
+    "summary": "用于测试引用关系的演示安全发现；不代表真实漏洞。"
+  },
+  {
+    "id": "sf:release:REL-001",
+    "entityType": "Release",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-release",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "release:REL-001"
+    },
+    "productId": "sf:product:event-platform",
+    "versionIds": [
+      "sf:version:event-broker-1.0.0"
+    ],
+    "artifactIds": [
+      "sf:artifact:package-001"
+    ],
+    "buildIds": [
+      "sf:build:BUILD-001"
+    ],
+    "testRunIds": [
+      "sf:test-run:TEST-001"
+    ],
+    "evidenceArtifactIds": [
+      "sf:artifact:test-report-001",
+      "sf:artifact:security-report-001"
+    ],
+    "vulnerabilityReview": "pass",
+    "status": "candidate"
+  },
+  {
+    "id": "sf:deployment:DEP-001",
+    "entityType": "Deployment",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-deployment",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "deploy:DEP-001"
+    },
+    "releaseId": "sf:release:REL-001",
+    "environment": "staging",
+    "targetRef": "demo-staging",
+    "status": "succeeded",
+    "startedAt": "2026-10-27T08:10:00Z",
+    "completedAt": "2026-10-27T08:12:00Z"
+  },
+  {
+    "id": "sf:incident:INC-001",
+    "entityType": "Incident",
+    "schemaVersion": "1.0.0",
+    "ontologyVersion": "1.0.0",
+    "tenantId": "demo-tenant",
+    "createdAt": "2026-10-27T08:00:00Z",
+    "source": {
+      "system": "demo-monitor",
+      "recordedAt": "2026-10-27T08:00:00Z",
+      "ref": "incident:INC-001"
+    },
+    "summary": "用于示例关系校验的演示事件，非真实生产事件。",
+    "severity": "low",
+    "status": "resolved",
+    "deploymentId": "sf:deployment:DEP-001",
+    "affectedComponentIds": [
+      "sf:component:event-broker"
+    ],
+    "evidenceArtifactIds": [
+      "sf:artifact:test-report-001"
+    ]
+  }
+]

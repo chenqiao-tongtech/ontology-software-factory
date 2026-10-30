@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ontology-software-factory.local/contracts/agent-handoff.schema.json",
+  "title": "Agent Handoff Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "handoffId",
+    "schemaVersion",
+    "runId",
+    "taskId",
+    "attemptId",
+    "fromRoleId",
+    "toRoleId",
+    "handoffType",
+    "inputRefs",
+    "contextScope",
+    "allowedToolIds",
+    "deadline",
+    "budget",
+    "acceptanceCriteria",
+    "failurePolicy"
+  ],
+  "properties": {
+    "handoffId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attemptId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fromRoleId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "toRoleId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "handoffType": {
+      "enum": [
+        "sequential",
+        "parallel-branch",
+        "review-request",
+        "repair-loop"
+      ]
+    },
+    "inputRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "refType",
+          "refId"
+        ],
+        "properties": {
+          "refType": {
+            "enum": [
+              "requirement",
+              "agent-result",
+              "artifact",
+              "evidence",
+              "catalog-item",
+              "workflow-state"
+            ]
+          },
+          "refId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "contextScope": {
+      "enum": [
+        "shared-approved",
+        "task-local",
+        "restricted-reference-only"
+      ]
+    },
+    "allowedToolIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxToolCalls",
+        "maxModelCalls"
+      ],
+      "properties": {
+        "maxToolCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxModelCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxCost": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "failurePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxAttempts",
+        "onExhausted"
+      ],
+      "properties": {
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "onExhausted": {
+          "enum": [
+            "retry",
+            "human-review",
+            "stop"
+          ]
+        },
+        "retryableErrorCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "correlationId": {
+      "type": "string"
+    },
+    "previousResultRef": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

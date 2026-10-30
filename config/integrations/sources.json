@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0.0",
+  "sources": [
+    {
+      "id": "source-project",
+      "name": "软件工厂工程目录",
+      "type": "repository",
+      "path": ".",
+      "description": "当前本地工程根目录；有 Git 元数据时读取最近提交，否则按源码目录扫描。",
+      "enabled": true,
+      "fixture": false
+    },
+    {
+      "id": "source-docs",
+      "name": "工程文档库",
+      "type": "documents",
+      "path": "docs",
+      "description": "项目架构、ADR、验收和操作手册。",
+      "enabled": true,
+      "fixture": false
+    },
+    {
+      "id": "source-demo-db",
+      "name": "业务元数据 SQLite 示例库",
+      "type": "sqlite",
+      "path": ".local-portal/demo-catalog.sqlite3",
+      "description": "本地门户首次启动时生成的合成数据，用于演示只读表结构发现，不代表企业数据。",
+      "enabled": true,
+      "fixture": true
+    }
+  ]
+}

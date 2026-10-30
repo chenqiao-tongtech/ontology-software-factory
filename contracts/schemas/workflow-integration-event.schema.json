@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/workflow-integration-event.schema.json",
+  "title": "Worker to Workflow Integration Event",
+  "type": "object",
+  "required": ["eventId", "eventType", "taskId", "idempotencyKey", "taskType", "workflowRunId", "workflowStepId", "taskStatus"],
+  "properties": {
+    "eventId": {"type": "string", "minLength": 1},
+    "eventType": {"enum": ["workflow.step.execution_succeeded", "workflow.step.execution_failed"]},
+    "taskId": {"type": "string", "minLength": 1},
+    "idempotencyKey": {"type": "string", "minLength": 1},
+    "taskType": {"type": "string", "minLength": 1},
+    "workflowRunId": {"type": "string", "minLength": 1},
+    "workflowStepId": {"type": "string", "minLength": 1},
+    "workflowId": {"type": ["string", "null"]},
+    "workflowVersion": {"type": ["string", "null"]},
+    "workflowAttempt": {"type": ["integer", "null"], "minimum": 1},
+    "businessOperationId": {"type": ["string", "null"]},
+    "taskStatus": {"enum": ["succeeded", "failed", "dead_letter"]},
+    "attempt": {"type": "integer", "minimum": 1},
+    "output": {"type": "object"},
+    "evidence": {"type": "array", "items": {"type": "object"}},
+    "errorClass": {"type": "string"},
+    "errorMessage": {"type": "string"},
+    "maxAttempts": {"type": "integer", "minimum": 1}
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {"properties": {"taskStatus": {"const": "succeeded"}}, "required": ["taskStatus"]},
+      "then": {"required": ["output", "evidence"]}
+    },
+    {
+      "if": {"properties": {"taskStatus": {"enum": ["failed", "dead_letter"]}}, "required": ["taskStatus"]},
+      "then": {"required": ["errorClass", "errorMessage"]}
+    }
+  ]
+}

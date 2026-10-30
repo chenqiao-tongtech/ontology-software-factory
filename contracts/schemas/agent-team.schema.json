@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ontology-software-factory.local/contracts/agent-team.schema.json",
+  "title": "Bounded Agent Team Topology",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "teamId",
+    "teamVersion",
+    "pattern",
+    "controller",
+    "limits",
+    "registeredRoles",
+    "stages",
+    "failurePaths",
+    "handoffRules",
+    "acceptanceCriteria"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "teamId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "teamVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pattern": {
+      "const": "bounded_specialist_team_with_deterministic_workflow_control"
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "type",
+        "llmPowered",
+        "ownsStateTransitions",
+        "mayGrantPermissions"
+      ],
+      "properties": {
+        "component": {
+          "const": "workflow-state-machine"
+        },
+        "type": {
+          "const": "deterministic"
+        },
+        "llmPowered": {
+          "const": false
+        },
+        "ownsStateTransitions": {
+          "const": true
+        },
+        "mayGrantPermissions": {
+          "const": false
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxAgentHops",
+        "maxRevisionLoops",
+        "maxParallelAgents",
+        "defaultTaskTimeoutSeconds",
+        "requireBudgetAndDeadline"
+      ],
+      "properties": {
+        "maxAgentHops": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "maxRevisionLoops": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "maxParallelAgents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "defaultTaskTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "requireBudgetAndDeadline": {
+          "const": true
+        }
+      }
+    },
+    "registeredRoles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "roleId",
+          "kind",
+          "stage",
+          "mayApproveHighRisk"
+        ],
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "specialist",
+              "producer",
+              "independent-verifier",
+              "packager",
+              "post-delivery-support"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mayApproveHighRisk": {
+            "const": false
+          }
+        }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stageId",
+          "mode",
+          "roleIds",
+          "requires"
+        ],
+        "properties": {
+          "stageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mode": {
+            "enum": [
+              "sequential",
+              "parallel_all_required",
+              "deterministic_join",
+              "human_or_policy_gate",
+              "optional_sequential"
+            ]
+          },
+          "roleIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "requires": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "condition": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "failurePaths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "fromStage",
+          "when",
+          "action"
+        ],
+        "properties": {
+          "fromStage": {
+            "type": "string"
+          },
+          "when": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "bounded_revision_loop",
+              "stop_candidate_and_record_audit",
+              "human_review"
+            ]
+          },
+          "targetStage": {
+            "type": "string"
+          },
+          "maxIterations": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "onExhausted": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "handoffRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaPath",
+        "authoritativeState",
+        "contextScopes",
+        "conflictPolicy",
+        "noSharedMutableAgentMemory",
+        "toolsGrantedBy",
+        "agentsMayMutateWorkflowState",
+        "agentsMayApproveOwnHighRiskResult"
+      ],
+      "properties": {
+        "schemaPath": {
+          "type": "string"
+        },
+        "authoritativeState": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "contextScopes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "conflictPolicy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "noSharedMutableAgentMemory": {
+          "const": true
+        },
+        "toolsGrantedBy": {
+          "const": "policy-runtime-only"
+        },
+        "agentsMayMutateWorkflowState": {
+          "const": false
+        },
+        "agentsMayApproveOwnHighRiskResult": {
+          "const": false
+        }
+      }
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

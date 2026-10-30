@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/worker-task.schema.json",
+  "title": "Worker Task Envelope",
+  "type": "object",
+  "required": ["taskType", "idempotencyKey", "payload", "attempts", "maxAttempts", "timeoutSeconds", "requiredEvidence"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^TASK-[A-F0-9]{12}$"},
+    "idempotencyKey": {"type": "string", "minLength": 1, "maxLength": 200},
+    "taskType": {"type": "string", "minLength": 1},
+    "queue": {"type": "string", "minLength": 1},
+    "payload": {"type": "object"},
+    "payloadSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "status": {"enum": ["queued", "running", "retry_wait", "succeeded", "failed", "dead_letter", "cancelled"]},
+    "attempts": {"type": "integer", "minimum": 0},
+    "maxAttempts": {"type": "integer", "minimum": 1, "maximum": 20},
+    "timeoutSeconds": {"type": "number", "exclusiveMinimum": 0},
+    "retryableErrorClasses": {"type": "array", "items": {"type": "string"}},
+    "requiredEvidence": {"type": "array", "items": {"type": "string"}},
+    "availableAt": {"type": "string", "format": "date-time"},
+    "leaseOwner": {"type": ["string", "null"]},
+    "leaseExpiresAt": {"type": ["string", "null"], "format": "date-time"},
+    "output": {"type": ["object", "null"]},
+    "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
+    "errorClass": {"type": ["string", "null"]},
+    "errorMessage": {"type": ["string", "null"]}
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "required": ["type", "uri", "sha256"],
+      "properties": {
+        "type": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "mediaType": {"type": "string"}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

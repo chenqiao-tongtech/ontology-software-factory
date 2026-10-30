@@ -1,0 +1,764 @@
+{
+  "schema_version": "1.0.0",
+  "baseline_id": "software-factory-architecture-baseline",
+  "baseline_version": "1.1.0",
+  "project": {
+    "name": "ontology-software-factory",
+    "reference_case": "围绕已批准 Kafka 版本进行标准化配置、客户化配置、校验和候选交付；不重写 Kafka。",
+    "target": "构建可组合、证据驱动、分阶段可验收的 AI 软件工厂参考实现。",
+    "mvp_scope_ref": "config/mvp-scope.json",
+    "planning_status": "defined",
+    "implementation_status": "partial"
+  },
+  "principles": [
+    {
+      "id": "AP-01",
+      "name": "资产优先与集成优先",
+      "rule": "优先复用批准资产与成熟 Git/CI/测试/扫描/制品平台。"
+    },
+    {
+      "id": "AP-02",
+      "name": "共享语义与适配器隔离",
+      "rule": "领域对象和契约稳定；厂商差异隔离在 adapters。"
+    },
+    {
+      "id": "AP-03",
+      "name": "控制面与执行面分离",
+      "rule": "规划/编排只产生授权任务，Runner 按任务规范执行。"
+    },
+    {
+      "id": "AP-04",
+      "name": "生成与验证分离",
+      "rule": "Agent 产出候选结果，独立工具提供真实验证证据。"
+    },
+    {
+      "id": "AP-05",
+      "name": "默认拒绝与最小权限",
+      "rule": "未知/未声明/越界工具调用默认拒绝。"
+    },
+    {
+      "id": "AP-06",
+      "name": "高风险动作独立审批",
+      "rule": "生产部署、删除、迁移、权限和秘密操作需策略及人工闸门。"
+    },
+    {
+      "id": "AP-07",
+      "name": "标准资产与客户差异分离",
+      "rule": "客户配置和补丁不得静默污染标准版本。"
+    },
+    {
+      "id": "AP-08",
+      "name": "证据驱动与可追溯",
+      "rule": "结果需关联版本、运行 ID、退出码、日志、报告和制品摘要。"
+    },
+    {
+      "id": "AP-09",
+      "name": "可解释失败与可恢复",
+      "rule": "提供错误语义、幂等、重试、取消、补偿、回滚和未知结果对账。"
+    },
+    {
+      "id": "AP-10",
+      "name": "渐进演进与可替换技术",
+      "rule": "模型、Agent 框架和外部工具经稳定接口替换。"
+    },
+    {
+      "id": "AP-11",
+      "name": "本体受版本治理",
+      "rule": "语义变更需 owner、影响分析、兼容策略、回归测试和批准。"
+    },
+    {
+      "id": "AP-12",
+      "name": "用基线评估效果",
+      "rule": "以相同任务和质量门槛测量质量、返工、时延、成本和人工介入。"
+    },
+    {
+      "id": "AP-13",
+      "name": "多智能体协作显式化与可控",
+      "rule": "团队拓扑、角色边界、任务交接、上下文范围、并行汇合、独立验证和修复上限必须显式配置；Workflow 控制派发，Agent 不自行扩权或批准自己的高风险结果。"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "C-01",
+      "name": "产品边界",
+      "rule": "Kafka 为示例资产；项目不开发 Kafka 本体。"
+    },
+    {
+      "id": "C-02",
+      "name": "生产发布边界",
+      "rule": "MVP 不自动部署生产；高风险动作必须经过独立授权和人工确认。"
+    },
+    {
+      "id": "C-03",
+      "name": "工具执行边界",
+      "rule": "不提供无限制 Shell、任意网络和默认生产凭证。"
+    },
+    {
+      "id": "C-04",
+      "name": "证据边界",
+      "rule": "模型文字、模拟输出或未绑定版本的报告不视为真实执行证据。"
+    },
+    {
+      "id": "C-05",
+      "name": "安全门禁边界",
+      "rule": "缺少要求的扫描器/证据时 fail closed。"
+    },
+    {
+      "id": "C-06",
+      "name": "本体授权边界",
+      "rule": "本体不独立授予权限，实际授权由 IAM/策略组件判定。"
+    },
+    {
+      "id": "C-07",
+      "name": "外部集成验收边界",
+      "rule": "缺凭据、目标服务或执行环境时标记未验收，不声称通过。"
+    },
+    {
+      "id": "C-08",
+      "name": "架构变更边界",
+      "rule": "改变范围或安全责任需更新基线、验收项和 ADR。"
+    },
+    {
+      "id": "C-09",
+      "name": "多智能体协作边界",
+      "rule": "MVP 使用有界专业 Agent 团队与确定性 Workflow 控制器；消息通过版本化 Handoff 契约，权威状态以运行账本/证据引用为准，独立工具和门禁验证候选结果。"
+    }
+  ],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "需求与交互",
+      "depends_on": [
+        "S2"
+      ],
+      "modules": [
+        {
+          "id": "S1.M1",
+          "name": "Portal/Console",
+          "path": "apps/",
+          "status": "partial"
+        },
+        {
+          "id": "S1.M2",
+          "name": "Requirement Intake",
+          "path": "contracts/schemas/production-request.schema.json",
+          "status": "partial"
+        },
+        {
+          "id": "S1.M3",
+          "name": "Scope Checker",
+          "path": "scripts/check_mvp_scope.py",
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "name": "语义核心与契约",
+      "depends_on": [],
+      "modules": [
+        {
+          "id": "S2.M1",
+          "name": "Ontology Registry",
+          "path": "ontology/software-factory-ontology.json",
+          "status": "implemented"
+        },
+        {
+          "id": "S2.M2",
+          "name": "Entity Schema",
+          "path": "contracts/schemas/entities.schema.json",
+          "status": "implemented"
+        },
+        {
+          "id": "S2.M3",
+          "name": "Semantic Validator",
+          "path": "src/ontology_software_factory/semantics.py",
+          "status": "implemented"
+        },
+        {
+          "id": "S2.M4",
+          "name": "LLM 辅助本体发现流水线",
+          "path": "src/ontology_software_factory/ontology_discovery.py",
+          "status": "partial"
+        },
+        {
+          "id": "S2.M5",
+          "name": "本体候选 Schema 与发现策略",
+          "path": "ontology/schemas/ontology-candidate.schema.json",
+          "status": "partial"
+        },
+        {
+          "id": "S2.M6",
+          "name": "NVIDIA Auto Ontology 元数据适配器",
+          "path": "src/ontology_software_factory/adapters/nvidia_auto_ontology.py",
+          "status": "partial"
+        },
+        {
+          "id": "S2.M7",
+          "name": "Cognee 图暂存适配器",
+          "path": "src/ontology_software_factory/adapters/cognee_ontology.py",
+          "status": "partial"
+        }
+      ]
+    },
+    {
+      "id": "S3",
+      "name": "资产与产品目录",
+      "depends_on": [
+        "S2"
+      ],
+      "modules": [
+        {
+          "id": "S3.M1",
+          "name": "Asset Catalog",
+          "path": "catalog/",
+          "status": "partial"
+        },
+        {
+          "id": "S3.M2",
+          "name": "Compatibility Matrix",
+          "path": "catalog/compatibility-matrix.md",
+          "status": "partial"
+        },
+        {
+          "id": "S3.M3",
+          "name": "Customer Config Separation",
+          "path": "examples/kafka-standard/",
+          "status": "partial"
+        }
+      ]
+    },
+    {
+      "id": "S4",
+      "name": "多智能体协作与 Agent 能力",
+      "depends_on": [
+        "S2",
+        "S3",
+        "S11"
+      ],
+      "modules": [
+        {
+          "id": "S4.M1",
+          "name": "Role Registry",
+          "path": "agents/roles/",
+          "status": "implemented"
+        },
+        {
+          "id": "S4.M2",
+          "name": "Skill Registry",
+          "path": "skills/",
+          "status": "implemented"
+        },
+        {
+          "id": "S4.M3",
+          "name": "Team Topology & Coordination",
+          "path": "agents/teams/software-factory-mvp.json",
+          "status": "partial"
+        },
+        {
+          "id": "S4.M4",
+          "name": "Typed Handoff / Context Contract",
+          "path": "contracts/schemas/agent-handoff.schema.json",
+          "status": "implemented"
+        },
+        {
+          "id": "S4.M5",
+          "name": "Agent Runtime Adapter",
+          "path": "src/ontology_software_factory/agent_runtime.py",
+          "status": "partial"
+        },
+        {
+          "id": "S4.M6",
+          "name": "本体发现 Agent 角色与 Skill",
+          "path": "agents/roles/ontology-discovery-agent.json",
+          "status": "partial"
+        },
+        {
+          "id": "S4.M7",
+          "name": "独立本体 Critic 角色与 Skill",
+          "path": "agents/roles/ontology-critic-agent.json",
+          "status": "partial"
+        }
+      ]
+    },
+    {
+      "id": "S5",
+      "name": "编排与任务管理",
+      "depends_on": [
+        "S2",
+        "S4",
+        "S11"
+      ],
+      "modules": [
+        {
+          "id": "S5.M1",
+          "name": "Workflow State Machine",
+          "path": "src/ontology_software_factory/workflow_engine.py",
+          "status": "partial"
+        },
+        {
+          "id": "S5.M2",
+          "name": "Worker Runtime",
+          "path": "src/ontology_software_factory/task_runtime.py",
+          "status": "partial"
+        },
+        {
+          "id": "S5.M3",
+          "name": "Outbox/Inbox Integration",
+          "path": "src/ontology_software_factory/integration.py",
+          "status": "partial"
+        },
+        {
+          "id": "S5.M4",
+          "name": "本体发现审查工作流",
+          "path": "workflows/definitions/ontology-discovery-review-v1.json",
+          "status": "partial"
+        }
+      ]
+    },
+    {
+      "id": "S6",
+      "name": "工具集成",
+      "depends_on": [
+        "S2",
+        "S11"
+      ],
+      "modules": [
+        {
+          "id": "S6.M1",
+          "name": "Tool Registry",
+          "path": "tools/registry.json",
+          "status": "partial"
+        },
+        {
+          "id": "S6.M2",
+          "name": "MCP Adapter",
+          "path": "adapters/mcp_stdio.py",
+          "status": "partial"
+        },
+        {
+          "id": "S6.M3",
+          "name": "HTTP API Adapter",
+          "path": "adapters/http_json.py",
+          "status": "partial"
+        }
+      ]
+    },
+    {
+      "id": "S7",
+      "name": "受控执行",
+      "depends_on": [
+        "S5",
+        "S6",
+        "S11"
+      ],
+      "modules": [
+        {
+          "id": "S7.M1",
+          "name": "Restricted Runner",
+          "path": "runners/restricted_runner.py",
+          "status": "partial"
+        },
+        {
+          "id": "S7.M2",
+          "name": "Workspace/Sandbox",
+          "path": "runners/README.md",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "S8",
+      "name": "质量与安全",
+      "depends_on": [
+        "S2",
+        "S7",
+        "S11"
+      ],
+      "modules": [
+        {
+          "id": "S8.M1",
+          "name": "Configuration Validator",
+          "path": "scripts/validate_kafka_profile.py",
+          "status": "implemented"
+        },
+        {
+          "id": "S8.M2",
+          "name": "Quality Gate",
+          "path": "scripts/run_quality_gate.py",
+          "status": "partial"
+        },
+        {
+          "id": "S8.M3",
+          "name": "Live SAST/SCA/Secrets Scanning",
+          "path": "policies/quality/",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "S9",
+      "name": "交付与发布",
+      "depends_on": [
+        "S3",
+        "S8",
+        "S11"
+      ],
+      "modules": [
+        {
+          "id": "S9.M1",
+          "name": "Delivery Bundle/Manifest",
+          "path": "scripts/create_release.py",
+          "status": "partial"
+        },
+        {
+          "id": "S9.M2",
+          "name": "Upgrade/Rollback Rehearsal",
+          "path": "scripts/rehearse_upgrade.py",
+          "status": "partial"
+        },
+        {
+          "id": "S9.M3",
+          "name": "Real Cluster Deployment",
+          "path": "deploy/",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "S10",
+      "name": "观测与生命周期",
+      "depends_on": [
+        "S2",
+        "S5",
+        "S9"
+      ],
+      "modules": [
+        {
+          "id": "S10.M1",
+          "name": "Observability Report",
+          "path": "scripts/report_factory_observability.py",
+          "status": "partial"
+        },
+        {
+          "id": "S10.M2",
+          "name": "Ontology Change Proposal",
+          "path": "scripts/propose_ontology_change.py",
+          "status": "partial"
+        },
+        {
+          "id": "S10.M3",
+          "name": "Production Metrics Backend",
+          "path": "observability/",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "S11",
+      "name": "横切治理",
+      "depends_on": [],
+      "modules": [
+        {
+          "id": "S11.M1",
+          "name": "Agent Permission Policy",
+          "path": "policies/agent-permissions.json",
+          "status": "partial"
+        },
+        {
+          "id": "S11.M2",
+          "name": "Tool Permissions",
+          "path": "policies/tool-permissions.json",
+          "status": "partial"
+        },
+        {
+          "id": "S11.M3",
+          "name": "Enterprise IAM/Secrets",
+          "path": "policies/README.md",
+          "status": "planned"
+        }
+      ]
+    }
+  ],
+  "ontology_plan": {
+    "representation_strategy": "JSON vocabulary + JSON Schema Draft 2020-12 + Python semantic validation for MVP; add RDF/OWL/SHACL only where a demonstrated need exists.",
+    "core_classes_current": [
+      "Requirement",
+      "Product",
+      "Component",
+      "Version",
+      "Artifact",
+      "Build",
+      "TestRun",
+      "Vulnerability",
+      "Release",
+      "Deployment",
+      "Incident"
+    ],
+    "candidate_extensions": [
+      "CustomerEnvironment",
+      "CustomerConfig",
+      "AgentRole",
+      "Skill",
+      "Task",
+      "WorkflowRun",
+      "ToolExecution",
+      "Approval",
+      "Evidence",
+      "CostRecord"
+    ],
+    "governance_requirements": [
+      "versioned vocabulary and schemas",
+      "competency questions",
+      "typed references",
+      "selected lifecycle invariants",
+      "migration and deprecation policy",
+      "owner approval and regression tests"
+    ],
+    "authorization_boundary": "Ontology provides semantic context; IAM/policy runtime authorizes actions.",
+    "operational_extension_classes": [
+      "AgentTeam",
+      "AgentRole",
+      "Skill",
+      "AgentTask",
+      "AgentHandoff",
+      "AgentResult",
+      "ContextReference",
+      "CoordinationDecision",
+      "ReviewDecision",
+      "OntologyCandidate",
+      "OntologyTermCandidate",
+      "OntologyRelationCandidate",
+      "OntologyConstraintCandidate",
+      "CompetencyQuestion",
+      "OntologySourceEvidence",
+      "OntologyEvaluation",
+      "OntologyApproval",
+      "OntologyRevision"
+    ]
+  },
+  "roadmap": [
+    {
+      "id": "P0",
+      "article": 15,
+      "name": "总体规划与概要设计",
+      "outputs": [
+        "project charter",
+        "architecture baseline",
+        "subsystem decomposition",
+        "ontology plan",
+        "principles and constraints",
+        "roadmap"
+      ],
+      "exit_criteria": [
+        "Baseline validator passes",
+        "MVP and non-goals reviewed",
+        "Module responsibilities/dependencies are traceable"
+      ],
+      "status": "defined"
+    },
+    {
+      "id": "P1",
+      "article": 16,
+      "name": "领域本体与契约",
+      "outputs": [
+        "core ontology",
+        "JSON Schema",
+        "semantic validator",
+        "ontology candidate schema",
+        "LLM discovery and critic passes",
+        "source-grounded competency questions"
+      ],
+      "exit_criteria": [
+        "Positive and negative contract tests pass",
+        "Competency questions map to core concepts"
+      ],
+      "status": "partial"
+    },
+    {
+      "id": "P2",
+      "article": 17,
+      "name": "资产目录",
+      "outputs": [
+        "catalog",
+        "dependency checks",
+        "customer config boundaries"
+      ],
+      "exit_criteria": [
+        "Unapproved and incompatible references rejected",
+        "Unverified metadata is not claimed as proof"
+      ],
+      "status": "partial"
+    },
+    {
+      "id": "P3",
+      "article": 18,
+      "name": "多智能体协作、Agent 与 Skills",
+      "outputs": [
+        "bounded team topology",
+        "role/skill registry",
+        "typed handoff/context contracts",
+        "permission matrix"
+      ],
+      "exit_criteria": [
+        "Unknown role and undeclared handoff rejected",
+        "Parallel verification joins all required evidence",
+        "Independent reviewer cannot self-approve",
+        "Agent hop and revision-loop limits are enforced"
+      ],
+      "status": "partial"
+    },
+    {
+      "id": "P4",
+      "article": 19,
+      "name": "工作流状态机",
+      "outputs": [
+        "workflow DAG",
+        "state machine",
+        "retry/recovery tests"
+      ],
+      "exit_criteria": [
+        "Invalid transitions rejected",
+        "Pause/retry/replay recovery tested"
+      ],
+      "status": "partial"
+    },
+    {
+      "id": "P5",
+      "article": 20,
+      "name": "工具集成与受控执行",
+      "outputs": [
+        "MCP/API adapters",
+        "restricted runner",
+        "tool policies"
+      ],
+      "exit_criteria": [
+        "Tool contracts and allowlists tested",
+        "External integration status accurately recorded"
+      ],
+      "status": "partial"
+    },
+    {
+      "id": "P6",
+      "article": 21,
+      "name": "首条真实生产流水线",
+      "outputs": [
+        "candidate config",
+        "execution logs",
+        "build/test evidence"
+      ],
+      "exit_criteria": [
+        "Request-to-candidate path reproducible",
+        "Failure is observable and blocks promotion"
+      ],
+      "status": "partial"
+    },
+    {
+      "id": "P7",
+      "article": 22,
+      "name": "质量与安全门禁",
+      "outputs": [
+        "reports",
+        "gate rules",
+        "exception audit"
+      ],
+      "exit_criteria": [
+        "Injected defect blocks release",
+        "Reports bind to exact input version/digest"
+      ],
+      "status": "partial"
+    },
+    {
+      "id": "P8",
+      "article": 23,
+      "name": "版本化交付与回滚",
+      "outputs": [
+        "release manifest",
+        "approval record",
+        "rollback evidence",
+        "ontology evaluation benchmark",
+        "candidate acceptance/rejection metrics",
+        "approved ontology revision proposals"
+      ],
+      "exit_criteria": [
+        "Delivery is traceable",
+        "Failure path has replayable rollback evidence"
+      ],
+      "status": "partial"
+    },
+    {
+      "id": "P9",
+      "article": 24,
+      "name": "观测、成本与生命周期",
+      "outputs": [
+        "metrics",
+        "cost ledger",
+        "audit query",
+        "change governance"
+      ],
+      "exit_criteria": [
+        "Quality/cost/latency/return-work can be compared to baseline",
+        "Ontology change requires review"
+      ],
+      "status": "partial"
+    }
+  ],
+  "required_design_documents": [
+    "docs/project-charter.md",
+    "docs/architecture.md",
+    "docs/subsystem-decomposition.md",
+    "docs/architecture-principles-and-constraints.md",
+    "docs/ontology-design-and-evolution.md",
+    "docs/development-roadmap.md",
+    "docs/acceptance/architecture-baseline-checklist.md",
+    "docs/nonfunctional-requirements.md",
+    "docs/technology-decisions.md",
+    "docs/risk-register.md",
+    "docs/diagrams/overall-architecture.mmd",
+    "docs/diagrams/subsystem-dependencies.mmd",
+    "docs/diagrams/roadmap.mmd",
+    "docs/adr/0014-overall-design-baseline-before-implementation.md",
+    "docs/adr/0015-mvp-technology-decisions.md",
+    "docs/diagrams/architecture.mmd",
+    "docs/multi-agent-architecture.md",
+    "docs/diagrams/multi-agent-topology.mmd",
+    "agents/teams/software-factory-mvp.json",
+    "contracts/schemas/agent-handoff.schema.json",
+    "examples/multi-agent-handoffs/requirement-to-architecture.json",
+    "contracts/schemas/agent-team.schema.json",
+    "docs/adr/0016-bounded-multi-agent-collaboration-as-core.md",
+    "docs/acceptance/multi-agent-architecture-checklist.md"
+  ],
+  "multi_agent_architecture": {
+    "pattern": "bounded_specialist_team_with_deterministic_workflow_control",
+    "controller": {
+      "component": "workflow-state-machine",
+      "llmPowered": false,
+      "responsibility": "dispatch, dependency evaluation, join, retry cap, approval gate; never grant IAM permissions"
+    },
+    "coordination_patterns": [
+      "sequential_handoff",
+      "parallel_independent_verification",
+      "all_required_join",
+      "bounded_revision_loop",
+      "human_escalation"
+    ],
+    "parallel_verification_roles": [
+      "test-agent",
+      "security-reviewer"
+    ],
+    "max_agent_hops": 16,
+    "max_revision_loops": 2,
+    "max_parallel_agents": 3,
+    "shared_state_authority": [
+      "workflow_run_store",
+      "event_ledger",
+      "versioned_artifact_refs",
+      "evidence_refs"
+    ],
+    "conflict_policy": "Verified tool evidence and approved asset metadata outrank agent assertions; unresolved material conflicts require human review.",
+    "approval_policy": "Agent may prepare a candidate but cannot approve its own release or high-risk action.",
+    "team_config_path": "agents/teams/software-factory-mvp.json",
+    "handoff_schema_path": "contracts/schemas/agent-handoff.schema.json"
+  }
+}

@@ -1,0 +1,1185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ontology-software-factory/contracts/entities.schema.json",
+  "title": "Software Factory Entity Contract",
+  "description": "Validates the shape of one core software factory entity. Cross-entity references and invariants are checked by the Python semantic validator.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Requirement"
+    },
+    {
+      "$ref": "#/$defs/Product"
+    },
+    {
+      "$ref": "#/$defs/Component"
+    },
+    {
+      "$ref": "#/$defs/Version"
+    },
+    {
+      "$ref": "#/$defs/Artifact"
+    },
+    {
+      "$ref": "#/$defs/Build"
+    },
+    {
+      "$ref": "#/$defs/TestRun"
+    },
+    {
+      "$ref": "#/$defs/Vulnerability"
+    },
+    {
+      "$ref": "#/$defs/Release"
+    },
+    {
+      "$ref": "#/$defs/Deployment"
+    },
+    {
+      "$ref": "#/$defs/Incident"
+    }
+  ],
+  "$defs": {
+    "entityBase": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "type": "string",
+          "enum": [
+            "Requirement",
+            "Product",
+            "Component",
+            "Version",
+            "Artifact",
+            "Build",
+            "TestRun",
+            "Vulnerability",
+            "Release",
+            "Deployment",
+            "Incident"
+          ]
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "system",
+        "recordedAt"
+      ]
+    },
+    "findingSource": {
+      "type": "object",
+      "properties": {
+        "scanner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "database": {
+          "type": "string",
+          "minLength": 1
+        },
+        "detectedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "scanner",
+        "detectedAt"
+      ]
+    },
+    "acceptanceCriterion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verificationMethod": {
+          "type": "string",
+          "enum": [
+            "unit",
+            "integration",
+            "e2e",
+            "manual",
+            "policy"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "verificationMethod",
+        "required"
+      ]
+    },
+    "Requirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Requirement"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "needs_clarification",
+            "approved",
+            "in_progress",
+            "accepted",
+            "rejected"
+          ]
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "p0",
+            "p1",
+            "p2",
+            "p3"
+          ]
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/acceptanceCriterion"
+          },
+          "minItems": 1
+        },
+        "targetProductId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "name",
+        "description",
+        "status",
+        "priority",
+        "acceptanceCriteria"
+      ],
+      "additionalProperties": false
+    },
+    "Product": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Product"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lifecycleStatus": {
+          "type": "string",
+          "enum": [
+            "active",
+            "maintenance",
+            "deprecated",
+            "retired"
+          ]
+        },
+        "componentIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "name",
+        "owner",
+        "lifecycleStatus",
+        "componentIds"
+      ],
+      "additionalProperties": false
+    },
+    "Component": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Component"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "middleware",
+            "library",
+            "service",
+            "template",
+            "tooling"
+          ]
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lifecycleStatus": {
+          "type": "string",
+          "enum": [
+            "active",
+            "maintenance",
+            "deprecated",
+            "retired"
+          ]
+        },
+        "currentVersionId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        },
+        "licenseSpdx": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "name",
+        "kind",
+        "owner",
+        "lifecycleStatus",
+        "currentVersionId"
+      ],
+      "additionalProperties": false
+    },
+    "Version": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Version"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "componentId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9A-Za-z][0-9A-Za-z.+_-]*$"
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "stable",
+            "preview",
+            "deprecated"
+          ]
+        },
+        "sourceUri": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "componentId",
+        "version",
+        "channel"
+      ],
+      "additionalProperties": false
+    },
+    "Artifact": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Artifact"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "artifactKind": {
+          "type": "string",
+          "enum": [
+            "source_archive",
+            "container_image",
+            "config_bundle",
+            "test_report",
+            "security_report",
+            "sbom",
+            "documentation",
+            "binary_package"
+          ]
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-fA-F0-9]{64}$"
+        },
+        "createdByBuildId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "artifactKind",
+        "mediaType",
+        "uri",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "Build": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Build"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "componentId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        },
+        "versionId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 7
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "artifactIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "runner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logsUri": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "componentId",
+        "versionId",
+        "sourceRevision",
+        "status",
+        "startedAt",
+        "completedAt",
+        "artifactIds",
+        "runner"
+      ],
+      "additionalProperties": false
+    },
+    "TestRun": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "TestRun"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "buildId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        },
+        "suite": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "passed",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "executedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reportArtifactId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "buildId",
+        "suite",
+        "status",
+        "total",
+        "passed",
+        "failed",
+        "skipped",
+        "executedAt",
+        "reportArtifactId"
+      ],
+      "additionalProperties": false
+    },
+    "Vulnerability": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Vulnerability"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "componentId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        },
+        "affectedVersionIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "unknown"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "accepted",
+            "fixed",
+            "false_positive"
+          ]
+        },
+        "finding": {
+          "$ref": "#/$defs/findingSource"
+        },
+        "findingId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "componentId",
+        "affectedVersionIds",
+        "severity",
+        "status",
+        "finding",
+        "findingId",
+        "summary"
+      ],
+      "additionalProperties": false
+    },
+    "Release": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Release"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "productId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        },
+        "versionIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "artifactIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "buildIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "testRunIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "evidenceArtifactIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "vulnerabilityReview": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "pass",
+            "block",
+            "waived"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "candidate",
+            "approved",
+            "published",
+            "withdrawn"
+          ]
+        },
+        "approvedBy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "approvedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "productId",
+        "versionIds",
+        "artifactIds",
+        "buildIds",
+        "testRunIds",
+        "evidenceArtifactIds",
+        "vulnerabilityReview",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "Deployment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Deployment"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "releaseId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        },
+        "environment": {
+          "type": "string",
+          "enum": [
+            "local",
+            "dev",
+            "staging",
+            "prod",
+            "customer"
+          ]
+        },
+        "targetRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "planned",
+            "pending_approval",
+            "running",
+            "succeeded",
+            "failed",
+            "rolled_back"
+          ]
+        },
+        "startedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "approvalRef": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "releaseId",
+        "environment",
+        "targetRef",
+        "status",
+        "startedAt",
+        "completedAt"
+      ],
+      "additionalProperties": false
+    },
+    "Incident": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$",
+          "description": "Stable entity identifier."
+        },
+        "entityType": {
+          "const": "Incident"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ontologyVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "investigating",
+            "mitigated",
+            "resolved",
+            "closed"
+          ]
+        },
+        "deploymentId": {
+          "type": "string",
+          "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+        },
+        "affectedComponentIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "evidenceArtifactIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "id",
+        "entityType",
+        "schemaVersion",
+        "ontologyVersion",
+        "tenantId",
+        "createdAt",
+        "summary",
+        "severity",
+        "status",
+        "affectedComponentIds",
+        "evidenceArtifactIds"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

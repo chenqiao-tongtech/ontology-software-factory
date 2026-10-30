@@ -1,0 +1,210 @@
+{
+  "schema_version": "0.1.0",
+  "project": {
+    "name": "ontology-software-factory",
+    "stage": "v2.0-formal-article-24-aligned-core",
+    "reference_case": "以 Kafka 作为示例中间件，围绕已批准版本开展标准化配置、验证和客户化交付；不重写 Kafka。",
+    "version": "0.4.0"
+  },
+  "mvp": {
+    "goal": "Deliver an auditable, deterministic configuration-only production path for an approved catalogue reference: structured request, asset selection, rendered config, fixed validator and regression tests, traceable package, fail-closed quality gate, simulated release/rollback, and local observability. This remains a reference MVP, not a production Kafka distribution or deployment platform. Multi-agent collaboration uses an explicit specialist topology, typed handoffs, bounded revision loops and independent verification; the workflow engine remains the deterministic coordinator.",
+    "included_capabilities": [
+      "structured_requirement_intake",
+      "approved_asset_selection",
+      "customer_configuration_validation",
+      "sandboxed_build_and_test",
+      "quality_gate",
+      "traceable_delivery_record",
+      "manual_release_approval",
+      "machine-readable core ontology vocabulary",
+      "JSON Schema Draft 2020-12 entity validation",
+      "typed cross-entity reference validation",
+      "selected lifecycle invariants and regression tests",
+      "versioned_asset_catalogue_for_products_components_versions_and_artifacts",
+      "dependency_resolution_and_cycle_checks",
+      "customer_configuration_and_custom_patch_separation",
+      "license_review_and_evidence_references",
+      "metadata_only_release_readiness_policy",
+      "tool_permission_registry_with_default_deny",
+      "configured_mcp_stdio_protocol_adapter",
+      "restricted_local_config_pipeline_with_real_validator_execution",
+      "configuration_bundle_quality_gate_with_fail_closed_policy",
+      "versioned_configuration_delivery_bundle_and_sbom",
+      "local_upgrade_rollback_rehearsal",
+      "local_observability_cost_report_and_change_proposals",
+      "bounded_multi_agent_collaboration",
+      "explicit_agent_team_topology",
+      "typed_agent_handoff_contracts",
+      "parallel_independent_test_and_security_review",
+      "bounded_revision_loop_with_human_escalation"
+    ],
+    "excluded_capabilities": [
+      "rewrite_kafka_from_scratch",
+      "autonomous_production_deployment",
+      "unrestricted_agent_tool_access",
+      "replace_existing_git_ci_and_artifact_systems",
+      "fully_autonomous_custom_software",
+      "formal OWL reasoning or RDF graph deployment",
+      "unbounded_autonomous_agent_orchestration_without_workflow_governance",
+      "real Kafka binary build or production deployment",
+      "authorization decisions based on ontology fields alone",
+      "fetch_remote_packages_or_artifacts",
+      "cryptographic_signature_or_attestation_verification",
+      "live_vulnerability_scanning_or_sbom_generation",
+      "production_release_or_deployment_automation",
+      "kernel_or_container_level_execution_sandbox",
+      "real_kafka_binary_download_or_build",
+      "real_kafka_cluster_compatibility_test",
+      "production_deployment_and_real_rollback",
+      "production_sast_sca_and_secret_scanning_until_tools_are_integrated",
+      "real_git_commit_or_pull_request_creation_from_pipeline"
+    ]
+  },
+  "required_modules": [
+    "ontology",
+    "contracts",
+    "catalog",
+    "agents",
+    "skills",
+    "workflows",
+    "adapters",
+    "policies",
+    "runners",
+    "tests",
+    "docs",
+    "agents/teams",
+    "contracts/schemas"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "MVP-01",
+      "description": "需求能够被结构化记录，并保留稳定 ID、来源与范围信息。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "MVP-02",
+      "description": "生产流程只能引用资产目录中已批准且版本明确的组件。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "MVP-03",
+      "description": "客户化配置在进入构建前通过机器可执行的 Schema / 规则校验。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "MVP-04",
+      "description": "构建与测试由隔离执行器真实运行，保存退出码、日志和运行标识。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "MVP-05",
+      "description": "测试结果关联到具体提交、构建记录与候选制品。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "MVP-06",
+      "description": "质量或安全门禁失败时，候选制品不能进入发布状态。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "MVP-07",
+      "description": "交付记录可以追溯源代码版本、依赖、构建、测试与制品摘要。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "MVP-08",
+      "description": "生产部署需要授权和人工审批，且有部署前检查与回退预案。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "SEM-01",
+      "description": "词汇表类名唯一，关系源和目标引用已定义类。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "SEM-02",
+      "description": "11 类核心实体通过 JSON Schema Draft 2020-12 结构校验。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "SEM-03",
+      "description": "实体引用满足存在性、目标类型、唯一性与同租户边界检查。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "SEM-04",
+      "description": "组件、版本、构建、发布与漏洞之间关键引用保持一致。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "SEM-05",
+      "description": "构建、测试、发布与生产部署的示例不变量有负向自动化测试。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "SEM-06",
+      "description": "范围检查、领域校验与全套回归测试可本地重复执行。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "CAT-01",
+      "description": "产品引用的所有组件都存在，且目录对象 ID 唯一。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "CAT-02",
+      "description": "每个组件的默认版本属于该组件，依赖解析版本属于声明的依赖组件。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "CAT-03",
+      "description": "已解析依赖满足声明的 SemVer 约束，且依赖图无环。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "CAT-04",
+      "description": "兼容性结论必须具有已验证的证据引用；未测试不表示兼容。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "CAT-05",
+      "description": "客户化配置与标准资产分离，密钥只能通过 secretRefs 引用。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "CAT-06",
+      "description": "客户补丁限定租户、绑定基础版本，并在批准前具备测试和安全审核结果。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "CAT-07",
+      "description": "资产目录元数据校验与版本发布就绪度检查可在本地重复执行。",
+      "evidence": "docs/acceptance/mvp-checklist.md"
+    },
+    {
+      "id": "AGENT-01",
+      "description": "Team topology references only registered Agent roles and uses a deterministic Workflow controller.",
+      "evidence": "docs/acceptance/multi-agent-architecture-checklist.md"
+    },
+    {
+      "id": "AGENT-02",
+      "description": "Agent handoffs validate against versioned contract; missing context scope, deadline or acceptance conditions are rejected.",
+      "evidence": "docs/acceptance/multi-agent-architecture-checklist.md"
+    },
+    {
+      "id": "AGENT-03",
+      "description": "Test and security review can run as independent branches and must both reach a join condition before a passing gate.",
+      "evidence": "docs/acceptance/multi-agent-architecture-checklist.md"
+    },
+    {
+      "id": "AGENT-04",
+      "description": "Revision loops and agent hops are bounded; unresolved conflict routes to human review.",
+      "evidence": "docs/acceptance/multi-agent-architecture-checklist.md"
+    },
+    {
+      "id": "AGENT-05",
+      "description": "No Agent can grant itself tools, approve its own high-risk result or move Workflow state directly.",
+      "evidence": "docs/acceptance/multi-agent-architecture-checklist.md"
+    }
+  ]
+}

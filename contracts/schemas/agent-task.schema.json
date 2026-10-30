@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ontology-software-factory/agent-task.schema.json",
+  "title": "Agent Task Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "taskId",
+    "tenantId",
+    "projectId",
+    "roleId",
+    "ontologyVersion",
+    "objective",
+    "inputs",
+    "expectedOutputEntityTypes",
+    "acceptanceCriteria",
+    "contextRefs",
+    "sensitivity",
+    "resourceLimits",
+    "idempotencyKey"
+  ],
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "pattern": "^sf:task:[A-Za-z0-9._-]+$"
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "roleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]+$"
+    },
+    "ontologyVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entityId",
+          "entityType"
+        ],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "pattern": "^sf:[a-z]+(?:-[a-z]+)*:[A-Za-z0-9._-]+$"
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "Requirement",
+              "Product",
+              "Component",
+              "Version",
+              "Artifact",
+              "Build",
+              "TestRun",
+              "Vulnerability",
+              "Release",
+              "Deployment",
+              "Incident"
+            ]
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "evidenceRef": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "expectedOutputEntityTypes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Requirement",
+          "Product",
+          "Component",
+          "Version",
+          "Artifact",
+          "Build",
+          "TestRun",
+          "Vulnerability",
+          "Release",
+          "Deployment",
+          "Incident"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "description",
+          "verificationMethod"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "verificationMethod": {
+            "type": "string",
+            "enum": [
+              "schema",
+              "unit_test",
+              "integration_test",
+              "security_scan",
+              "human_review",
+              "manual"
+            ]
+          }
+        }
+      }
+    },
+    "contextRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "refType",
+          "refId",
+          "accessClass"
+        ],
+        "properties": {
+          "refType": {
+            "type": "string",
+            "enum": [
+              "entity",
+              "artifact",
+              "document",
+              "commit",
+              "tool_run"
+            ]
+          },
+          "refId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "accessClass": {
+            "type": "string",
+            "enum": [
+              "shared-task-context",
+              "role-local-context",
+              "restricted-reference"
+            ]
+          }
+        }
+      }
+    },
+    "sensitivity": {
+      "type": "string",
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted"
+      ]
+    },
+    "resourceLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxAttempts",
+        "timeoutSeconds",
+        "maxToolCalls"
+      ],
+      "properties": {
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7200
+        },
+        "maxToolCalls": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      }
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 8
+    },
+    "workflowState": {
+      "type": "string"
+    }
+  }
+}

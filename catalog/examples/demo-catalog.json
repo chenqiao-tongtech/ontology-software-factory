@@ -1,0 +1,272 @@
+{
+  "catalogId": "sf:catalog:shared-assets",
+  "catalogSchemaVersion": "1.0.0",
+  "generatedAt": "2026-10-28T00:00:00Z",
+  "products": [
+    {
+      "id": "sf:product:event-platform",
+      "name": "示例事件平台交付产品",
+      "owner": "platform-team",
+      "lifecycleStatus": "active",
+      "componentIds": [
+        "sf:component:event-broker",
+        "sf:component:metrics-exporter",
+        "sf:component:deployment-template",
+        "sf:component:runtime-image"
+      ],
+      "description": "合成演示数据，用于展示标准资产目录与客户配置分层；不代表真实的 Kafka 认证或兼容测试。",
+      "tags": ["demo", "middleware", "delivery"]
+    }
+  ],
+  "components": [
+    {
+      "id": "sf:component:event-broker",
+      "name": "示例事件中间件（Kafka 类产品示例）",
+      "kind": "middleware",
+      "owner": "platform-team",
+      "lifecycleStatus": "active",
+      "supportPolicy": "vendor",
+      "source": {
+        "sourceType": "upstream",
+        "uri": "https://kafka.apache.org/",
+        "revision": "demo-ref-only",
+        "retrievedAt": "2026-10-28T00:00:00Z",
+        "verifiedBy": "demo-process",
+        "notes": "仅演示字段；此样例不声明任何实际二进制已下载或校验。"
+      },
+      "license": {
+        "spdxId": "Apache-2.0",
+        "reviewStatus": "approved",
+        "reviewedBy": "demo-review-record",
+        "reviewedAt": "2026-10-28T00:00:00Z",
+        "obligations": ["保留适用的版权与许可声明"],
+        "notes": "演示元数据，生产项目必须针对真实版本及分发方式进行法务/开源合规复核。"
+      },
+      "defaultVersionId": "sf:version:event-broker-3.8.0",
+      "versions": [
+        {
+          "id": "sf:version:event-broker-3.8.0",
+          "version": "3.8.0",
+          "channel": "stable",
+          "lifecycleStatus": "active",
+          "publishedAt": "2026-10-28T00:00:00Z",
+          "sourceRevision": "demo-source-revision-not-a-real-commit",
+          "integrityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "artifactIds": ["sf:artifact:event-broker-package"],
+          "sbomArtifactId": "sf:artifact:event-broker-sbom",
+          "provenanceArtifactId": "sf:artifact:event-broker-provenance",
+          "dependencies": [],
+          "supportedPlatforms": ["linux-amd64", "linux-arm64"],
+          "notes": "版本号仅用于演示 SemVer 与引用校验；不是已验证的产品兼容声明。"
+        }
+      ]
+    },
+    {
+      "id": "sf:component:metrics-exporter",
+      "name": "示例指标导出扩展",
+      "kind": "extension",
+      "owner": "observability-team",
+      "lifecycleStatus": "active",
+      "supportPolicy": "internal",
+      "source": {
+        "sourceType": "internal",
+        "uri": "https://example.invalid/source/metrics-exporter",
+        "revision": "demo-ref-only",
+        "retrievedAt": "2026-10-28T00:00:00Z",
+        "verifiedBy": "demo-process"
+      },
+      "license": {
+        "spdxId": "Apache-2.0",
+        "reviewStatus": "approved",
+        "reviewedBy": "demo-review-record",
+        "reviewedAt": "2026-10-28T00:00:00Z",
+        "obligations": [],
+        "notes": "合成演示记录。"
+      },
+      "defaultVersionId": "sf:version:metrics-exporter-0.4.0",
+      "versions": [
+        {
+          "id": "sf:version:metrics-exporter-0.4.0",
+          "version": "0.4.0",
+          "channel": "stable",
+          "lifecycleStatus": "active",
+          "publishedAt": "2026-10-28T00:00:00Z",
+          "sourceRevision": "demo-source-revision-not-a-real-commit",
+          "integrityDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "artifactIds": ["sf:artifact:metrics-exporter-package"],
+          "dependencies": [
+            {
+              "componentId": "sf:component:event-broker",
+              "versionConstraint": ">=3.8.0,<4.0.0",
+              "resolvedVersionId": "sf:version:event-broker-3.8.0",
+              "scope": "runtime",
+              "optional": false,
+              "declaredBy": "maintainer",
+              "evidenceArtifactIds": []
+            }
+          ],
+          "supportedPlatforms": ["linux-amd64", "linux-arm64"],
+          "notes": "依赖约束与解析版本仅用于演示校验逻辑。"
+        }
+      ]
+    },
+    {
+      "id": "sf:component:deployment-template",
+      "name": "示例部署模板",
+      "kind": "template",
+      "owner": "platform-team",
+      "lifecycleStatus": "active",
+      "supportPolicy": "internal",
+      "source": {
+        "sourceType": "internal",
+        "uri": "https://example.invalid/source/deployment-template",
+        "revision": "demo-ref-only",
+        "retrievedAt": "2026-10-28T00:00:00Z",
+        "verifiedBy": "demo-process"
+      },
+      "license": {
+        "spdxId": "Apache-2.0",
+        "reviewStatus": "approved",
+        "reviewedBy": "demo-review-record",
+        "reviewedAt": "2026-10-28T00:00:00Z",
+        "obligations": [],
+        "notes": "合成演示记录。"
+      },
+      "defaultVersionId": "sf:version:deployment-template-1.1.0",
+      "versions": [
+        {
+          "id": "sf:version:deployment-template-1.1.0",
+          "version": "1.1.0",
+          "channel": "stable",
+          "lifecycleStatus": "active",
+          "publishedAt": "2026-10-28T00:00:00Z",
+          "sourceRevision": "demo-source-revision-not-a-real-commit",
+          "integrityDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "artifactIds": ["sf:artifact:deployment-template-bundle"],
+          "dependencies": [
+            {
+              "componentId": "sf:component:event-broker",
+              "versionConstraint": "^3.8.0",
+              "resolvedVersionId": "sf:version:event-broker-3.8.0",
+              "scope": "runtime",
+              "optional": false,
+              "declaredBy": "maintainer",
+              "evidenceArtifactIds": []
+            },
+            {
+              "componentId": "sf:component:runtime-image",
+              "versionConstraint": "~1.27.0",
+              "resolvedVersionId": "sf:version:runtime-image-1.27.0",
+              "scope": "runtime",
+              "optional": false,
+              "declaredBy": "manifest",
+              "evidenceArtifactIds": []
+            }
+          ],
+          "supportedPlatforms": ["kubernetes"],
+          "notes": "依赖锁定示例，不构成真实平台支持矩阵。"
+        }
+      ]
+    },
+    {
+      "id": "sf:component:runtime-image",
+      "name": "示例运行时基础镜像",
+      "kind": "base-image",
+      "owner": "platform-team",
+      "lifecycleStatus": "active",
+      "supportPolicy": "vendor",
+      "source": {
+        "sourceType": "vendor",
+        "uri": "https://example.invalid/runtime-image",
+        "revision": "demo-ref-only",
+        "retrievedAt": "2026-10-28T00:00:00Z",
+        "verifiedBy": "demo-process"
+      },
+      "license": {
+        "spdxId": "LicenseRef-Demo-Base-Image",
+        "reviewStatus": "approved",
+        "reviewedBy": "demo-review-record",
+        "reviewedAt": "2026-10-28T00:00:00Z",
+        "obligations": [],
+        "notes": "示意 LicenseRef；生产目录应使用合规审核后的真实标识。"
+      },
+      "defaultVersionId": "sf:version:runtime-image-1.27.0",
+      "versions": [
+        {
+          "id": "sf:version:runtime-image-1.27.0",
+          "version": "1.27.0",
+          "channel": "stable",
+          "lifecycleStatus": "active",
+          "publishedAt": "2026-10-28T00:00:00Z",
+          "sourceRevision": "demo-image-digest-ref",
+          "integrityDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "artifactIds": ["sf:artifact:runtime-image"],
+          "sbomArtifactId": "sf:artifact:runtime-image-sbom",
+          "provenanceArtifactId": "sf:artifact:runtime-image-provenance",
+          "dependencies": [],
+          "supportedPlatforms": ["linux-amd64"],
+          "notes": "样例 digest 是占位符，不得用于真实拉取或验证。"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {"id":"sf:artifact:event-broker-package","kind":"binary-package","uri":"artifact://demo/event-broker-3.8.0.tgz","digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","mediaType":"application/gzip","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"upstream","sourceUri":"https://kafka.apache.org/","sourceRevision":"demo-ref-only","producer":"demo-only","notes":"占位元数据；没有对应真实二进制文件。"},
+    {"id":"sf:artifact:event-broker-sbom","kind":"sbom","uri":"artifact://demo/event-broker-3.8.0.cdx.json","digest":"sha256:2222222222222222222222222222222222222222222222222222222222222222","mediaType":"application/vnd.cyclonedx+json","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"manual","producer":"demo-only","notes":"占位的 SBOM 引用，不是生成或验证过的 CycloneDX 文件。"},
+    {"id":"sf:artifact:event-broker-provenance","kind":"provenance","uri":"artifact://demo/event-broker-provenance.json","digest":"sha256:3333333333333333333333333333333333333333333333333333333333333333","mediaType":"application/json","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"manual","producer":"demo-only","notes":"占位的来源证明引用，不是有效的 SLSA provenance。"},
+    {"id":"sf:artifact:metrics-exporter-package","kind":"binary-package","uri":"artifact://demo/metrics-exporter-0.4.0.tgz","digest":"sha256:4444444444444444444444444444444444444444444444444444444444444444","mediaType":"application/gzip","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"internal-build","producer":"demo-only","notes":"占位元数据；不对应真实文件。"},
+    {"id":"sf:artifact:deployment-template-bundle","kind":"config-bundle","uri":"artifact://demo/deployment-template-1.1.0.zip","digest":"sha256:5555555555555555555555555555555555555555555555555555555555555555","mediaType":"application/zip","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"internal-build","producer":"demo-only","notes":"占位元数据；不对应真实文件。"},
+    {"id":"sf:artifact:runtime-image","kind":"container-image","uri":"artifact://demo/runtime-image:1.27.0","digest":"sha256:6666666666666666666666666666666666666666666666666666666666666666","mediaType":"application/vnd.oci.image.manifest.v1+json","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"vendor","sourceUri":"https://example.invalid/runtime-image","producer":"demo-only","notes":"占位元数据；不对应真实 OCI 镜像。"},
+    {"id":"sf:artifact:runtime-image-sbom","kind":"sbom","uri":"artifact://demo/runtime-image.cdx.json","digest":"sha256:7777777777777777777777777777777777777777777777777777777777777777","mediaType":"application/vnd.cyclonedx+json","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"manual","producer":"demo-only","notes":"占位的 SBOM 引用。"},
+    {"id":"sf:artifact:runtime-image-provenance","kind":"provenance","uri":"artifact://demo/runtime-image-provenance.json","digest":"sha256:8888888888888888888888888888888888888888888888888888888888888888","mediaType":"application/json","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"manual","producer":"demo-only","notes":"占位的来源证明引用。"},
+    {"id":"sf:artifact:compatibility-report","kind":"test-report","uri":"artifact://demo/compatibility-report.json","digest":"sha256:9999999999999999999999999999999999999999999999999999999999999999","mediaType":"application/json","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"manual","producer":"demo-only","notes":"用于展示兼容规则需要引用证据；不是实际测试结果。"},
+    {"id":"sf:artifact:customer-patch-package","kind":"patch-package","uri":"artifact://demo/customer-patch.diff","digest":"sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd","mediaType":"text/x-diff","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"customer","producer":"demo-only","notes":"客户补丁示例，不包含真实补丁。"},
+    {"id":"sf:artifact:customer-patch-test-report","kind":"test-report","uri":"artifact://demo/customer-patch-test-report.json","digest":"sha256:fedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedcbafedc","mediaType":"application/json","createdAt":"2026-10-28T00:00:00Z","verificationStatus":"pending","originType":"manual","producer":"demo-only","notes":"占位测试报告。"}
+  ],
+  "compatibilityRules": [
+    {
+      "id": "sf:compatibility:event-broker-metrics-exporter",
+      "sourceVersionId": "sf:version:event-broker-3.8.0",
+      "targetVersionId": "sf:version:metrics-exporter-0.4.0",
+      "status": "untested",
+      "evidenceArtifactIds": [],
+      "notes": "未测试状态不表示兼容或不兼容。"
+    }
+  ],
+  "customerConfigurations": [
+    {
+      "id": "sf:customer-config:north-tenant-1",
+      "tenantId": "customer-north",
+      "productId": "sf:product:event-platform",
+      "configurationVersion": "1.0.0",
+      "status": "validated",
+      "owner": "customer-delivery-team",
+      "createdAt": "2026-10-28T00:00:00Z",
+      "baseVersionIds": ["sf:version:event-broker-3.8.0", "sf:version:metrics-exporter-0.4.0", "sf:version:deployment-template-1.1.0", "sf:version:runtime-image-1.27.0"],
+      "overrides": [
+        {"key": "replicaCount", "value": 3, "reason": "示例客户容量配置"},
+        {"key": "storageClass", "value": "fast-ssd", "reason": "示例环境参数"}
+      ],
+      "secretRefs": ["vault://customer-north/event-platform/sasl-password"],
+      "customPatchIds": ["sf:custom-patch:north-tenant-broker-001"],
+      "notes": "只保存非敏感配置值和密钥引用，不保存原始密码或 API Key。"
+    }
+  ],
+  "customPatches": [
+    {
+      "id": "sf:custom-patch:north-tenant-broker-001",
+      "tenantId": "customer-north",
+      "componentId": "sf:component:event-broker",
+      "baseVersionId": "sf:version:event-broker-3.8.0",
+      "patchVersion": "1.0.0",
+      "sourceRepoUri": "https://example.invalid/customer-north/event-broker-patches",
+      "commitId": "abcdef0123456789abcdef0123456789abcdef01",
+      "owner": "customer-delivery-team",
+      "status": "draft",
+      "securityReviewStatus": "pending",
+      "artifactId": "sf:artifact:customer-patch-package",
+      "testEvidenceArtifactIds": ["sf:artifact:customer-patch-test-report"],
+      "notes": "示意客户补丁记录；还未经过测试或安全审核。"
+    }
+  ]
+}
