@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from ontology_software_factory.api_contract_connectors import (
-    AsyncAPIJsonConnector, GraphQLSDLConnector, OpenAPIJsonConnector, ProtobufConnector
+    AsyncAPIJsonConnector, DbtManifestConnector, GraphQLSDLConnector, OpenAPIJsonConnector, ProtobufConnector, SchemaRegistryExportConnector
 )
 from ontology_software_factory.source_connectors import SourceConnectorError
 
@@ -50,6 +50,30 @@ class ApiContractConnectorTests(unittest.TestCase):
         result = ProtobufConnector([self.root]).scan("src-4", self.write("orders.proto", proto))
         self.assertTrue(any(item.kind == "protobuf-message" for item in result.assets))
         self.assertTrue(any(item.kind == "protobuf-rpc" for item in result.assets))
+
+
+    def test_dbt_manifest_imports_models_sources_and_lineage(self):
+        manifest = {
+            "nodes": {"model.pkg.orders": {"name": "orders", "resource_type": "model",
+                "package_name": "pkg", "database": "warehouse", "schema": "analytics",
+                "description": "orders model", "config": {"materialized": "table"},
+                "depends_on": {"nodes": ["source.pkg.raw_orders"]},
+                "columns": {"id": {"description": "primary key"}}}},
+            "sources": {"source.pkg.raw_orders": {"name": "raw_orders", "source_name": "erp",
+                "database": "warehouse", "schema": "raw"}}
+        }
+        result = DbtManifestConnector([self.root]).scan("dbt-1", self.write("manifest.json", json.dumps(manifest)))
+        self.assertTrue(any(item.kind == "dbt-node" and item.name == "orders" for item in result.assets))
+        self.assertTrue(any(item.kind == "dbt-source" for item in result.assets))
+
+    def test_schema_registry_export_imports_subject_versions(self):
+        export = {"subjects": [{"subject": "orders-value", "version": 2, "id": 18,
+            "schemaType": "AVRO", "schema": json.dumps({"type": "record", "name": "Order",
+                "fields": [{"name": "id", "type": "string"}]})}]}
+        result = SchemaRegistryExportConnector([self.root]).scan(
+            "registry-1", self.write("schema-export.json", json.dumps(export)))
+        self.assertEqual(result.assets[0].metadata["subject"], "orders-value")
+        self.assertEqual(result.assets[0].metadata["fields"], ["id"])
 
     def test_path_outside_allowed_roots_is_rejected(self):
         with tempfile.TemporaryDirectory() as other:
