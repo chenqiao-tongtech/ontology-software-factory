@@ -162,6 +162,8 @@ class AgentWorkflowStepHandler:
                 "ontologyBinding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")},
                 "taskContract": task_contract,
                 "unavailableSkillTools": execution.get("unavailable_skill_tools", []),
+                "runtimeContractLockDigest": (payload.get("runtimeContractLock") or {}).get("digest"),
+                "workspaceMetadata": execution.get("workspace_metadata"),
                 "workspaceOperations": execution.get("workspace_operations", []),
                 "workspaceChanges": workspace_change_artifact,
                 "output": output,
