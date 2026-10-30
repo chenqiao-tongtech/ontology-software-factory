@@ -117,6 +117,8 @@ def validate_agent_catalog(root: Path = ROOT) -> list[str]:
     errors.extend(schema_errors(result,result_schema,"example result"))
     if task.get("taskId") != result.get("taskId"): errors.append("example result taskId does not match task")
     if task.get("roleId") != result.get("roleId"): errors.append("example result roleId does not match task")
+    for field in ("ontologyVersion", "ontologySnapshotId", "ontologyDigest", "ontologySchemaVersion", "roleDigest", "skillRefs"):
+        if task.get(field) != result.get(field): errors.append(f"example result {field} does not match task")
     role=role_by_id.get(task.get("roleId"))
     if role:
         allowed=set(role.get("outputEntityTypes",[]))
