@@ -27,7 +27,7 @@ class ObservabilityTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d)
    harness=root/'harness.jsonl'; connector=root/'connector.jsonl'
-   harness.write_text(json.dumps({'runId':'r1','taskId':'t1','toolId':'documents.read','status':'succeeded','durationMs':3,'prompt':'must-not-leak'})+'\\n')
+   harness.write_text(json.dumps({'runId':'r1','taskId':'t1','toolId':'documents.read','status':'succeeded','durationMs':3,'prompt':'must-not-leak'})+chr(10))
    connector.write_text(json.dumps({'sourceId':'s1','connectorId':'source.sqlite','status':'complete','assetCount':4,'location':'/private/path'})+'\\n')
    report=build_platform_observability_report(root,{},harness_audit_path=harness,connector_audit_path=connector)
    self.assertEqual(report['platform']['harnessAudit']['total'],1)
