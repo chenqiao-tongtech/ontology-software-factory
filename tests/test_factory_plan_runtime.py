@@ -85,7 +85,8 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         self.assertEqual([item["assignmentId"] for item in first["enqueued"]], ["analyze-requirement"])
         self.assertEqual(first["execution"]["phases"][0]["status"], "running")
         persisted = self.workflow_store.list_factory_plan_phases(self.run["id"], self.plan["planId"])
-        self.assertEqual(persisted[0]["status"], "running")
+        requirements_phase = next(item for item in persisted if item["phaseId"] == "requirements-analysis")
+        self.assertEqual(requirements_phase["status"], "running")
         self.assertEqual(first["execution"]["phases"][1]["status"], "pending")
         self.assertEqual(len(self.task_store.list_tasks()), 1)
 
@@ -146,7 +147,11 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         self.assertEqual(execution["completedAssignments"], 1)
         self.assertEqual(execution["phases"][0]["status"], "succeeded")
         self.assertEqual(
-            self.workflow_store.list_factory_plan_phases(self.run["id"], self.plan["planId"])[0]["status"],
+            next(
+                item["status"] for item in self.workflow_store.list_factory_plan_phases(
+                    self.run["id"], self.plan["planId"]
+                ) if item["phaseId"] == "requirements-analysis"
+            ),
             "succeeded",
         )
         self.assertTrue(list((Path(self.temp.name) / "artifacts").rglob("agent-result.json")))
