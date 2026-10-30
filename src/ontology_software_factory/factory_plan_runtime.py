@@ -67,6 +67,16 @@ def get_factory_plan_execution(task_store: Any, plan_record: dict[str, Any]) -> 
     tasks = task_store.list_tasks(500)
     by_key = {item["idempotencyKey"]: item for item in tasks}
     phases = _phase_projection(plan, by_key)
+    if hasattr(task_store, "list_factory_plan_phases"):
+        persisted = {
+            item["phaseId"]: item["status"]
+            for item in task_store.list_factory_plan_phases(
+                plan["workflowRunId"], plan["planId"]
+            )
+        }
+        for phase in phases:
+            if phase["phaseId"] in persisted:
+                phase["status"] = persisted[phase["phaseId"]]
     statuses = [phase["status"] for phase in phases]
     if all(value == "succeeded" for value in statuses):
         status = "succeeded"
