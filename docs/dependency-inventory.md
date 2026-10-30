@@ -8,6 +8,7 @@
 
 | 依赖组 | 包 | 用途 | 安装命令 |
 |---|---|---|---|
+| 构建 | `setuptools>=68` | PEP 517 / setuptools 构建后端；pip 安装时自动处理 | `pip install -e .` |
 | 基础 | `jsonschema[format]>=4.21,<5` | JSON Schema / Format 校验 | `pip install -e .` |
 | `llm` | `openai>=1.99,<4` | OpenAI Responses API Provider、本体发现 | `pip install -e '.[llm]'` |
 | `agent-runtime` | `openai>=1.99,<4` | OpenAI API 客户端 | `pip install -e '.[agent-runtime]'` |
@@ -16,6 +17,8 @@
 | `mysql` | `PyMySQL>=1.1,<2` | MySQL Schema 只读连接器 | `pip install -e '.[mysql]'` |
 
 Pydantic 等 Agent SDK 传递依赖由 pip 根据包元数据安装，不要手工固定与 Agent SDK 不兼容的版本。Python 版本要求为 3.11+。
+
+项目在 pyproject.toml 中提供 Ruff 配置（行宽 100、Python 3.11 目标），但 Ruff 当前不是项目安装依赖，也不在现有 GitHub CI 必跑步骤中。如需本地 lint，可自行安装 `python -m pip install ruff` 并执行 `ruff check .`。
 
 ## 2. Python 标准库能力
 
