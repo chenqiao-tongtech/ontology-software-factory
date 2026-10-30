@@ -1,9 +1,15 @@
 PYTHON ?= python
 export PYTHONPATH := src
 
-.PHONY: portal validate architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow ontology-consumers runner-tests test demo-pipeline demo-gate demo-e2e demo-ontology-discovery demo-ontology-discovery-worker observability clean-local
+.PHONY: portal ai-runtime-console agent-workflow-console llm-check validate architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow ontology-consumers runner-tests test demo-pipeline demo-gate demo-e2e demo-ontology-discovery demo-ontology-discovery-worker observability clean-local
 portal:
 	$(PYTHON) scripts/run_factory_portal.py --host 127.0.0.1 --port 8770
+ai-runtime-console:
+	$(PYTHON) scripts/run_ai_runtime_console.py --host 127.0.0.1 --port 8768
+agent-workflow-console:
+	$(PYTHON) scripts/run_agent_workflow_console.py --host 127.0.0.1 --port 8769
+llm-check:
+	$(PYTHON) scripts/check_llm_connection.py
 
 validate: architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow ontology-consumers
 architecture-baseline:
