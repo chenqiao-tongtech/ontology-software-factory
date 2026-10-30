@@ -259,7 +259,7 @@ def main() -> int:
     workflow_store = SQLiteWorkflowStore(db_path)
     task_store = SQLiteTaskStore(db_path)
     engine = WorkflowEngine(workflow_store, load_definition())
-    runtime = OpenAIAgentsRuntime(project_root=ROOT)
+    runtime = OpenAIAgentsRuntime(project_root=ROOT, usage_store=workflow_store)
     artifact_root = ROOT / "data" / "real-agent-workflow" / "artifacts"
     step_handler = AgentWorkflowStepHandler(runtime, artifact_root=artifact_root)
     handlers = {f"agent.workflow-step.{step_id}": step_handler
