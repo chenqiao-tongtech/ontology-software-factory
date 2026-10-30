@@ -109,7 +109,15 @@ def validate_role_ontology_contract(
     if project_root is not None:
         root = Path(project_root)
         for skill_id in role.get("skillIds", []):
-            skill_path = root / "skills" / str(skill_id) / "skill.json"
+            if not isinstance(skill_id, str) or not re.fullmatch(r"[a-z][a-z0-9-]{1,70}", skill_id):
+                raise OntologyBindingError("Role contains an invalid Skill identifier")
+            skill_path = root / "skills" / skill_id / "skill.json"
+            try:
+                skill_path.resolve().relative_to(root.resolve())
+            except ValueError as exc:
+                raise OntologyBindingError(f"Skill path escapes project root: {skill_id}") from exc
+            if skill_path.is_symlink():
+                raise OntologyBindingError(f"Skill definition must not be a symlink: {skill_id}")
             try:
                 skill = json.loads(skill_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
@@ -147,6 +155,9 @@ def _skill_reference_records(project_root: str | Path, skills: list[dict[str, An
         skill_id = str(skill["skillId"])
         instructions_path = root / "skills" / skill_id / "SKILL.md"
         try:
+            instructions_path.resolve().relative_to(root.resolve())
+            if instructions_path.is_symlink():
+                raise OSError("Skill instructions must not be a symlink")
             instructions = instructions_path.read_text(encoding="utf-8")
         except OSError as exc:
             raise OntologyBindingError(f"Skill instructions are missing: {skill_id}") from exc
