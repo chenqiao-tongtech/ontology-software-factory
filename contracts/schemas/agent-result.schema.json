@@ -17,7 +17,8 @@
     "evidenceRefs",
     "humanReviewRequired",
     "errors",
-    "completedAt"
+    "completedAt",
+    "skillRefs"
   ],
   "properties": {
     "taskId": {
@@ -190,6 +191,32 @@
     "ontologyVersion": {
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "skillRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "skillId",
+          "version",
+          "digest"
+        ],
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,70}$"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
     }
   }
 }
