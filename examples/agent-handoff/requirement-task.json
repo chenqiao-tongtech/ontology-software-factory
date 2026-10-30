@@ -48,5 +48,16 @@
     "maxToolCalls": 10
   },
   "idempotencyKey": "REQ-001-normalize-v1",
-  "workflowState": "requirements.analysis"
+  "workflowState": "requirements.analysis",
+  "ontologySnapshotId": "ont-1111111111111111",
+  "ontologyDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+  "ontologySchemaVersion": "1.0.0",
+  "roleDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+  "skillRefs": [
+    {
+      "skillId": "requirement-normalization",
+      "version": "1.0.0",
+      "digest": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ]
 }
