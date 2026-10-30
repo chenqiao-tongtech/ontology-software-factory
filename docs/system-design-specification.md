@@ -3,7 +3,7 @@
 | 文档属性 | 内容 |
 |---|---|
 | 文档编号 | OSF-SDS-001 |
-| 文档版本 | 1.5 |
+| 文档版本 | 1.6 |
 | 基线日期 | 2026-10-30 |
 | 适用系统 | ontology-software-factory |
 | 基线分支 | main |
@@ -203,7 +203,7 @@ flowchart TB
 - Tool Registry：工具定义与权限交集；
 - Harness：统一策略、上下文、预算、凭据、隔离和证据控制。
 
-**现状：** 团队拓扑、角色文件、Skill 文件、Skill Schema、Agent SDK 适配器、结构化输出和工具权限交集已有实现。Agent Runtime 新增本体定义只读、连接器目录只读和依赖声明只读三类工具，并通过角色 Tool ID 与策略矩阵限制可见范围。本阶段新增 SkillRegistry，支持 Skill Schema 校验、角色/能力目录引用校验、指令文件读取及内容摘要锁；该 Registry 尚未接入 Agent Workflow 的运行时加载链路。新增 HarnessRuntime 本地参考实现，提供按角色字段白名单组装上下文、租户/项目绑定、工具调用预算、模型 Token 预算、独立审批回调、元数据审计和文件型 Kill Switch。HarnessRuntime 当前由调用方显式注入 ToolRegistry，尚未成为 OpenAIAgentsRuntime 的默认中介，也未提供企业 PDP、Secret Broker 或分布式预算存储。
+**现状：** 团队拓扑、角色文件、Skill 文件、Skill Schema、Agent SDK 适配器、结构化输出和工具权限交集已有实现。OpenAIAgentsRuntime 已把其注册工具接入 Harness Tool Gateway：工具可见性由 Role、运行时实现和策略矩阵共同决定，调用时执行工具 Schema 校验、单次 Agent 任务工具调用预算、Kill Switch 和元数据审计。Harness 同时按 Role 字段白名单组装受限共享上下文。SkillRegistry 支持 Skill Schema 校验、角色/能力目录引用校验、指令文件读取及内容摘要锁，并已用于 Agent Runtime 的 Skill 加载。当前 Harness 预算为进程内、单次 Agent 执行级别；模型实际 Token 用量尚未接入，其他 Agent Provider、非 Agent Connector 和跨进程执行路径尚未统一接管。企业 PDP、Secret Broker 和分布式预算存储仍未实现。
 
 **执行约束：** Agent 最大轮次受配置限制；默认工具范围有限；SDK tracing 默认关闭；生产部署、秘密读取、策略修改、自我审批和跨租户读取为全局拒绝动作。
 
@@ -509,13 +509,13 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 
 | 序号 | 建设方向 | 主要交付物 | 前置条件 |
 |---|---|---|---|
-| 1 | Harness Runtime | 将现有本地 Harness 接入 Agent/Workflow；补齐 PDP 接口、策略版本、预算持久化、审计和 Kill Switch 运维接口 | 现有 Tool/Role/Policy/Workflow 契约 |
+| 1 | Harness Runtime | 扩展至所有 Agent Provider、Connector 和 Workflow 执行路径；补齐 Token 计量、跨任务预算持久化、PDP 接口、策略版本与 Kill Switch 运维接口 | OpenAI Agents Runtime 已接入单次 Agent 执行级工具网关 |
 | 2 | Skill Registry | 将现有内容寻址 Registry 接入 Agent Runtime；补齐 Skill 依赖、回归测试、发布/弃用和发现 API | 现有 Skill JSON/SKILL.md |
 | 3 | Connector Runtime | 将现有只读扫描 Runtime 接入 Portal 与 Source Sync；补齐同步游标、健康状态、凭据注入和动作连接器幂等执行 | Source Connector、Connector Catalog |
 | 4 | 本体发现连接器扩展 | 已支持 OpenAPI/AsyncAPI JSON、GraphQL SDL、Protobuf、dbt manifest/catalog 和 Schema Registry JSON 导出；继续接入文档 SaaS、实时 Schema Registry、数据目录和运维元数据 | Connector Runtime 与 Source Evidence 模型 |
 | 5 | Agent Tools 扩展 | 本体查询、代码分析、依赖分析、测试、扫描、制品和工单工具 | Harness Tool Gateway 与独立权限 |
 | 6 | 统一监控台 | Agent/Skill/Tool/Connector/Workflow Trace、证据导航、成本、告警和运行控制 | 统一事件与 Trace 关联模型 |
-| 7 | Factory Orchestrator 与本体模块治理 | 受限主控 Role/Skill、AgentPlan Schema、确定性校验、不可变计划持久化、依赖感知 Assignment 调度、Agent Worker 执行、事务 Outbox/Inbox 结果回写、Assignment 结果与证据持久化、本体模块清单 | 主控自动生成计划、独立审批服务、独立 Phase 状态机、Harness 全量工具中介和分布式调度尚未完成；模块清单仍基于单一权威本体 JSON |
+| 7 | Factory Orchestrator 与本体模块治理 | 受限主控 Role/Skill、AgentPlan Schema、确定性校验、不可变计划持久化、依赖感知 Assignment 调度、Agent Worker 执行、事务 Outbox/Inbox 结果回写、Assignment 结果与证据持久化、本体模块清单 | 主控自动生成计划、独立审批服务、独立 Phase 状态机、跨 Provider/Connector 的 Harness 全量中介和分布式调度尚未完成；模块清单仍基于单一权威本体 JSON |
 
 每个方向均需交付代码、Schema、单元与集成测试、运行说明、依赖更新、权限矩阵、监控指标和验收报告。跨模块能力按 ADR 管理。
 
@@ -563,3 +563,4 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 | 1.3 | 2026-10-30 | 增加 Workflow Engine 的 AgentPlan 校验提交与 SQLite 不可变持久化，记录计划摘要和工作流事件，增加计划提交 API 与运行详情查询；assignment 级 Worker Task 实例化仍待完成 |
 | 1.4 | 2026-10-30 | 增加 Assignment 到 Worker Task 的依赖感知派发、Role/Skill 与本体快照锁定、Agent Runtime 执行、Agent Result 与证据制品、运行详情派生进度视图；独立审批与 Workflow 事件投影仍待完成 |
 | 1.5 | 2026-10-30 | 增加 Factory Assignment 结果事务 Outbox/Inbox 投影、Workflow 事件账本与 Assignment 结果持久化；独立 Phase 状态机和 Harness 全量工具中介仍待完成 |
+| 1.6 | 2026-10-30 | OpenAI Agents Runtime 注册工具接入 Harness Tool Gateway，增加策略矩阵交集、工具 Schema 校验、单次 Agent 任务工具预算、Kill Switch 和元数据审计；跨 Provider/Connector 中介、Token 计量和持久化预算仍待完成 |
