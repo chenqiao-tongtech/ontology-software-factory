@@ -171,7 +171,7 @@ make test
 make docker-test-image
 ```
 
-`make validate` 会校验架构基线、MVP 范围、领域契约、资产目录、Agent/Skills、多智能体拓扑、Workflow 定义、本体发现配置，以及 Agent Role、Skill、Workflow、Tool 和 JSON Schema 契约对本体类的引用。`make test` 运行完整 unittest 套件。测试中使用的 Fake Provider、fixture 和模拟服务用于验证本地逻辑，不代表外部 LLM/MCP/NVIDIA/Cognee 服务已经连通。
+`make validate` 会校验架构基线、MVP 范围、领域契约、资产目录、Agent/Skills、多智能体拓扑、Workflow 定义、本体发现配置、连接器目录，以及 Agent Role、Skill、Workflow、Tool 和 JSON Schema 契约对本体类的引用。`make test` 运行完整 unittest 套件。测试中使用的 Fake Provider、fixture 和模拟服务用于验证本地逻辑，不代表外部 LLM/MCP/NVIDIA/Cognee 服务已经连通。
 
 测试数量和执行结果以当前提交对应的 GitHub Actions CI 为准。离线 Fixture、Fake Provider 和模拟集成测试不等于真实外部服务或生产环境验收。
 
@@ -419,3 +419,17 @@ python scripts/run_ontology_discovery.py \
 
 
 本阶段进一步加入 Run 级 Workflow/Role/Skill 内容锁、Docker 固定测试执行、digest 固定的容器安全扫描与 Agent Workspace 证据门禁；Git Worktree 仅创建本地候选分支，不自动 push/PR/merge。详见 [受控工作区与执行手册](docs/controlled-workspace-execution.md)。
+
+
+## 连接器平台与本体数据接入
+
+连接器分为两条独立能力线：**本体数据源连接器**（只读发现代码、文档、数据库 Schema、API/事件契约、数据目录和运维元数据）与 **Agent 动作连接器**（受控创建 PR、更新工单、触发 CI 等写操作）。两者共享注册、权限、凭据引用、审计和版本治理，但不共享写权限。
+
+当前新增连接器描述目录、Schema、默认拒绝授权检查和校验命令：
+
+- `connectors/registry.json`：连接器能力、方向、操作、实现状态、数据分类、认证方式和网络出口声明。
+- `src/ontology_software_factory/connector_catalog.py`：加载并校验连接器目录；仅允许已实现且明确声明的操作，未知/未实现连接器默认拒绝。
+- `make connector-catalog`：单独校验连接器目录；`make validate` 已纳入该检查。
+- [连接器平台与本体数据接入设计](docs/connector-platform-and-ontology-ingestion.md)：覆盖 Harness、Skills、Tools、连接器边界与数据源路线图。
+
+目录中标记为 `planned` 或 `adapter-required` 的项目只是能力路线图，不能被运行时调用。当前未因此新增 Confluence、SharePoint、Google Drive、Kafka Schema Registry、GraphQL 等真实外部适配器，也未实现生产级 OAuth/Secret Broker。
