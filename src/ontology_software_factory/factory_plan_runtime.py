@@ -12,6 +12,7 @@ from .ontology_runtime import (
     build_agent_task_contract,
     build_agent_result_contract,
     validate_agent_output,
+    validate_typed_entity_references,
     validate_ontology_binding,
     validate_runtime_contract_lock,
 )
@@ -70,7 +71,7 @@ def get_factory_plan_execution(task_store: Any, plan_record: dict[str, Any]) -> 
         status = "succeeded"
     elif any(value == "failed" for value in statuses):
         status = "failed"
-    elif any(value == "running" for value in statuses):
+    elif any(value in {"running", "succeeded"} for value in statuses):
         status = "running"
     else:
         status = "pending"
@@ -236,6 +237,16 @@ class FactoryAssignmentHandler:
             if not isinstance(output, dict):
                 raise PermanentTaskError("Agent output must be a JSON object")
             validate_agent_output(output, role=role, binding=binding)
+            ontology = binding["ontology"]
+            extensions = ontology.get("operationalExtensions", {}) if isinstance(ontology.get("operationalExtensions"), dict) else {}
+            ontology_classes = {
+                item["name"] for item in ontology.get("classes", []) + extensions.get("classes", [])
+                if isinstance(item, dict) and item.get("name")
+            }
+            validate_typed_entity_references(
+                output, ontology_classes=ontology_classes,
+                allowed_types=set(output_types), label="Factory Assignment output",
+            )
             artifact = {
                 "workflowRunId": run_id, "planId": plan_id, "phaseId": phase_id,
                 "assignmentId": assignment_id, "roleId": role_id, "skillId": skill_id,
