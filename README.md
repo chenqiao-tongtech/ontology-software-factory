@@ -168,6 +168,7 @@ ontology-software-factory/
 python -m pip install -e .
 make validate
 make test
+make docker-test-image
 ```
 
 `make validate` 会校验架构基线、MVP 范围、领域契约、资产目录、Agent/Skills、多智能体拓扑、Workflow 定义、本体发现配置，以及 Agent Role、Skill、Workflow、Tool 和 JSON Schema 契约对本体类的引用。`make test` 运行完整 unittest 套件。测试中使用的 Fake Provider、fixture 和模拟服务用于验证本地逻辑，不代表外部 LLM/MCP/NVIDIA/Cognee 服务已经连通。
