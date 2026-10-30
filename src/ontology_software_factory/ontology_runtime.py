@@ -335,6 +335,7 @@ def build_agent_result_contract(
     result = {
         "taskId": task_contract["taskId"],
         "roleId": role["roleId"],
+        "skillRefs": skill_refs,
         "ontologyVersion": verified["ontologyVersion"],
         "ontologySnapshotId": verified["snapshotId"],
         "ontologyDigest": verified["digest"],
