@@ -6,7 +6,7 @@ and TLS are required; only information_schema metadata is queried.
 from __future__ import annotations
 
 import os
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 from typing import Any
 
 from .source_connectors import SourceAsset, SourceConnectorError, SourceScanResult, _asset_id
@@ -46,10 +46,9 @@ class PostgreSQLSchemaConnector(_SQLSchemaConnector):
     def scan(self, source_id: str, location: str) -> SourceScanResult:
         value = self._connection_string(str(location))
         parsed = self._validate_url(value, {"postgres", "postgresql"})
-        if parsed.query and "sslmode=" in parsed.query and "sslmode=disable" in parsed.query:
-            raise SourceConnectorError("PostgreSQL TLS must not be disabled")
-        if not parsed.query or "sslmode=" not in parsed.query:
-            raise SourceConnectorError("PostgreSQL connection URL must specify sslmode=require or verify-full")
+        sslmode = parse_qs(parsed.query).get("sslmode", [""])[0].lower()
+        if sslmode not in {"require", "verify-ca", "verify-full"}:
+            raise SourceConnectorError("PostgreSQL connection URL must specify sslmode=require, verify-ca, or verify-full")
         try:
             import psycopg
         except ImportError as exc:
