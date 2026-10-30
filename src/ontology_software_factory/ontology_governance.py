@@ -57,6 +57,19 @@ def _walk_enums(value: Any):
             yield from _walk_enums(child)
 
 
+def _json_pointer(value: Any, pointer: str):
+    current = value
+    for raw_part in pointer.strip("/").split("/"):
+        part = raw_part.replace("~1", "/").replace("~0", "~")
+        if isinstance(current, dict):
+            current = current.get(part)
+        elif isinstance(current, list) and part.isdigit() and int(part) < len(current):
+            current = current[int(part)]
+        else:
+            return None
+    return current
+
+
 def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None = None,
                          additional_ontologies: list[dict] | None = None) -> dict:
     """Build a verifiable graph from repository definitions and explicit typed fields."""
@@ -196,6 +209,7 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
         if edge["target"].startswith("tool:") and edge["target"].split(":", 1)[1] not in tools:
             issues.append({"code": "unknown-tool-reference", "consumer": edge["source"], "target": edge["target"]})
 
+    pointer_map = mapping.get("contractEntityTypeEnumPointers", {})
     for rel in mapping.get("contractFiles", []):
         path = root / str(rel)
         data = _read_json(path)
@@ -203,8 +217,23 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
             issues.append({"code": "consumer-source-file-missing-or-invalid", "source": str(rel)})
         node_id = "contract:" + path.stem
         add_node(node_id, "json-contract", data.get("title", path.stem), str(rel))
-        for value in sorted({str(x) for x in _walk_enums(data) if str(x) in classes}):
-            add_edge("class:" + value, node_id, "constrains-entity-type")
+        pointers = pointer_map.get(str(rel), [])
+        if pointers:
+            values = []
+            for pointer in pointers:
+                resolved = _json_pointer(data, pointer)
+                if not isinstance(resolved, list):
+                    issues.append({"code": "contract-entity-enum-pointer-invalid", "source": str(rel), "pointer": pointer})
+                    continue
+                values.extend(resolved)
+            for value in sorted({str(x) for x in values}):
+                if value not in classes:
+                    issues.append({"code": "unknown-contract-ontology-class", "consumer": node_id, "class": value})
+                else:
+                    add_edge("class:" + value, node_id, "constrains-entity-type")
+        else:
+            for value in sorted({str(x) for x in _walk_enums(data) if str(x) in classes}):
+                add_edge("class:" + value, node_id, "constrains-entity-type")
 
     for name in sorted(classes):
         add_node("class:" + name, "ontology-class", name, "ontology/software-factory-ontology.json")
