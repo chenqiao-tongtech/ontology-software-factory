@@ -25,13 +25,13 @@ EXCLUDED = {".git", ".hg", ".svn", ".venv", "venv", "node_modules", "__pycache__
 class RemoteRepositoryConnector:
     """Read-only metadata adapter for github.com or gitlab.com."""
 
-    def __init__(self, provider: str, fetch_json: Callable, *, max_assets: int = 600):
+    def __init__(self, provider: str, fetch_json: Callable, *, token_env: str | None = None, max_assets: int = 600):
         if provider not in {"github", "gitlab"}:
             raise ValueError("provider must be github or gitlab")
         self.source_type = provider
         self.provider = provider
         self.fetch_json = fetch_json
-        self.max_assets = max_assets
+        self.max_assets = max_assets\n        self.token_env = token_env
 
     def scan(self, source_id: str, location: str | Path) -> SourceScanResult:
         parsed = urlparse(str(location))
