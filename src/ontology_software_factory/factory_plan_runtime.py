@@ -213,6 +213,7 @@ class FactoryAssignmentHandler:
                 step_id=assignment_id, attempt=context.attempt, objective=objective,
                 timeout_seconds=int(payload.get("timeoutSeconds", 900)),
                 max_attempts=3, idempotency_key=context.idempotency_key,
+                output_entity_types=list(output_types),
             )
         except Exception as exc:
             raise PermanentTaskError(f"factory assignment contract rejected: {type(exc).__name__}") from exc
@@ -279,6 +280,7 @@ class FactoryAssignmentHandler:
                 output=output, evidence=evidence,
                 artifact_uri=f"artifact://{run_id}/{plan_id}/{phase_id}/{assignment_id}/worker-attempt-{context.attempt}/output.json",
                 completed_at=datetime.now(timezone.utc).isoformat(),
+                output_entity_types=list(output_types),
             )
             result_path = stage / "agent-result.json"
             result_path.write_text(json.dumps(agent_result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
