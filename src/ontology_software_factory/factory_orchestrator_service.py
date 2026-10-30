@@ -23,7 +23,6 @@ class FactoryOrchestratorService:
 
     def generate_and_submit(
         self, engine: Any, run: dict[str, Any], *, requirement: str,
-        requested_by: str = "factory-orchestrator",
     ) -> dict[str, Any]:
         run_id = str(run.get("id", ""))
         requirement = str(requirement).strip()
