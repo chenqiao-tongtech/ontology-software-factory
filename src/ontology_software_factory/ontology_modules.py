@@ -26,6 +26,16 @@ def validate_module_manifest(ontology: dict[str, Any], manifest: dict[str, Any])
         str(item.get("name")) for item in core_relations + extensions.get("relations", [])
         if isinstance(item, dict) and item.get("name")
     }
+    for relation in core_relations + extensions.get("relations", []):
+        if not isinstance(relation, dict):
+            errors.append("ontology relation definition must be an object")
+            continue
+        source = relation.get("source")
+        targets = relation.get("target", [])
+        targets = targets if isinstance(targets, list) else [targets]
+        if source not in all_classes or not targets or any(target not in all_classes for target in targets):
+            errors.append(f"ontology relation has unknown source or target: {relation.get('name', '<unnamed>')}")
+
     seen_modules: set[str] = set()
     seen_classes: list[str] = []
     seen_relations: list[str] = []
