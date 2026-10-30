@@ -12,6 +12,7 @@ from ontology_software_factory.ontology_runtime import (
     validate_agent_task_contract,
     validate_agent_output,
     validate_ontology_binding,
+    validate_role_ontology_contract,
 )
 from ontology_software_factory.ontology_versioning import create_snapshot
 
@@ -83,6 +84,23 @@ class OntologyRuntimeBindingTests(unittest.TestCase):
                 ROOT, role=self.role, binding=snapshot, run_id="RUN-ABC123",
                 step_id="requirement-analysis", attempt=1, objective="Create a small API",
             )
+
+    def test_skill_entity_types_are_checked_against_pinned_ontology(self):
+        with tempfile.TemporaryDirectory() as temp:
+            skill_dir = Path(temp) / "skills" / "test-skill"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "skill.json").write_text(json.dumps({
+                "skillId": "test-skill", "version": "1.0.0", "compatibleRoleIds": ["test-role"],
+                "inputEntityTypes": ["GhostEntity"], "outputEntityTypes": ["Artifact"],
+                "requiredToolIds": ["documents.read"],
+            }), encoding="utf-8")
+            role = {
+                "roleId": "test-role", "inputEntityTypes": ["Requirement"],
+                "outputEntityTypes": ["Artifact"], "skillIds": ["test-skill"],
+                "toolIds": ["documents.read"],
+            }
+            with self.assertRaises(OntologyBindingError):
+                validate_role_ontology_contract(role, self.snapshot, temp)
 
     def test_typed_output_must_respect_role_output_types(self):
         with self.assertRaises(OntologyBindingError):
