@@ -67,7 +67,37 @@ class WorkspaceManager:
         target = raw_target.resolve()
         if self.workspace_root not in target.parents:
             raise WorkspacePolicyError("workspace path escaped workspace root")
-        if not target.exists():
+        backend = os.getenv("FACTORY_WORKSPACE_BACKEND", "copy").strip().lower()
+        if backend not in {"copy", "git-worktree"}:
+            raise WorkspacePolicyError("workspace backend must be copy or git-worktree")
+        if backend == "git-worktree":
+            git = shutil.which("git")
+            if not git:
+                raise WorkspacePolicyError("git-worktree backend requires the Git CLI")
+            root_result = subprocess.run(
+                [git, "-C", str(self.project_root), "rev-parse", "--show-toplevel"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, timeout=15, shell=False, check=False,
+            )
+            if root_result.returncode != 0 or Path(root_result.stdout.strip()).resolve() != self.project_root:
+                raise WorkspacePolicyError("git-worktree backend requires project_root to be the Git repository root")
+            branch_name = f"agent/run-{run_id.lower()}"
+            if not target.exists():
+                proc = subprocess.run(
+                    [git, "-C", str(self.project_root), "worktree", "add", "-b", branch_name, str(target), "HEAD"],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, timeout=60, shell=False, check=False,
+                )
+                if proc.returncode != 0:
+                    raise WorkspacePolicyError("cannot create isolated Git worktree: " + proc.stdout[-2000:])
+            current = subprocess.run(
+                [git, "-C", str(target), "branch", "--show-current"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, timeout=15, shell=False, check=False,
+            )
+            if current.returncode != 0 or current.stdout.strip() != branch_name:
+                raise WorkspacePolicyError("existing run workspace does not match its expected local branch")
+        elif not target.exists():
             shutil.copytree(
                 self.project_root, target,
                 ignore=shutil.ignore_patterns(*IGNORE_NAMES, "*.pyc", "*.sqlite3", "*.log"),
@@ -76,6 +106,14 @@ class WorkspaceManager:
         if target.is_symlink() or not target.is_dir():
             raise WorkspacePolicyError("workspace root is not a regular directory")
         return target
+
+    def describe(self, run_id: str) -> dict[str, Any]:
+        backend = os.getenv("FACTORY_WORKSPACE_BACKEND", "copy").strip().lower()
+        if backend == "git-worktree":
+            return {"backend": "git-worktree", "branch": f"agent/run-{run_id.lower()}",
+                    "pushEnabled": False, "mergeEnabled": False}
+        return {"backend": "repository-copy", "branch": None,
+                "pushEnabled": False, "mergeEnabled": False}
 
 
 class WorkspaceExecution:
@@ -100,6 +138,7 @@ class WorkspaceExecution:
         self.max_write_bytes = max_write_bytes
         self.max_output_chars = max_output_chars
         self.operations: list[dict[str, Any]] = []
+        self.tool_evidence: list[dict[str, Any]] = []
         self.evidence_root = self.root / ".agent-evidence"
         self.evidence_root.mkdir(exist_ok=True)
 
@@ -226,6 +265,43 @@ class WorkspaceExecution:
                            "logSha256": sha256_file(log_path)})
         return result
 
+    def _run_container_command(
+        self, argv: list[str], *, timeout_seconds: int, image: str = "ontology-software-factory-test-runner:py311-v1"
+    ) -> tuple[int, str, bool, str]:
+        docker = shutil.which("docker")
+        if not docker:
+            return 127, "Docker CLI is not installed", False, "unavailable"
+        inspect = subprocess.run(
+            [docker, "image", "inspect", image], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            timeout=15, shell=False, check=False,
+        )
+        if inspect.returncode != 0:
+            return 127, "Required container image is not present locally; image pulls are disabled", False, "image_missing"
+        uid = str(os.getuid()) if hasattr(os, "getuid") else "10001"
+        gid = str(os.getgid()) if hasattr(os, "getgid") else "10001"
+        command = [
+            docker, "run", "--rm", "--pull=never", "--network=none", "--read-only",
+            "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128",
+            "--memory=1g", "--cpus=1", "--user", f"{uid}:{gid}",
+            "--tmpfs", "/tmp:rw,noexec,nosuid,size=256m",
+            "--env", "PYTHONPATH=/workspace/src", "--env", "PYTHONIOENCODING=utf-8",
+            "--env", "PYTHONUTF8=1", "--env", "HOME=/tmp",
+            "--volume", f"{self.root}:/workspace:rw", "--workdir", "/workspace",
+            image, *argv,
+        ]
+        try:
+            proc = subprocess.run(
+                command, cwd=self.root, env={"PATH": os.environ.get("PATH", ""), "LANG": "C.UTF-8"},
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace",
+                timeout=timeout_seconds, shell=False, check=False,
+            )
+            return proc.returncode, proc.stdout, False, "docker"
+        except subprocess.TimeoutExpired as exc:
+            output = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+            return 124, output + "\\nRUNNER_TIMEOUT: container suite exceeded the configured timeout", True, "docker"
+
     def run_tests(self, suite_id: str, *, timeout_seconds: int = 120) -> dict[str, Any]:
         suites = {
             "kafka-profile-regression": [sys.executable, "-m", "unittest", "tests.test_kafka_profile", "-v"],
@@ -235,36 +311,49 @@ class WorkspaceExecution:
             raise WorkspacePolicyError("test suite is not in the fixed command allowlist")
         if not 1 <= timeout_seconds <= 120:
             raise WorkspacePolicyError("test timeout must be between 1 and 120 seconds")
-        if os.getenv("FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION", "").lower() not in {"1", "true", "yes"}:
+        container_enabled = os.getenv("FACTORY_ENABLE_CONTAINER_EXECUTION", "").lower() in {"1", "true", "yes"}
+        host_enabled = os.getenv("FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION", "").lower() in {"1", "true", "yes"}
+        if not container_enabled and not host_enabled:
             return {"status": "blocked", "suiteId": suite_id, "executed": False,
-                    "reason": "host execution is disabled; configure an OS/container sandbox or explicitly set FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION=1 for a trusted local demo",
+                    "reason": "execution disabled; enable Docker execution with FACTORY_ENABLE_CONTAINER_EXECUTION=1",
                     "evidence": None}
-        env = {"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(self.root / "src"),
-               "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
-               "HOME": str(self.root / ".agent-home"), "LANG": "C.UTF-8"}
-        Path(env["HOME"]).mkdir(exist_ok=True)
         argv = suites[suite_id]
         started = time.monotonic()
-        timed_out = False
-        try:
-            proc = subprocess.run(argv, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
-                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                  text=True, encoding="utf-8", errors="replace",
-                                  timeout=timeout_seconds, shell=False, check=False)
-            exit_code, output = proc.returncode, proc.stdout
-        except subprocess.TimeoutExpired as exc:
-            timed_out, exit_code = True, 124
-            output = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-            output += "\nRUNNER_TIMEOUT: test suite exceeded the configured timeout"
+        if container_enabled:
+            container_argv = ["python", *argv[1:]]
+            exit_code, output, timed_out, sandbox = self._run_container_command(
+                container_argv, timeout_seconds=timeout_seconds
+            )
+        else:
+            env = {"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(self.root / "src"),
+                   "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
+                   "HOME": str(self.root / ".agent-home"), "LANG": "C.UTF-8"}
+            Path(env["HOME"]).mkdir(exist_ok=True)
+            try:
+                proc = subprocess.run(argv, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                      text=True, encoding="utf-8", errors="replace",
+                                      timeout=timeout_seconds, shell=False, check=False)
+                exit_code, output, timed_out, sandbox = proc.returncode, proc.stdout, False, "host-unsafe-demo"
+            except subprocess.TimeoutExpired as exc:
+                timed_out, exit_code, sandbox = True, 124, "host-unsafe-demo"
+                output = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+                output += "\\nRUNNER_TIMEOUT: test suite exceeded the configured timeout"
         duration = round((time.monotonic() - started) * 1000)
         output = output[:self.max_output_chars]
-        status = "timed_out" if timed_out else ("passed" if exit_code == 0 else "failed")
+        status = ("timed_out" if timed_out else
+                  "incomplete" if sandbox in {"unavailable", "image_missing"} else
+                  "passed" if exit_code == 0 else "failed")
         report = {"schemaVersion": "1.0.0", "runId": self.run_id, "suiteId": suite_id,
                   "status": status, "exitCode": exit_code, "durationMs": duration,
                   "commandId": suite_id, "argv": argv, "executedAt": datetime.now(timezone.utc).isoformat(),
-                  "workspaceOnly": True, "sandbox": "host-process; not an OS/container sandbox"}
+                  "workspaceOnly": True, "sandbox": sandbox}
         evidence = self._write_evidence("tests", suite_id, report, output)
-        return {**report, "evidence": evidence}
+        result = {**report, "evidence": evidence}
+        self.tool_evidence.append(result)
+        self.operations.append({"operation": "tests.run", "suiteId": suite_id,
+                                "status": status, "reportSha256": evidence["reportSha256"]})
+        return result
 
     def run_security_scan(self, scanner_id: str, *, timeout_seconds: int = 90) -> dict[str, Any]:
         if scanner_id not in {"semgrep", "gitleaks", "trivy"}:

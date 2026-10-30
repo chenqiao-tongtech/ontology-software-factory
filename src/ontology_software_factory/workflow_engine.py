@@ -80,7 +80,8 @@ class WorkflowEngine:
         return {"run": run, "events": self.store.get_events(run_id)}
 
     def create_run(self, title: str, requested_by: str = "local-operator", environment: str = "staging",
-                   ontology_binding: dict[str, Any] | None = None) -> dict[str, Any]:
+                   ontology_binding: dict[str, Any] | None = None,
+                   runtime_contract_lock: dict[str, Any] | None = None) -> dict[str, Any]:
         if ontology_binding is not None:
             from .ontology_runtime import validate_ontology_binding
             ontology_binding = validate_ontology_binding(ontology_binding)
@@ -105,13 +106,14 @@ class WorkflowEngine:
             "currentStepId": self.definition["startStepId"], "createdAt": timestamp, "updatedAt": timestamp,
             "requestedBy": requested_by, "environment": environment, "revision": 1,
             "ontologyBinding": ontology_binding,
+            "runtimeContractLock": runtime_contract_lock,
             "steps": steps,
         }
         first = self._step(run, run["currentStepId"])
         first["status"] = "running"
         first["attempt"] = 1
         first["startedAt"] = timestamp
-        event = self._event("run.created", f"创建工作流运行：{run['title']}", actor=requested_by, payload={"workflowVersion": run["workflowVersion"], "ontologySnapshotId": (ontology_binding or {}).get("snapshotId"), "ontologyDigest": (ontology_binding or {}).get("digest"), "ontologyVersion": (ontology_binding or {}).get("ontologyVersion"), "ontologySchemaVersion": (ontology_binding or {}).get("schemaVersion")})
+        event = self._event("run.created", f"创建工作流运行：{run['title']}", actor=requested_by, payload={"workflowVersion": run["workflowVersion"], "ontologySnapshotId": (ontology_binding or {}).get("snapshotId"), "ontologyDigest": (ontology_binding or {}).get("digest"), "ontologyVersion": (ontology_binding or {}).get("ontologyVersion"), "ontologySchemaVersion": (ontology_binding or {}).get("schemaVersion"), "runtimeContractLockDigest": (runtime_contract_lock or {}).get("digest")})
         self.store.insert_new_run(run, event)
         return self.get_run(run_id)
 

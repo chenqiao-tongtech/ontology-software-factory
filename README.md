@@ -404,4 +404,4 @@ python scripts/run_ontology_discovery.py \
 **验收原则：** 只有当真实执行结果、退出码、日志、摘要与必需证据齐全时，才将相应任务标记为 `PASS`。模型生成的自然语言总结、fixture 结果或设计文档本身，都不能替代真实构建、测试、安全扫描和部署证据。
 
 
-本阶段 Agent 受控工作区与工具接入说明见 [controlled workspace execution](docs/controlled-workspace-execution.md)。
+本阶段 Agent 受控工作区、Run 级 Role/Skill 锁、Docker 固定测试执行和 Git Worktree 本地候选分支说明见 [controlled workspace execution](docs/controlled-workspace-execution.md)。

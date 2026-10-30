@@ -13,7 +13,7 @@ from .software_factory_pipeline import SoftwareFactoryPipeline, PipelineValidati
 from .workspace_execution import WorkspaceManager
 from .ontology_runtime import (
     build_agent_task_contract, build_agent_result_contract, validate_agent_output,
-    validate_ontology_binding, validate_role_ontology_contract,
+    validate_ontology_binding, validate_role_ontology_contract, validate_runtime_contract_lock,
 )
 
 
@@ -61,7 +61,14 @@ class AgentWorkflowStepHandler:
             raise PermanentTaskError("workflow input is missing a non-empty requirement")
         try:
             binding = validate_ontology_binding(payload.get("ontologyBinding", {}))
-            role = json.loads((self.project_root / "agents" / "roles" / f"{role_id}.json").read_text(encoding="utf-8"))
+            runtime_lock = payload.get("runtimeContractLock", {})
+            if (runtime_lock.get("workflowId") != payload.get("workflowId")
+                    or runtime_lock.get("workflowVersion") != payload.get("workflowVersion")):
+                raise ValueError("Workflow definition version does not match the Run-level Role/Skill lock")
+            locked = validate_runtime_contract_lock(
+                self.project_root, runtime_lock, role_id, binding
+            )
+            role = locked["role"]
             validate_role_ontology_contract(role, binding, self.project_root)
             requested_skill = payload.get("skillId")
             if requested_skill and requested_skill not in role.get("skillIds", []):
@@ -113,7 +120,10 @@ class AgentWorkflowStepHandler:
                                              "Review evidence gaps and require independent human approval"]
 
         try:
-            runtime_kwargs = {"ontology_binding": binding, "task_contract": task_contract}
+            runtime_kwargs = {
+                "ontology_binding": binding, "task_contract": task_contract,
+                "runtime_contract_lock": payload.get("runtimeContractLock"),
+            }
             if getattr(self.runtime, "supports_workspace_tools", False):
                 # One repository copy per run, outside the source checkout. No branch is pushed.
                 runtime_kwargs["workspace_path"] = self.workspace_manager.open(run_id)
@@ -156,7 +166,10 @@ class AgentWorkflowStepHandler:
                 "ontologyBinding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")},
                 "taskContract": task_contract,
                 "unavailableSkillTools": execution.get("unavailable_skill_tools", []),
+                "runtimeContractLockDigest": (payload.get("runtimeContractLock") or {}).get("digest"),
+                "workspaceMetadata": execution.get("workspace_metadata"),
                 "workspaceOperations": execution.get("workspace_operations", []),
+                "workspaceEvidence": execution.get("workspace_evidence", []),
                 "workspaceChanges": workspace_change_artifact,
                 "output": output,
             }

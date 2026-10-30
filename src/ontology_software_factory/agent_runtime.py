@@ -166,10 +166,19 @@ class OpenAIAgentsRuntime:
 
     def run_agent(self, role_id: str, task_input: dict[str, Any], *,
                   ontology_binding: dict[str, Any], task_contract: dict[str, Any],
-                  workspace_path: str | Path | None = None) -> dict[str, Any]:
-        role = self._load_role(role_id)
+                  workspace_path: str | Path | None = None,
+                  runtime_contract_lock: dict[str, Any] | None = None) -> dict[str, Any]:
         binding = validate_ontology_binding(ontology_binding)
-        skill_contracts = validate_role_ontology_contract(role, binding, self.project_root)
+        if runtime_contract_lock is None:
+            raise AgentContractError("Workflow Run Role/Skill lock is required")
+        try:
+            locked_contract = validate_runtime_contract_lock(
+                self.project_root, runtime_contract_lock, role_id, binding
+            )
+        except Exception as exc:
+            raise AgentContractError(f"Workflow Run Role/Skill lock validation failed: {type(exc).__name__}") from exc
+        role = locked_contract["role"]
+        skill_contracts = locked_contract["skills"]
         validate_agent_task_contract(self.project_root, task_contract, role=role, binding=binding)
         if role_id not in self._models:
             raise AgentContractError(f"Role has no registered typed output model: {role_id}")
@@ -252,6 +261,14 @@ class OpenAIAgentsRuntime:
         LOGGER.info("agent.run.completed role_id=%s latency_ms=%d item_count=%d",
                     role_id, latency_ms, len(getattr(result, "new_items", []) or []))
         workspace_changes = workspace.diff_patch() if workspace is not None else None
+        workspace_backend = os.getenv("FACTORY_WORKSPACE_BACKEND", "copy").strip().lower()
+        workspace_metadata = None
+        if workspace is not None:
+            workspace_metadata = {
+                "backend": "git-worktree" if workspace_backend == "git-worktree" else "repository-copy",
+                "branch": f"agent/run-{str(task_input.get('run_id', '')).lower()}" if workspace_backend == "git-worktree" else None,
+                "pushEnabled": False, "mergeEnabled": False,
+            }
         return {
             "role_id": role_id,
             "model": self.model,
@@ -262,6 +279,8 @@ class OpenAIAgentsRuntime:
             "task_contract_digest": task_digest,
             "unavailable_skill_tools": unavailable_skill_tools,
             "workspace_operations": list(workspace.operations) if workspace is not None else [],
+            "workspace_evidence": list(workspace.tool_evidence) if workspace is not None else [],
+            "workspace_metadata": workspace_metadata,
             "workspace_changes": workspace_changes,
             "evidence": [{"type": "agent_run_metadata", "uri": f"runtime://{role_id}",
                            "sha256": "not_applicable", "note": "SDK result metadata; not a content attestation"}],

@@ -9,6 +9,7 @@ from ontology_software_factory.task_runtime import SQLiteTaskStore, TaskWorker
 from ontology_software_factory.workflow_engine import WorkflowEngine
 from ontology_software_factory.workflow_store import SQLiteWorkflowStore
 from ontology_software_factory.ontology_versioning import create_snapshot
+from ontology_software_factory.ontology_runtime import build_runtime_contract_lock
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -17,8 +18,8 @@ class FakeAgentRuntime:
     def __init__(self):
         self.calls = []
 
-    def run_agent(self, role_id, task_input, *, ontology_binding, task_contract):
-        self.calls.append((role_id, task_input, ontology_binding, task_contract))
+    def run_agent(self, role_id, task_input, *, ontology_binding, task_contract, runtime_contract_lock):
+        self.calls.append((role_id, task_input, ontology_binding, task_contract, runtime_contract_lock))
         outputs = {
             "requirement-analyst": {
                 "summary": "A small HTTP service", "functional_requirements": ["FR-1 /health", "FR-2 /hello"],
@@ -63,7 +64,9 @@ class AgentWorkflowTests(unittest.TestCase):
             engine = WorkflowEngine(wf_store, load_definition())
             ontology = json.loads((ROOT / "ontology/software-factory-ontology.json").read_text(encoding="utf-8"))
             binding = create_snapshot(ontology, actor="test", reason="workflow integration fixture")
-            run = engine.create_run("agent pipeline test", requested_by="test", environment="review", ontology_binding=binding)
+            runtime_lock = build_runtime_contract_lock(ROOT, load_definition(), binding)
+            run = engine.create_run("agent pipeline test", requested_by="test", environment="review",
+                                    ontology_binding=binding, runtime_contract_lock=runtime_lock)
             runtime = FakeAgentRuntime()
             artifacts = Path(temp) / "artifacts"
             handler = AgentWorkflowStepHandler(runtime, artifact_root=artifacts)
@@ -95,6 +98,7 @@ class AgentWorkflowTests(unittest.TestCase):
             ])
             self.assertTrue(all(call[2]["snapshotId"] == binding["snapshotId"] for call in runtime.calls))
             self.assertTrue(all(call[3]["ontologyDigest"] == binding["digest"] for call in runtime.calls))
+            self.assertTrue(all(call[4]["digest"] == runtime_lock["digest"] for call in runtime.calls))
             self.assertTrue(all(call[3]["skillRefs"] and all(len(ref["digest"]) == 64 for ref in call[3]["skillRefs"]) for call in runtime.calls))
             self.assertTrue(list(artifacts.rglob("evidence/*.json")))
             self.assertEqual(len(list(artifacts.rglob("agent-result.json"))), 5)
@@ -132,8 +136,9 @@ class AgentWorkflowTests(unittest.TestCase):
 
     def test_security_block_stops_before_human_approval(self):
         class BlockingRuntime(FakeAgentRuntime):
-            def run_agent(self, role_id, task_input, *, ontology_binding, task_contract):
-                result = super().run_agent(role_id, task_input, ontology_binding=ontology_binding, task_contract=task_contract)
+            def run_agent(self, role_id, task_input, *, ontology_binding, task_contract, runtime_contract_lock):
+                result = super().run_agent(role_id, task_input, ontology_binding=ontology_binding,
+                                           task_contract=task_contract, runtime_contract_lock=runtime_contract_lock)
                 if role_id == "security-reviewer":
                     result["output"]["release_recommendation"] = "blocked"
                 return result
@@ -144,20 +149,27 @@ class AgentWorkflowTests(unittest.TestCase):
             from ontology_software_factory.task_runtime import TaskContext, PermanentTaskError
             ontology = json.loads((ROOT / "ontology/software-factory-ontology.json").read_text(encoding="utf-8"))
             binding = create_snapshot(ontology, actor="test", reason="security block fixture")
+            runtime_lock = build_runtime_contract_lock(ROOT, load_definition(), binding)
             requirement = {"workflowRunId": "run-test", "workflowStepId": "requirement-analysis", "workflowAttempt": 1,
-                           "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
+                           "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
+                           "ontologyBinding": binding, "runtimeContractLock": runtime_lock,
+                           "input": {"requirement": "Build a tiny app"}}
             handler(requirement, TaskContext("t1", "workflow-key-1", "w", 1, 9999999999, ("normalized-requirement",)))
             architecture = {"workflowRunId": "run-test", "workflowStepId": "architecture-design", "workflowAttempt": 1,
-                            "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
+                            "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
+                            "ontologyBinding": binding, "runtimeContractLock": runtime_lock, "input": {"requirement": "Build a tiny app"}}
             handler(architecture, TaskContext("t2", "workflow-key-2", "w", 1, 9999999999, ("architecture-decision-record", "interface-contract")))
             implementation = {"workflowRunId": "run-test", "workflowStepId": "implementation-proposal", "workflowAttempt": 1,
-                              "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
+                              "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
+                              "ontologyBinding": binding, "runtimeContractLock": runtime_lock, "input": {"requirement": "Build a tiny app"}}
             handler(implementation, TaskContext("t3", "workflow-key-3", "w", 1, 9999999999, ("candidate-change-set", "change-summary")))
             test = {"workflowRunId": "run-test", "workflowStepId": "test-strategy", "workflowAttempt": 1,
-                    "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
+                              "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
+                    "ontologyBinding": binding, "runtimeContractLock": runtime_lock, "input": {"requirement": "Build a tiny app"}}
             handler(test, TaskContext("t4", "workflow-key-4", "w", 1, 9999999999, ("test-strategy",)))
             security = {"workflowRunId": "run-test", "workflowStepId": "security-review", "workflowAttempt": 1,
-                        "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
+                              "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
+                        "ontologyBinding": binding, "runtimeContractLock": runtime_lock, "input": {"requirement": "Build a tiny app"}}
             with self.assertRaises(PermanentTaskError):
                 handler(security, TaskContext("t5", "workflow-key-5", "w", 1, 9999999999, ("security-review-summary", "evidence-gaps")))
 
