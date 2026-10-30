@@ -28,12 +28,19 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
 
 
-def _phase_projection(plan: dict[str, Any], tasks_by_key: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _phase_projection(
+    plan: dict[str, Any], tasks_by_key: dict[str, dict[str, Any]],
+    phase_attempts: dict[str, int] | None = None,
+) -> list[dict[str, Any]]:
     phases = []
+    phase_attempts = phase_attempts or {}
     for phase in plan["phases"]:
+        phase_attempt = int(phase_attempts.get(phase["phaseId"], 1))
         assignments = []
         for assignment in phase["assignments"]:
             key = f"factory:{plan['workflowRunId']}:{plan['planId']}:{assignment['assignmentId']}"
+            if phase_attempt > 1:
+                key += f":attempt:{phase_attempt}" 
             task = tasks_by_key.get(key)
             assignments.append({
                 "assignmentId": assignment["assignmentId"],
@@ -56,7 +63,7 @@ def _phase_projection(plan: dict[str, Any], tasks_by_key: dict[str, dict[str, An
             status = "pending"
         phases.append({
             "phaseId": phase["phaseId"], "dependsOn": list(phase["dependsOn"]),
-            "status": status, "assignments": assignments,
+            "attempt": phase_attempt, "status": status, "assignments": assignments,
         })
     return phases
 
@@ -67,17 +74,17 @@ def get_factory_plan_execution(task_store: Any, plan_record: dict[str, Any],
     plan = plan_record["plan"]
     tasks = task_store.list_tasks(500)
     by_key = {item["idempotencyKey"]: item for item in tasks}
-    phases = _phase_projection(plan, by_key)
-    if workflow_store is not None and hasattr(workflow_store, "list_factory_plan_phases"):
-        persisted = {
-            item["phaseId"]: item["status"]
-            for item in workflow_store.list_factory_plan_phases(
-                plan["workflowRunId"], plan["planId"]
-            )
-        }
-        for phase in phases:
-            if phase["phaseId"] in persisted:
-                phase["status"] = persisted[phase["phaseId"]]
+    persisted_rows = (
+        workflow_store.list_factory_plan_phases(plan["workflowRunId"], plan["planId"])
+        if workflow_store is not None and hasattr(workflow_store, "list_factory_plan_phases")
+        else []
+    )
+    persisted = {item["phaseId"]: item for item in persisted_rows}
+    phase_attempts = {key: int(value["attempt"]) for key, value in persisted.items()}
+    phases = _phase_projection(plan, by_key, phase_attempts)
+    for phase in phases:
+        if phase["phaseId"] in persisted:
+            phase["status"] = persisted[phase["phaseId"]]["status"]
     statuses = [phase["status"] for phase in phases]
     if all(value == "succeeded" for value in statuses):
         status = "succeeded"
@@ -150,14 +157,15 @@ class FactoryPlanDispatcher:
 
         current_tasks = self.task_store.list_tasks(500)
         by_key = {item["idempotencyKey"]: item for item in current_tasks}
-        projection = _phase_projection(plan, by_key)
+        phase_rows = (
+            self.workflow_store.list_factory_plan_phases(run["id"], plan["planId"])
+            if self.workflow_store is not None else []
+        )
+        phase_state_by_id = {item["phaseId"]: item for item in phase_rows}
+        phase_attempts = {key: int(value["attempt"]) for key, value in phase_state_by_id.items()}
+        projection = _phase_projection(plan, by_key, phase_attempts)
         phase_status = {item["phaseId"]: item["status"] for item in projection}
-        if self.workflow_store is not None:
-            persisted_phase_status = {
-                item["phaseId"]: item["status"]
-                for item in self.workflow_store.list_factory_plan_phases(run["id"], plan["planId"])
-            }
-            phase_status.update(persisted_phase_status)
+        phase_status.update({key: value["status"] for key, value in phase_state_by_id.items()})
         active_count = sum(1 for item in current_tasks if item["status"] in {"queued", "running", "retry_wait"}
                            and item.get("payload", {}).get("factoryPlanId") == plan["planId"])
         slots = max(0, int(plan["limits"]["maxParallelAssignments"]) - active_count)
@@ -172,12 +180,18 @@ class FactoryPlanDispatcher:
             if not all(phase_status.get(dep) == "succeeded" for dep in phase["dependsOn"]):
                 blocked.append(phase["phaseId"])
                 continue
+            phase_attempt = int(phase_attempts.get(phase["phaseId"], 1))
             phase_enqueued = any(
-                f"factory:{run['id']}:{plan['planId']}:{assignment['assignmentId']}" in by_key
+                (
+                    f"factory:{run['id']}:{plan['planId']}:{assignment['assignmentId']}"
+                    + (f":attempt:{phase_attempt}" if phase_attempt > 1 else "")
+                ) in by_key
                 for assignment in phase["assignments"]
             )
             for assignment in phase["assignments"]:
                 key = f"factory:{run['id']}:{plan['planId']}:{assignment['assignmentId']}"
+                if phase_attempt > 1:
+                    key += f":attempt:{phase_attempt}"
                 if key in by_key:
                     continue
                 if slots <= 0:
@@ -188,6 +202,7 @@ class FactoryPlanDispatcher:
                     "workflowVersion": run.get("workflowVersion"),
                     "factoryPlanId": plan["planId"],
                     "factoryPhaseId": phase["phaseId"],
+                    "factoryPhaseAttempt": phase_attempt,
                     "factoryAssignmentId": assignment["assignmentId"],
                     "roleId": assignment["roleId"],
                     "skillId": assignment["skillId"],
@@ -288,12 +303,14 @@ class FactoryAssignmentHandler:
         except Exception as exc:
             raise PermanentTaskError(f"factory assignment contract rejected: {type(exc).__name__}") from exc
 
-        stage = self.artifact_root / run_id / plan_id / phase_id / assignment_id / f"worker-attempt-{context.attempt}"
+        phase_attempt = int(payload.get("factoryPhaseAttempt", 1))
+        stage = self.artifact_root / run_id / plan_id / phase_id / assignment_id / f"phase-attempt-{phase_attempt}" / f"worker-attempt-{context.attempt}"
         if stage.exists():
             raise PermanentTaskError("artifact directory already exists for this Worker attempt")
         stage.mkdir(parents=True, exist_ok=False)
         task_input = {
             "run_id": run_id, "plan_id": plan_id, "phase_id": phase_id,
+            "phase_attempt": phase_attempt,
             "assignment_id": assignment_id, "objective": objective,
             "input_refs": payload.get("inputRefs", []),
             "acceptance_criteria": payload.get("acceptanceCriteria", []),
@@ -321,6 +338,7 @@ class FactoryAssignmentHandler:
             )
             artifact = {
                 "workflowRunId": run_id, "planId": plan_id, "phaseId": phase_id,
+                "phaseAttempt": phase_attempt,
                 "assignmentId": assignment_id, "roleId": role_id, "skillId": skill_id,
                 "ontologyBinding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")},
                 "runtimeContractLockDigest": payload["runtimeContractLock"].get("digest"),
