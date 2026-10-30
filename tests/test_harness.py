@@ -116,7 +116,7 @@ class HarnessRuntimeTests(unittest.TestCase):
         first = HarnessRuntime(
             project_root=ROOT, tool_registry=self.registry,
             audit_path=self.root / "first-audit.jsonl",
-            budget=shared_budget, usage_store=store, policy_version="test-policy-v1",
+            budget=shared_budget, usage_store=store, policy_version="test-policy-v1", policy_digest="sha256:test-policy",
         )
         second = HarnessRuntime(
             project_root=ROOT, tool_registry=self.registry,
