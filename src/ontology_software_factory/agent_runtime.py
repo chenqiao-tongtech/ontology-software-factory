@@ -44,9 +44,11 @@ class OpenAIAgentsRuntime:
     supports_workspace_tools = True
 
     def __init__(self, *, project_root: str | Path, model: str | None = None,
-                 max_turns: int = 8, tracing_enabled: bool | None = None):
+                 max_turns: int = 8, tracing_enabled: bool | None = None,
+                 usage_store: Any | None = None):
         self.project_root = Path(project_root).resolve()
         self._active_harness_context = ContextVar(f"agent_harness_context_{id(self)}", default=None)
+        self.usage_store = usage_store
         self.skill_registry = SkillRegistry(self.project_root)
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-6.1-sol")
         self.max_turns = max(1, min(int(max_turns), 20))
@@ -340,8 +342,12 @@ class OpenAIAgentsRuntime:
             audit_path=os.getenv("FACTORY_HARNESS_AUDIT", str(self.project_root / ".local-runs/harness-audit.jsonl")),
             budget=HarnessBudget(
                 max_tool_calls=int(task_contract.get("resourceLimits", {}).get("maxToolCalls", 50)),
+                max_run_tool_calls=int(task_input.get("run_budget", {}).get("maxToolCalls", 500)),
+                max_input_tokens=int(task_input.get("run_budget", {}).get("maxInputTokens", 100_000)),
+                max_output_tokens=int(task_input.get("run_budget", {}).get("maxOutputTokens", 40_000)),
             ),
             kill_switch_path=os.getenv("FACTORY_HARNESS_KILL_SWITCH") or None,
+            usage_store=self.usage_store, policy_version=registry.policy_version,
         )
         principal = HarnessPrincipal(
             principal_id=task_id, role_id=role_id,
@@ -423,9 +429,24 @@ class OpenAIAgentsRuntime:
                     role_id, allowed, self.model, self.tracing_enabled, binding["snapshotId"], binding["digest"], task_digest)
         import time
         started = time.perf_counter()
+        usage_record = None
+        harness.assert_model_budget_available(run_id)
         harness_token = self._active_harness_context.set((harness, principal, run_id, task_id))
         try:
             result = self._Runner.run_sync(agent, task_payload, max_turns=self.max_turns)
+            usage_obj = getattr(getattr(result, "context_wrapper", None), "usage", None)
+            if usage_obj is None:
+                usage_obj = getattr(result, "usage", None)
+            if usage_obj is not None:
+                input_tokens = int(getattr(usage_obj, "input_tokens", 0) or 0)
+                output_tokens = int(getattr(usage_obj, "output_tokens", 0) or 0)
+                harness.record_model_usage(
+                    run_id, task_id=task_id, provider="openai-agents",
+                    model=self.model, input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                )
+                usage_record = {"inputTokens": input_tokens, "outputTokens": output_tokens,
+                                "totalTokens": input_tokens + output_tokens}
             output = result.final_output
             if hasattr(output, "model_dump"):
                 output = output.model_dump(mode="json")
@@ -457,6 +478,7 @@ class OpenAIAgentsRuntime:
             "model": self.model,
             "latency_ms": latency_ms,
             "tool_ids": allowed,
+            "usage": usage_record,
             "output": output,
             "ontology_binding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")},
             "task_contract_digest": task_digest,
