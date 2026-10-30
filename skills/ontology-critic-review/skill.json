@@ -1,0 +1,15 @@
+{
+  "skillId": "ontology-critic-review",
+  "version": "1.0.0",
+  "title": "本体候选独立评审",
+  "description": "从语义一致性、证据、重复/歧义、关系类型、约束归属和能力问题覆盖方面独立挑战候选本体。",
+  "compatibleRoleIds": ["ontology-critic-agent"],
+  "inputEntityTypes": ["OntologyCandidate", "Artifact"],
+  "outputEntityTypes": ["Artifact"],
+  "requiredToolIds": ["ontology.candidate.read", "ontology.candidate.validate", "ontology.candidate.evaluate", "documents.read"],
+  "acceptanceCriteria": ["所有 blocker/error 指向候选对象或具体缺失证据。", "至少检查重复/重叠、无证据关系、约束越权和能力问题覆盖。", "不改写原候选、不授予权限、不执行发布。"],
+  "failureConditions": ["候选摘要与审查时摘要不同。", "来源材料未授权或摘要不匹配。"],
+  "contextRequirements": ["审查只读候选与已授权来源。", "不能把与候选生成者一致的模型输出当作独立批准。"],
+  "sideEffects": "只生成独立评审结果，不更改候选和正式本体。",
+  "humanReviewRequired": true
+}

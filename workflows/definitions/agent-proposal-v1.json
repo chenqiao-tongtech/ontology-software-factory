@@ -1,0 +1,45 @@
+{
+  "id": "agent-proposal-pipeline",
+  "name": "真实多 Agent 候选变更工作流",
+  "version": "1.0.0",
+  "description": "通过持久化 Workflow/Worker/Outbox 调度五个真实 Agent 阶段，并在最终人工复核门停止；不自动执行或部署代码。",
+  "startStepId": "requirement-analysis",
+  "steps": [
+    {
+      "id": "requirement-analysis", "name": "需求分析", "roleId": "requirement-analyst", "skillId": "requirement-normalization",
+      "executionMode": "agent", "dependsOn": [], "timeoutSeconds": 600, "maxAttempts": 3,
+      "retryableErrorClasses": ["transient_timeout", "worker_lost", "rate_limited"],
+      "requiresEvidence": ["normalized-requirement"], "requiresIdempotencyKey": true, "sideEffect": "none", "compensation": null, "requiresApproval": false
+    },
+    {
+      "id": "architecture-design", "name": "架构设计", "roleId": "solution-architect", "skillId": "architecture-plan",
+      "executionMode": "agent", "dependsOn": ["requirement-analysis"], "timeoutSeconds": 900, "maxAttempts": 3,
+      "retryableErrorClasses": ["transient_timeout", "worker_lost", "rate_limited"],
+      "requiresEvidence": ["architecture-decision-record", "interface-contract"], "requiresIdempotencyKey": true, "sideEffect": "none", "compensation": null, "requiresApproval": false
+    },
+    {
+      "id": "implementation-proposal", "name": "实现提案与候选文件", "roleId": "implementation-agent", "skillId": "bounded-code-change",
+      "executionMode": "agent", "dependsOn": ["architecture-design"], "timeoutSeconds": 1800, "maxAttempts": 2,
+      "retryableErrorClasses": ["transient_timeout", "worker_lost", "rate_limited"],
+      "requiresEvidence": ["candidate-change-set", "change-summary"], "requiresIdempotencyKey": true, "sideEffect": "artifact-write", "compensation": "delete-candidate-artifacts", "requiresApproval": false
+    },
+    {
+      "id": "test-strategy", "name": "测试策略设计", "roleId": "test-agent", "skillId": "test-evidence-collection",
+      "executionMode": "agent", "dependsOn": ["implementation-proposal"], "timeoutSeconds": 900, "maxAttempts": 3,
+      "retryableErrorClasses": ["transient_timeout", "worker_lost", "rate_limited"],
+      "requiresEvidence": ["test-strategy"], "requiresIdempotencyKey": true, "sideEffect": "none", "compensation": null, "requiresApproval": false
+    },
+    {
+      "id": "security-review", "name": "安全审查", "roleId": "security-reviewer", "skillId": "dependency-security-review",
+      "executionMode": "agent", "dependsOn": ["test-strategy"], "timeoutSeconds": 1200, "maxAttempts": 2,
+      "retryableErrorClasses": ["transient_timeout", "worker_lost", "rate_limited"],
+      "requiresEvidence": ["security-review-summary", "evidence-gaps"], "requiresIdempotencyKey": true, "sideEffect": "none", "compensation": null, "requiresApproval": false
+    },
+    {
+      "id": "human-review", "name": "人工复核候选变更", "roleId": "human-release-approver", "skillId": null,
+      "executionMode": "human", "dependsOn": ["security-review"], "timeoutSeconds": 86400, "maxAttempts": 1,
+      "retryableErrorClasses": [], "requiresEvidence": ["review-decision"], "requiresIdempotencyKey": true,
+      "sideEffect": "approval-record", "compensation": null, "requiresApproval": true
+    }
+  ]
+}

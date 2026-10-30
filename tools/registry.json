@@ -1,0 +1,137 @@
+{
+  "version": "1.0.0",
+  "tools": [
+    {
+      "toolId": "catalog.read",
+      "description": "读取已批准资产目录中的元数据",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "catalogPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "catalogPath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "documents.read",
+      "description": "读取当前项目中明确允许的文档",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "relativePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "relativePath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "contract.validate",
+      "description": "校验结构化输入对象",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "schemaPath": {
+            "type": "string"
+          },
+          "instancePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaPath",
+          "instancePath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "workspace.write.candidate",
+      "description": "写入隔离运行目录中的候选文件",
+      "riskClass": "bounded-write",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "relativePath": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "relativePath",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "tests.run",
+      "description": "运行固定的受控校验工作流，不接受自由 Shell 命令",
+      "riskClass": "bounded-execution",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "suiteId": {
+            "type": "string",
+            "enum": [
+              "kafka-config-validation",
+              "repository-unit-tests"
+            ]
+          }
+        },
+        "required": [
+          "runId",
+          "suiteId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "release.simulation.promote",
+      "description": "在本地模拟环境提升候选交付包；绝不调用外部部署",
+      "riskClass": "high-impact",
+      "approvalRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "releaseId": {
+            "type": "string"
+          },
+          "targetEnvironment": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "releaseId",
+          "targetEnvironment"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

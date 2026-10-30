@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/workflow-run.schema.json",
+  "title": "Workflow Run",
+  "type": "object",
+  "required": [
+    "id",
+    "workflowId",
+    "workflowVersion",
+    "title",
+    "status",
+    "currentStepId",
+    "createdAt",
+    "updatedAt",
+    "requestedBy",
+    "environment",
+    "steps",
+    "revision"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workflowId": {
+      "type": "string"
+    },
+    "workflowVersion": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "running",
+        "waiting_approval",
+        "paused",
+        "failed",
+        "succeeded",
+        "cancelled"
+      ]
+    },
+    "currentStepId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requestedBy": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "attempt",
+          "maxAttempts",
+          "dependsOn",
+          "evidence",
+          "retryable"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "roleId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "waiting_approval",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "executionTaskId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "executionResult": {
+            "type": "object",
+            "description": "Structured result projected from a Worker integration event.",
+            "properties": {
+              "taskId": {
+                "type": "string"
+              },
+              "eventId": {
+                "type": "string"
+              },
+              "workerAttempt": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "output": {
+                "type": "object"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "errorClass": {
+                "type": "string"
+              },
+              "errorMessage": {
+                "type": "string"
+              },
+              "taskStatus": {
+                "enum": [
+                  "succeeded",
+                  "failed",
+                  "dead_letter"
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  }
+}
