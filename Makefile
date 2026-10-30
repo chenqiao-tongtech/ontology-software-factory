@@ -1,7 +1,7 @@
 PYTHON ?= python
 export PYTHONPATH := src
 
-.PHONY: docker-test-image portal ai-runtime-console agent-workflow-console llm-check validate architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow ontology-consumers connector-catalog runner-tests test demo-pipeline demo-gate demo-e2e demo-ontology-discovery demo-ontology-discovery-worker observability clean-local
+.PHONY: docker-test-image portal ai-runtime-console agent-workflow-console llm-check validate architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow ontology-consumers connector-catalog connector-runtime harness skill-registry runner-tests test demo-pipeline demo-gate demo-e2e demo-ontology-discovery demo-ontology-discovery-worker observability clean-local
 portal:
 	$(PYTHON) scripts/run_factory_portal.py --host 127.0.0.1 --port 8770
 ai-runtime-console:
@@ -14,7 +14,7 @@ llm-check:
 docker-test-image:
 	docker build -f runners/container/Dockerfile.test-runner -t ontology-software-factory-test-runner:py311-v1 .
 
-validate: architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow ontology-consumers connector-catalog
+validate: architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow ontology-consumers connector-catalog connector-runtime harness skill-registry
 architecture-baseline:
 	$(PYTHON) scripts/validate_architecture_baseline.py
 scope:
@@ -38,6 +38,12 @@ ontology-consumers:
 	$(PYTHON) scripts/validate_ontology_consumers.py
 connector-catalog:
 	$(PYTHON) scripts/validate_connector_catalog.py
+connector-runtime:
+	$(PYTHON) scripts/validate_connector_runtime.py
+harness:
+	$(PYTHON) scripts/validate_harness.py
+skill-registry:
+	$(PYTHON) scripts/validate_skill_registry.py
 runner-tests:
 	$(PYTHON) -m unittest tests.test_kafka_profile -v
 test:
