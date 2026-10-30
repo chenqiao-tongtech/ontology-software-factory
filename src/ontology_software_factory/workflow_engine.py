@@ -93,6 +93,9 @@ class WorkflowEngine:
                                          actor: str = "factory-orchestrator") -> dict[str, Any]:
         """Validate and durably attach an immutable Orchestrator plan to its Workflow Run."""
         run = self.get_run(run_id)
+        actor = str(actor).strip()
+        if not actor:
+            raise WorkflowError("plan submitter actor is required", 400)
         if run.get("status") not in {"running", "queued", "waiting_approval"}:
             raise WorkflowError("cannot submit an Orchestrator plan to a terminal or paused run", 409)
         if not isinstance(plan, dict) or plan.get("workflowRunId") != run_id:
