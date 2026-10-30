@@ -393,7 +393,7 @@ class SQLiteWorkflowStore:
 
     def record_harness_usage(
         self, *, event_id: str, run_id: str, task_id: str, event_type: str,
-        policy_version: str, policy_digest: str = "unknown", occurred_at: str, tool_calls: int = 0,
+        policy_version: str, occurred_at: str, policy_digest: str = "unknown", tool_calls: int = 0,
         context_bytes: int = 0, input_tokens: int = 0, output_tokens: int = 0,
         provider: str | None = None, model: str | None = None, tool_id: str | None = None,
         status: str = "recorded", metadata: dict[str, Any] | None = None,
