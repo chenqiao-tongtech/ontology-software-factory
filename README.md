@@ -25,29 +25,67 @@
 - [安全边界与当前限制](#安全边界与当前限制)
 - [验收与进一步阅读](#验收与进一步阅读)
 
-## 主控智能体与模块化本体：Assignment 调度阶段
+## 主控智能体、独立审批与 Harness 运行治理
 
-已加入 `factory-orchestrator` 受限规划角色、`factory-orchestration` Skill、结构化 AgentPlan Schema/示例、Typed Output 模型和确定性计划校验。`POST /api/runs/{runId}/orchestrator-plan` 将计划绑定到已有 Workflow Run，并在 SQLite 事务中保存不可变计划、SHA-256 摘要及审计事件。新增 Assignment 调度器：按 Phase 依赖检查可执行任务，使用稳定幂等键创建 `agent.factory-assignment` Worker Task；Worker 按计划指定的 Role、Skill 和运行时本体快照执行，并生成 Agent Result、制品摘要和证据。运行详情接口增加 `factoryPlanExecutions` 派生视图。
+主控 Agent 已接入真实 Agent Runtime 规划入口。创建 Workflow Run 时，系统锁定本体快照、Role/Skill 契约及工具权限策略版本；随后可以调用主控 Agent，根据该 Run 的需求与受限上下文生成结构化 AgentPlan。控制面覆盖模型返回的 Run ID、Plan ID 和本体绑定字段，并对计划执行确定性 Schema、拓扑、依赖、Role/Skill、预算和风险校验。
 
-本轮新增校验命令：
+**计划生成不会自动派发任务。** 每份计划都会创建独立审批记录，只有独立审批人批准后，Dispatcher 才能创建 Worker Task。
 
-```bash
-make orchestrator-plan
-make ontology-modules
+### 计划生成、审批与派发
+
+生成计划（需求从创建 Run 时保存的输入文件读取）：
+
+```http
+POST /api/runs/{runId}/orchestrator-plan/generate
+Content-Type: application/json
+
+{}
 ```
 
-计划提交后，可显式触发 Assignment 派发；高风险或要求人工审批的计划会返回 `approval_required`，不会创建 Worker Task：
+也可以在请求体中提供本次规划使用的需求文本：
+
+```json
+{"requirement":"为客户交付一个受治理的 Kafka 配置管理服务。"}
+```
+
+审批计划：
+
+```http
+POST /api/runs/{runId}/orchestrator-plan/approval
+Content-Type: application/json
+
+{
+  "planId": "sf:agent-plan:...",
+  "decision": "approve",
+  "actor": "independent-reviewer",
+  "reason": "已检查需求范围、风险、预算和验收条件。"
+}
+```
+
+拒绝时将 `decision` 设为 `reject`。审批记录绑定 Plan SHA-256、审批人、决定和理由；重复决定会被拒绝。当前本地控制台未集成企业身份认证，`actor` 是调用方提供的审计标识，不能作为生产环境身份凭证。
+
+批准后派发：
 
 ```http
 POST /api/runs/{runId}/orchestrator-plan/dispatch
 Content-Type: application/json
 
-{"planId":"sf:agent-plan:your-plan-id"}
+{"planId":"sf:agent-plan:..."}
 ```
 
-Worker 执行后调用现有 `POST /api/worker/run-once` 和 `POST /api/relay/drain`；随后通过 `GET /api/runs/{runId}` 查询 `factoryPlanExecutions`、`factoryAssignmentResults` 和 Workflow 事件。
+Worker 执行后调用现有 `POST /api/worker/run-once` 和 `POST /api/relay/drain`。查询 `GET /api/runs/{runId}` 可查看 `orchestratorPlans`、`factoryPlanApprovals`、`factoryPlanPhases`、`factoryAssignmentResults`、`harnessUsage` 和 `harnessUsageEvents`。
 
-**实现边界：** Assignment 已进入真实 Worker 队列并可由 Agent Runtime 执行；Phase 依赖与并发上限由调度器控制。Worker 结果通过事务 Outbox/Workflow Inbox 去重回写 Workflow 事件账本，并持久化 Assignment 结果与证据索引。高风险或要求人工审批的计划会被阻止派发。当前 Phase 进度仍由 Worker 任务记录派生，尚未成为独立的 Workflow 状态机；OpenAI Agents Runtime 的注册工具已通过 Harness Tool Gateway 执行权限、工具 Schema、单次 Agent 调用预算、Kill Switch 和元数据审计。跨 Agent Run 的持久化预算、模型实际 Token 用量采集、其他 Agent Provider/框架的统一接入、自动生成计划、跨进程调度协调和独立审批服务仍待完成。现有 Agent Proposal Workflow 保持独立。本体模块清单仍是单一权威本体 JSON 的逻辑分组。详细范围见 [实现说明](docs/factory-orchestrator-implementation.md)。
+### 持久化 Phase 状态
+
+Phase 状态保存在 Workflow SQLite 数据库中，状态包括 `pending`、`running`、`succeeded` 和 `failed`。Worker 结果通过事务 Outbox/Workflow Inbox 回写后更新 Phase 状态并追加事件；下游 Phase 只有在所有前置 Phase 成功后才能派发。Worker 自身的瞬时失败重试仍由现有 Task Runtime 负责，Phase 级人工重试与跨进程调度协调仍待扩展。
+
+### Harness Run 级预算与策略版本锁
+
+OpenAI Agents Runtime 的工具调用、上下文大小和模型 Token 用量写入共享 Workflow SQLite 使用量账本。工具调用按 Run 累计并在数据库事务中检查预算；模型 Token 用量从 Agent SDK 返回的 usage 对象读取，缺少真实 usage 时保持缺失，不生成估算值。工具权限策略的版本和 SHA-256 摘要随 Workflow Run Runtime Contract Lock 固定；策略内容发生变化时，旧 Run 的后续 Agent 调用会因策略漂移而失败关闭。
+
+当前默认 Run 级 Token 上限为输入 100,000、输出 40,000；AgentPlan 的 `maxToolCalls` 作为 Run 级工具调用上限，并按 Assignment 分配单任务上限。审计默认写入 `.local-runs/harness-audit.jsonl`，可通过 `FACTORY_HARNESS_AUDIT` 和 `FACTORY_HARNESS_KILL_SWITCH` 配置审计文件和 Kill Switch 路径。
+
+**实现边界：** 当前真实 Agent 规划与 Harness 用量采集只覆盖 OpenAI Agents SDK 适配器；其他 Provider、Connector 和 Workflow 执行路径尚未统一接入。Run 级预算与使用量已在单机 SQLite 持久化，但多节点并发调度、企业身份认证、集中 PDP、Secret Broker、分布式预算服务和完整成本计价仍未实现。现有 Agent Proposal Workflow 保持独立。本体模块清单仍是单一权威本体 JSON 的逻辑分组。详细范围见 [实现说明](docs/factory-orchestrator-implementation.md)。
 
 ## 主控智能体与软件工厂本体体系设计
 
