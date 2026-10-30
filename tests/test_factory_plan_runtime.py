@@ -123,6 +123,66 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         self.assertEqual(again["enqueued"], [])
         self.assertEqual(len(self.task_store.list_tasks()), 1)
 
+    def test_failed_phase_can_be_retried_with_new_attempt_and_stale_results_are_ignored(self):
+        phase = self.plan["phases"][0]
+        assignment = phase["assignments"][0]
+        failed_payload = {
+            "eventId": "EVT-FACTORY-FAIL-ATTEMPT-1",
+            "workflowRunId": self.run["id"],
+            "factoryPlanId": self.plan["planId"],
+            "factoryPhaseId": phase["phaseId"],
+            "factoryPhaseAttempt": 1,
+            "factoryAssignmentId": assignment["assignmentId"],
+            "taskId": "task-failed-attempt-1",
+            "roleId": assignment["roleId"],
+            "skillId": assignment["skillId"],
+            "taskStatus": "failed",
+            "output": {},
+            "evidence": [],
+            "errorClass": "permanent",
+            "errorMessage": "fixture failure",
+        }
+        self.engine.apply_factory_assignment_event(failed_payload)
+        failed_state = next(
+            item for item in self.workflow_store.list_factory_plan_phases(self.run["id"], self.plan["planId"])
+            if item["phaseId"] == phase["phaseId"]
+        )
+        self.assertEqual(failed_state["status"], "failed")
+        self.assertEqual(failed_state["attempt"], 1)
+
+        retried = self.engine.retry_factory_orchestrator_phase(
+            self.run["id"], self.plan["planId"], phase["phaseId"],
+            actor="independent-reviewer", reason="Retry after correcting the transient environment issue",
+        )
+        self.assertEqual(retried["status"], "pending")
+        self.assertEqual(retried["attempt"], 2)
+
+        stale_payload = dict(failed_payload)
+        stale_payload["eventId"] = "EVT-FACTORY-STALE-ATTEMPT-1"
+        stale_payload["taskId"] = "task-late-attempt-1"
+        stale = self.engine.apply_factory_assignment_event(stale_payload)
+        self.assertTrue(stale["ignored"])
+        current_state = next(
+            item for item in self.workflow_store.list_factory_plan_phases(self.run["id"], self.plan["planId"])
+            if item["phaseId"] == phase["phaseId"]
+        )
+        self.assertEqual(current_state["status"], "pending")
+        self.assertEqual(current_state["attempt"], 2)
+
+        dispatched = self.dispatcher.dispatch_ready(self.run, self.plan_record)
+        task = self.task_store.list_tasks()[0]
+        self.assertEqual(dispatched["enqueued"][0]["assignmentId"], assignment["assignmentId"])
+        self.assertTrue(task["idempotencyKey"].endswith(":attempt:2"))
+        self.assertEqual(task["payload"]["factoryPhaseAttempt"], 2)
+
+    def test_phase_retry_requires_failed_phase_and_has_bounded_attempts(self):
+        phase = self.plan["phases"][0]
+        with self.assertRaises(WorkflowError):
+            self.engine.retry_factory_orchestrator_phase(
+                self.run["id"], self.plan["planId"], phase["phaseId"],
+                actor="independent-reviewer", reason="Cannot retry a pending phase",
+            )
+
     def test_high_risk_or_human_approval_plan_is_not_dispatched(self):
         self.plan["planId"] = "sf:agent-plan:approval-required-002"
         self.plan["riskAssessment"]["requiresHumanApproval"] = True
