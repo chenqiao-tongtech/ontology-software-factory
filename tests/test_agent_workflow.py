@@ -115,6 +115,19 @@ class AgentWorkflowTests(unittest.TestCase):
                 handler(payload, TaskContext("t1", "idempotency-key-1", "w", 1, 9999999999,
                                              ("normalized-requirement",)))
 
+    def test_workflow_role_mismatch_is_rejected(self):
+        from ontology_software_factory.task_runtime import TaskContext, PermanentTaskError
+        ontology = json.loads((ROOT / "ontology/software-factory-ontology.json").read_text(encoding="utf-8"))
+        binding = create_snapshot(ontology, actor="test", reason="role mismatch fixture")
+        with tempfile.TemporaryDirectory() as temp:
+            handler = AgentWorkflowStepHandler(FakeAgentRuntime(), artifact_root=Path(temp) / "artifacts")
+            payload = {"workflowRunId": "run-test", "workflowStepId": "requirement-analysis",
+                       "roleId": "security-reviewer", "ontologyBinding": binding,
+                       "input": {"requirement": "Build a tiny app"}}
+            with self.assertRaises(PermanentTaskError):
+                handler(payload, TaskContext("t1", "idempotency-key-1", "w", 1, 9999999999,
+                                             ("normalized-requirement",)))
+
     def test_security_block_stops_before_human_approval(self):
         class BlockingRuntime(FakeAgentRuntime):
             def run_agent(self, role_id, task_input, *, ontology_binding, task_contract):
