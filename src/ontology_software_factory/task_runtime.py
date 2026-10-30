@@ -408,7 +408,8 @@ class SQLiteTaskStore:
         business = task.get("payload", {})
         run_id = business.get("workflowRunId")
         step_id = business.get("workflowStepId")
-        if not run_id or not step_id:
+        factory_assignment_id = business.get("factoryAssignmentId")
+        if not run_id or not (step_id or factory_assignment_id):
             return  # A standalone task has no workflow consumer.
         event_id = f"EVT-{uuid4().hex.upper()}"
         payload = {
@@ -418,6 +419,10 @@ class SQLiteTaskStore:
             "workflowId": business.get("workflowId"), "workflowVersion": business.get("workflowVersion"),
             "workflowAttempt": business.get("workflowAttempt"),
             "businessOperationId": business.get("businessOperationId"),
+            "factoryPlanId": business.get("factoryPlanId"),
+            "factoryPhaseId": business.get("factoryPhaseId"),
+            "factoryAssignmentId": factory_assignment_id,
+            "roleId": business.get("roleId"), "skillId": business.get("skillId"),
             **result_payload,
         }
         self._conn.execute("""INSERT INTO integration_outbox(
