@@ -142,6 +142,7 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
                 role_target = ("human-role:" if step.get("executionMode") == "human" else "role:") + str(role_id)
                 if step.get("executionMode") == "human":
                     add_node(role_target, "human-approval-role", str(role_id), str(path.relative_to(root)))
+                    add_edge(step_node, role_target, "requires-human-approval-role")
                 else:
                     add_edge(step_node, role_target, "dispatches-role")
                     if role_id not in roles:
