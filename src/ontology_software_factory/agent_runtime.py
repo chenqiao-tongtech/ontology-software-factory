@@ -261,7 +261,7 @@ class OpenAIAgentsRuntime:
         LOGGER.info("agent.run.completed role_id=%s latency_ms=%d item_count=%d",
                     role_id, latency_ms, len(getattr(result, "new_items", []) or []))
         workspace_changes = workspace.diff_patch() if workspace is not None else None
-        workspace_backend = __import__("os").getenv("FACTORY_WORKSPACE_BACKEND", "copy").strip().lower()
+        workspace_backend = os.getenv("FACTORY_WORKSPACE_BACKEND", "copy").strip().lower()
         workspace_metadata = None
         if workspace is not None:
             workspace_metadata = {
