@@ -945,7 +945,8 @@ class PortalHandler(BaseHTTPRequestHandler):
         if path == "/api/health": return self._send_json(200, {"status": "ok", "mode": "local-reference-portal", "timestamp": now_iso()})
         if path == "/api/overview": return self._send_json(200, get_overview())
         if path == "/api/observability":
-            return self._send_json(200, build_platform_observability_report(ROOT / ".local-runs", state_read()))
+            workflow_db = Path(os.getenv("FACTORY_AGENT_WORKFLOW_DB", str(ROOT / "data" / "real-agent-workflow" / "agent_workflow.sqlite3")))
+            return self._send_json(200, build_platform_observability_report(ROOT / ".local-runs", state_read(), agent_workflow_db=workflow_db))
         if path == "/api/sources": return self._send_json(200, {"sources": source_scan_results()})
         if path == "/api/ontology/versions":
             snapshots = state_read().get("ontologySnapshots", [])
