@@ -7,7 +7,7 @@
     "snapshotId": "ont-0123456789abcdef",
     "digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "ontologyId": "software-factory-core",
-    "ontologyVersion": "1.0.0",
+    "ontologyVersion": "1.1.0",
     "schemaVersion": "1.0.0"
   },
   "phases": [
@@ -22,30 +22,50 @@
           "roleId": "requirement-analyst",
           "skillId": "requirement-normalization",
           "objective": "检查需求边界、歧义和验收标准。",
-          "inputRefs": ["sf:requirement:sample-001"],
-          "outputEntityTypes": ["Requirement", "Artifact"],
-          "acceptanceCriteria": ["所有验收条件均有验证方法", "未确认事项明确标记"]
+          "inputRefs": [
+            "sf:requirement:sample-001"
+          ],
+          "outputEntityTypes": [
+            "Requirement",
+            "Artifact"
+          ],
+          "acceptanceCriteria": [
+            "所有验收条件均有验证方法",
+            "未确认事项明确标记"
+          ]
         }
       ],
-      "acceptanceCriteria": ["需求范围和验收条件通过契约校验"]
+      "acceptanceCriteria": [
+        "需求范围和验收条件通过契约校验"
+      ]
     },
     {
       "phaseId": "architecture-design",
       "name": "架构设计",
       "objective": "提出组件、接口和风险方案。",
-      "dependsOn": ["requirements-analysis"],
+      "dependsOn": [
+        "requirements-analysis"
+      ],
       "assignments": [
         {
           "assignmentId": "design-solution",
           "roleId": "solution-architect",
           "skillId": "architecture-plan",
           "objective": "形成架构方案和 ADR 草案。",
-          "inputRefs": ["sf:requirement:sample-001"],
-          "outputEntityTypes": ["Artifact"],
-          "acceptanceCriteria": ["方案包含接口、依赖、风险和验证计划"]
+          "inputRefs": [
+            "sf:requirement:sample-001"
+          ],
+          "outputEntityTypes": [
+            "Artifact"
+          ],
+          "acceptanceCriteria": [
+            "方案包含接口、依赖、风险和验证计划"
+          ]
         }
       ],
-      "acceptanceCriteria": ["架构方案通过独立评审"]
+      "acceptanceCriteria": [
+        "架构方案通过独立评审"
+      ]
     }
   ],
   "limits": {
@@ -57,10 +77,14 @@
   },
   "riskAssessment": {
     "level": "low",
-    "risks": ["示例计划不包含真实运行环境信息"],
+    "risks": [
+      "示例计划不包含真实运行环境信息"
+    ],
     "requiresHumanApproval": true
   },
-  "humanEscalations": ["需求基线存在歧义时暂停并请求产品负责人确认"],
+  "humanEscalations": [
+    "需求基线存在歧义时暂停并请求产品负责人确认"
+  ],
   "controlAssertions": {
     "mayChangeWorkflowState": false,
     "mayGrantPermissions": false,
