@@ -50,7 +50,7 @@ class SkillRegistry:
         }
         self._tool_ids = {
             item["toolId"]
-            for item in json.loads((self.root / "tools/registry.json").read_text(encoding="utf-8"))["tools"]
+            for item in json.loads((self.root / "agents/tool-catalog.json").read_text(encoding="utf-8"))["tools"]
         }
         self._items: dict[str, SkillDescriptor] = {}
         self._definitions: dict[str, dict[str, Any]] = {}
@@ -98,7 +98,7 @@ class SkillRegistry:
                     )
             missing_registry_tools = set(definition["requiredToolIds"]) - self._tool_ids
             if missing_registry_tools:
-                raise SkillRegistryError(f"Skill {skill_id!r} references unknown tools: {sorted(missing_registry_tools)}")
+                raise SkillRegistryError(f"Skill {skill_id!r} references unknown capability IDs: {sorted(missing_registry_tools)}")
             version = definition["version"]
             if not re.fullmatch(r"\d+\.\d+\.\d+", version):
                 raise SkillRegistryError(f"Skill {skill_id!r} has invalid semantic version")
