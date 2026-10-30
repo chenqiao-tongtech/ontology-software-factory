@@ -278,13 +278,13 @@ make portal
 | 功能模块 | 当前实现 | 重要边界 |
 |---|---|---|
 | 平台基础 | 统一导航、REST API、稳定对象 ID、本地状态与事件账本、同源写操作校验 | 本地 JSON 状态；无企业登录、多租户 IAM 或不可篡改审计存储 |
-| 企业资产接入与本体工作台 | 目录/文档/SQLite 只读元数据扫描、本地 Git 元数据、GitHub.com/GitLab.com HTTPS 仓库元数据只读 API、交互式 SVG 关系图、候选来源路径、审批提案 | 没有 OAuth/SSO、自托管 GitLab 或 Webhook；远端候选仅依据文件路径，本地候选使用规则抽取且不调用 LLM；审批不自动修改正式本体 |
+| 企业资产接入与本体工作台 | 目录/文档/SQLite/PostgreSQL/MySQL Schema 只读扫描、本地 Git 元数据、GitHub.com/GitLab.com HTTPS 仓库元数据只读 API、交互式 SVG 关系图、候选证据卡片与 GitHub/GitLab 文件浏览链接、每数据源同步历史和错误分类 | 没有 OAuth/SSO、自托管 GitLab 或 Webhook；远端候选仅依据文件路径，本地候选使用规则抽取且不调用 LLM；数据库只读取 information_schema；审批不自动修改正式本体 |
 | Agent 与质量安全 | 离线 Agent 阶段状态机、事件证据、真实校验脚本/测试套件、可选 Semgrep/Gitleaks/Trivy 扫描器检查 | 离线 Agent 不调用真实模型；扫描器缺失/未执行不能显示 PASS；非容器隔离测试床 |
 | 交付发布 | 触发现有端到端流水线，显示配置包 manifest、哈希、配置范围 SBOM、独立审批和本地升级/回退演练 | 不包含 Kafka 二进制，不部署真实环境；SBOM 只描述配置交付包 |
 
 私有远端仓库需要在同一个 shell 中设置环境变量后再执行 `make portal`：`export GITHUB_TOKEN=...` 或 `export GITLAB_TOKEN=...`。门户源代码在 `apps/factory-portal/`，服务端入口在 `scripts/run_factory_portal.py`，详细阶段、接口和验收边界见 [`docs/platform/four-stage-platform-delivery.md`](docs/platform/four-stage-platform-delivery.md)，实施与验证记录见 [`docs/platform/four-stage-implementation-report.md`](docs/platform/four-stage-implementation-report.md)。首次运行时会在 `.local-portal/` 创建本地 JSON 状态和合成 SQLite 数据库；该目录已忽略，不应提交。可接入已有本机代码/文档目录或 SQLite 数据库，请谨慎配置路径。
 
-**安全说明：** Portal 默认只绑定 `127.0.0.1` 且不带登录认证。不要直接暴露到局域网或公网。目录连接器只扫描限定扩展名并跳过隐藏目录、依赖目录和大文件；SQLite 使用只读连接。生产部署仍需企业身份认证、角色授权、服务端数据存储、外部系统凭据管理、隔离执行器和正式安全评审。
+**安全说明：** Portal 默认只绑定 `127.0.0.1` 且不带登录认证。不要直接暴露到局域网或公网。目录连接器只扫描限定扩展名并跳过隐藏目录、依赖目录和大文件；SQLite/PostgreSQL/MySQL 使用只读 Schema 查询。数据库连接配置只保存 DSN 环境变量名和显式主机 allow-list，不保存 DSN 值；主机 allow-list 不是网络出口防火墙。GitHub/GitLab 文件链接仅打开托管平台浏览器页面。同步历史保存在本地可修改的 JSON 状态文件，不是不可篡改审计日志。生产部署仍需企业身份认证、角色授权、服务端数据存储、外部系统凭据管理、网络出口控制、隔离执行器和正式安全评审。
 
 ## 界面截图
 
@@ -370,5 +370,7 @@ python scripts/run_ontology_discovery.py \
 7. `docs/tool-adapters-and-security-execution.md`、`docs/acceptance/mvp-v2-acceptance.md`：工具边界、真实验收状态和未完成项。
 8. `docs/adr/`：关键架构决策记录。
 9. `article/`：第 15–24 篇正式公众号稿，以及 `article/supplementary/` 下此前完成的工程补充篇 A–E。
+
+本轮 Portal 证据导航与连接器运行状态实现说明见 [Evidence Navigation and Connector Operations Console](docs/2026-10-30-evidence-navigation-and-connector-console.md)。
 
 **验收原则：** 只有当真实执行结果、退出码、日志、摘要与必需证据齐全时，才将相应任务标记为 `PASS`。模型生成的自然语言总结、fixture 结果或设计文档本身，都不能替代真实构建、测试、安全扫描和部署证据。

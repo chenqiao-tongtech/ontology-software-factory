@@ -103,8 +103,10 @@ def ensure_state() -> dict:
         ]})
     state = load_json(STATE_PATH, None)
     if not isinstance(state, dict) or state.get("schemaVersion") != "1.0.0":
-        state = {"schemaVersion": "1.0.0", "ontologyCandidates": [], "ontologyChanges": [], "agentRuns": [], "qualityRuns": [], "portalEvents": [], "releaseApprovals": []}
+        state = {"schemaVersion": "1.0.0", "ontologyCandidates": [], "ontologyChanges": [], "agentRuns": [], "qualityRuns": [], "portalEvents": [], "releaseApprovals": [], "sourceSyncHistory": {}}
         dump(STATE_PATH, state)
+    # Additive state migration: preserve existing local portal data.
+    state.setdefault("sourceSyncHistory", {})
     return state
 
 
@@ -175,15 +177,37 @@ def _remote_json(url: str, headers: dict[str, str]) -> tuple[int, object]:
         raise ConnectionError(type(exc).__name__) from exc
 
 
+def remote_asset_browse_url(source: dict, path: str, branch: str | None) -> str | None:
+    """Build a provider-host-allowlisted browser link; never use credentials or arbitrary hosts."""
+    parsed = urlparse(str(source.get("url", "")))
+    provider = source.get("type")
+    expected_host = "github.com" if provider == "github" else "gitlab.com" if provider == "gitlab" else None
+    if parsed.scheme != "https" or parsed.hostname != expected_host or parsed.username or parsed.password:
+        return None
+    segments = [part for part in parsed.path.strip("/").split("/") if part]
+    if provider == "github" and len(segments) == 2:
+        owner, project = segments
+        if project.endswith(".git"): project = project[:-4]
+        return f"https://github.com/{owner}/{project}/blob/{quote(str(branch or 'main'), safe='/')}/{quote(path, safe='/')}"
+    if provider == "gitlab" and len(segments) >= 2:
+        project = "/".join(segments)
+        if project.endswith(".git"): project = project[:-4]
+        return f"https://gitlab.com/{project}/-/blob/{quote(str(branch or 'main'), safe='/')}/{quote(path, safe='/')}"
+    return None
+
+
 def scan_remote_repository(source: dict, result: dict) -> dict:
     """Use the common connector registry for GitHub and GitLab metadata scans."""
     try:
         registry = build_source_connector_registry(ROOT, remote_fetcher=_remote_json, source=source)
         scanned = registry.scan(source["type"], source["id"], source.get("url", ""))
+        first_meta = scanned.assets[0].metadata if scanned.assets else {}
+        branch = (first_meta or {}).get("defaultBranch")
         assets = [{"path": asset.locator, "kind": (asset.metadata or {}).get("suffix", "").lstrip("."),
                    "bytes": asset.size_bytes, "assetId": asset.asset_id,
-                   "sourceRevision": (asset.metadata or {}).get("sourceRevision")} for asset in scanned.assets[:50]]
-        first_meta = scanned.assets[0].metadata if scanned.assets else {}
+                   "sourceRevision": (asset.metadata or {}).get("sourceRevision"),
+                   "browseUrl": remote_asset_browse_url(source, asset.locator, (asset.metadata or {}).get("defaultBranch"))}
+                  for asset in scanned.assets[:50]]
         token_env = str(source.get("tokenEnv") or ("GITHUB_TOKEN" if source["type"] == "github" else "GITLAB_TOKEN"))
         result.update(status=scanned.status, assetCount=len(scanned.assets), assets=assets,
             details={"provider": source["type"], "connector": "RemoteRepositoryConnector",
@@ -222,7 +246,7 @@ def build_source_connector_registry(allowed_root: Path, *, remote_fetcher=None, 
 
 
 def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
-    path_label = source.get("url", source.get("path", ""))
+    path_label = source.get("url", source.get("path", source.get("connectionEnv", "")))
     result = {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": str(path_label), "enabled": bool(source.get("enabled", True)), "fixture": bool(source.get("fixture")), "lastSyncAt": now_iso(), "status": "error", "assetCount": 0, "assets": [], "details": {}}
     if source.get("type") in {"github", "gitlab", "postgresql", "mysql"}:
         if not allow_remote:
@@ -324,13 +348,28 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
         return result
 
 
+def _source_error_class(result: dict) -> str | None:
+    status = result.get("status")
+    if status in {"connected", "partial"}: return None
+    if status == "disabled": return "disabled"
+    if status == "not-synced": return "not-synced"
+    if status == "invalid-url": return "configuration"
+    message = str(result.get("message", "")).lower()
+    if "timeout" in message or "timed out" in message: return "timeout"
+    if "tls" in message or "ssl" in message or "certificate" in message: return "tls-or-certificate"
+    if "host" in message or "allow" in message: return "host-policy"
+    if status == "unavailable": return "provider-unavailable"
+    return "connector-error"
+
+
 def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> list[dict]:
     """Return recent scan metadata. Remote HTTP requests run only after explicit sync/discovery actions."""
     state = state_read()
     cache = state.get("sourceScans", {})
-    now = time.time()
+    histories = state.get("sourceSyncHistory", {})
     out = []
     updated_cache = dict(cache)
+    updated_histories = dict(histories)
     for source in source_configs():
         cached = cache.get(source["id"])
         cache_fresh = False
@@ -341,15 +380,37 @@ def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> l
             except (ValueError, TypeError):
                 cache_fresh = False
         if cache_fresh:
-            result = cached
+            result = dict(cached)
         elif source.get("type") in {"github", "gitlab", "postgresql", "mysql"} and not allow_remote:
             result = cached or {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": source.get("url", source.get("connectionEnv", "")), "enabled": source.get("enabled", True), "fixture": False, "lastSyncAt": None, "status": "not-synced", "assetCount": 0, "assets": [], "details": {}, "message": "Remote repository/database is not queried by background refresh; use explicit Sync to fetch metadata"}
         else:
+            started = time.monotonic()
             result = scan_source(source, allow_remote=allow_remote)
+            duration_ms = round((time.monotonic() - started) * 1000, 1)
+            result["scanDurationMs"] = duration_ms
+            history = list(histories.get(source["id"], []))
+            history.append({
+                "syncId": "sync-" + uuid.uuid4().hex[:10],
+                "sourceId": source["id"],
+                "at": result.get("lastSyncAt") or now_iso(),
+                "durationMs": duration_ms,
+                "status": result.get("status", "unknown"),
+                "assetCount": int(result.get("assetCount", 0) or 0),
+                "errorClass": _source_error_class(result),
+            })
+            updated_histories[source["id"]] = history[-20:]
+            result["syncHistory"] = updated_histories[source["id"]][-5:]
             updated_cache[source["id"]] = result
+        result.setdefault("syncHistory", updated_histories.get(source["id"], [])[-5:])
+        if result.get("syncHistory"):
+            latest = result["syncHistory"][-1]
+            result.setdefault("lastSyncDurationMs", latest.get("durationMs"))
+            result.setdefault("lastErrorClass", latest.get("errorClass"))
         out.append(result)
-    if updated_cache != cache:
-        def save(st): st["sourceScans"] = updated_cache
+    if updated_cache != cache or updated_histories != histories:
+        def save(st):
+            st["sourceScans"] = updated_cache
+            st["sourceSyncHistory"] = updated_histories
         state_update(save)
     return out
 
@@ -414,6 +475,10 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
             "contentSha256": asset.get("sha256"),
             "sourceRevision": asset.get("sourceRevision") or scan_details.get("sourceRevision"),
             "scannedAt": scan.get("lastSyncAt"),
+            "browseUrl": asset.get("browseUrl") or (
+                remote_asset_browse_url(source_cfg, path, scan_details.get("defaultBranch"))
+                if source_cfg.get("type") in {"github", "gitlab"} else None
+            ),
         }
     for asset in scan.get("assets", []):
         if source_cfg.get("type") == "sqlite":
@@ -791,11 +856,21 @@ class PortalHandler(BaseHTTPRequestHandler):
             body = self._body()
             if path == "/api/sources":
                 source_type = body.get("type")
-                if source_type not in {"repository", "documents", "sqlite", "github", "gitlab"}: raise ValueError("type must be repository, documents, sqlite, github or gitlab")
+                if source_type not in {"repository", "documents", "sqlite", "github", "gitlab", "postgresql", "mysql"}: raise ValueError("unsupported source type")
                 name = str(body.get("name", "")).strip(); raw_path = str(body.get("path", "")).strip()
-                if not name or not raw_path: raise ValueError("name and path are required")
+                if not name: raise ValueError("name is required")
                 if len(name) > 100 or len(raw_path) > 1000: raise ValueError("name or path too long")
-                if source_type in {"github", "gitlab"}:
+                if source_type in {"postgresql", "mysql"}:
+                    connection_env = str(body.get("connectionEnv", raw_path)).strip()
+                    if not re.fullmatch(r"[A-Z_][A-Z0-9_]{0,127}", connection_env):
+                        raise ValueError("connectionEnv must be an environment variable name, never a DSN value")
+                    raw_hosts = body.get("allowedHosts", "")
+                    allowed_hosts = [x.strip().lower().rstrip(".") for x in (raw_hosts if isinstance(raw_hosts, list) else str(raw_hosts).split(",")) if str(x).strip()]
+                    if not allowed_hosts or any(not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", host) for host in allowed_hosts):
+                        raise ValueError("allowedHosts must contain one or more DNS hostnames")
+                    source_path_label = "$" + "{" + connection_env + "} · " + ", ".join(allowed_hosts)
+                    resolved = None
+                elif source_type in {"github", "gitlab"}:
                     parsed = urlparse(raw_path)
                     valid_host = parsed.hostname in ({"github.com", "www.github.com"} if source_type == "github" else {"gitlab.com"})
                     if parsed.scheme != "https" or not valid_host or parsed.username or parsed.password or parsed.query or parsed.fragment:
@@ -815,7 +890,12 @@ class PortalHandler(BaseHTTPRequestHandler):
                 elif source_type in {"repository", "documents"}:
                     if not resolved.is_dir(): raise ValueError("Source path must be an existing directory")
                 sources = source_configs(); source_id = "source-" + uuid.uuid4().hex[:10]
-                source = {"id": source_id, "name": name, "type": source_type, ("url" if source_type in {"github", "gitlab"} else "path"): source_path_label, "description": str(body.get("description", "由本地门户添加的只读数据源"))[:300], "enabled": True, "fixture": False}
+                source = {"id": source_id, "name": name, "type": source_type, "description": str(body.get("description", "由本地门户添加的只读数据源"))[:300], "enabled": True, "fixture": False}
+                if source_type in {"github", "gitlab"}: source["url"] = source_path_label
+                elif source_type in {"postgresql", "mysql"}:
+                    source["connectionEnv"] = connection_env
+                    source["allowedHosts"] = allowed_hosts
+                else: source["path"] = source_path_label
                 source["tokenEnv"] = "GITHUB_TOKEN" if source_type == "github" else "GITLAB_TOKEN" if source_type == "gitlab" else None
                 if source.get("tokenEnv") is None: source.pop("tokenEnv", None)
                 sources.append(source); save_sources(sources)

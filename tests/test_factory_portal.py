@@ -137,6 +137,7 @@ class FactoryPortalServiceTests(unittest.TestCase):
         self.assertEqual(result["assetCount"], 2)
         self.assertEqual(result["details"]["connector"], "RemoteRepositoryConnector")
         self.assertEqual(result["details"]["sourceRevision"], "tree-sha")
+        self.assertEqual(result["assets"][0]["browseUrl"], "https://github.com/acme/example/blob/main/src/domain.py")
         self.assertTrue(result["details"]["tokenConfigured"])
         self.assertNotIn("never-echo-this", json.dumps(result))
         self.assertEqual(mocked.call_count, 2)
@@ -154,6 +155,44 @@ class FactoryPortalServiceTests(unittest.TestCase):
         self.assertEqual(result["details"]["connector"], "RemoteRepositoryConnector")
         self.assertNotIn("never-echo-this", json.dumps(result))
         self.assertIn("/api/v4/projects/group%2Fsubgroup%2Fproject", mocked.call_args_list[0].args[0])
+
+    def test_remote_asset_browse_urls_are_provider_allowlisted_and_encoded(self):
+        github = {"type": "github", "url": "https://github.com/acme/example"}
+        gitlab = {"type": "gitlab", "url": "https://gitlab.com/group/subgroup/project"}
+        self.assertEqual(
+            portal.remote_asset_browse_url(github, "src/a file.py", "main"),
+            "https://github.com/acme/example/blob/main/src/a%20file.py",
+        )
+        self.assertEqual(
+            portal.remote_asset_browse_url(gitlab, "docs/model.md", "release/1"),
+            "https://gitlab.com/group/subgroup/project/-/blob/release/1/docs/model.md",
+        )
+        self.assertIsNone(portal.remote_asset_browse_url(
+            {"type": "github", "url": "https://attacker.example/acme/example"},
+            "src/domain.py", "main",
+        ))
+
+    def test_source_sync_history_records_duration_status_and_error_class(self):
+        def fake_scan(source, *, allow_remote=False):
+            status = "connected" if source["id"] != "test-docs" else "unavailable"
+            return {
+                "id": source["id"], "name": source["name"], "type": source["type"],
+                "pathLabel": source.get("path", ""), "lastSyncAt": portal.now_iso(),
+                "status": status, "assetCount": 3 if status == "connected" else 0,
+                "assets": [], "details": {},
+                "message": "provider unavailable" if status == "unavailable" else "ok",
+            }
+        with patch.object(portal, "scan_source", side_effect=fake_scan):
+            results = portal.source_scan_results(force=True)
+        repo_result = next(x for x in results if x["id"] == "test-repo")
+        docs_result = next(x for x in results if x["id"] == "test-docs")
+        self.assertGreaterEqual(repo_result["lastSyncDurationMs"], 0)
+        self.assertEqual(repo_result["syncHistory"][-1]["assetCount"], 3)
+        self.assertIsNone(repo_result["lastErrorClass"])
+        self.assertEqual(docs_result["lastErrorClass"], "provider-unavailable")
+        history = portal.state_read()["sourceSyncHistory"]
+        self.assertEqual(len(history["test-repo"]), 1)
+        self.assertEqual(history["test-docs"][-1]["status"], "unavailable")
 
     def test_remote_connector_rejects_non_https_and_non_provider_hosts(self):
         source = {"id": "bad-remote", "name": "bad", "type": "github", "url": "http://127.0.0.1/secret", "enabled": True}
