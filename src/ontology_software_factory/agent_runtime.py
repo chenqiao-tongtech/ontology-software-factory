@@ -285,7 +285,7 @@ class OpenAIAgentsRuntime:
             "relations": ontology.get("relations", []) + extensions.get("relations", []),
             "controlledVocabularies": ontology.get("controlledVocabularies", {}),
             "mvpInvariants": ontology.get("mvpInvariants", []),
-            "skills": [{key: skill.get(key) for key in ("skillId", "version", "title", "inputEntityTypes", "outputEntityTypes", "requiredToolIds", "compatibleRoleIds")} for skill in skill_contracts],
+            "skills": [{key: skill.get(key) for key in ("skillId", "version", "title", "inputEntityTypes", "outputEntityTypes", "requiredToolIds", "compatibleRoleIds")} for skill in execution_skills],
             "availableToolIds": allowed,
             "unavailableSkillTools": unavailable_skill_tools,
         }
