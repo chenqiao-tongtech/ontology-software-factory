@@ -50,12 +50,16 @@ class FactoryPortalServiceTests(unittest.TestCase):
         paths = {item["path"] for item in result["assets"]}
         self.assertNotIn(".env", paths)
         self.assertTrue(all(not path.startswith(".") for path in paths))
+        self.assertTrue(all(item.get("sha256") for item in result["assets"]))
+        self.assertEqual(result["details"]["connector"], "LocalDirectoryConnector")
 
     def test_sqlite_connector_reads_schema_and_is_read_only(self):
         result = portal.scan_source(portal.source_configs()[1])
         self.assertEqual(result["status"], "connected")
         names = {item["name"] for item in result["details"]["tables"]}
         self.assertEqual(names, {"orders", "active_orders"})
+        self.assertEqual(result["details"]["connector"], "SQLiteSchemaConnector")
+        self.assertIn("customer_id", {column["name"] for table in result["details"]["tables"] for column in table["columns"]})
         with sqlite3.connect(self.db_path) as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
 
@@ -70,6 +74,7 @@ class FactoryPortalServiceTests(unittest.TestCase):
         candidate = portal.discover_candidates()
         self.assertEqual(candidate["engine"], "local-rule-based-extraction")
         self.assertIn("ExampleEntity", {term["label"] for term in candidate["terms"]})
+        self.assertIn("customer_id", {term["label"] for term in candidate["terms"]})
         self.assertTrue(all(term["evidence"] for term in candidate["terms"]))
         self.assertIn(candidate["candidateId"], {x["candidateId"] for x in portal.state_read()["ontologyCandidates"]})
         self.assertIn("不会自动", candidate["notice"])
