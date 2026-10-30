@@ -954,7 +954,7 @@ class PortalHandler(BaseHTTPRequestHandler):
             before = find_snapshot(snapshots, from_id)
             after = find_snapshot(snapshots, to_id)
             result = diff_snapshots(before, after)
-            graph = build_consumer_graph(ROOT, load_json(FORMAL_ONTOLOGY, {}))
+            graph = build_consumer_graph(ROOT, after.get("ontology", {}), additional_ontologies=[before.get("ontology", {})])
             result["consumerImpact"] = analyze_consumer_impact(result["impact"]["affectedClasses"], graph)
             result["compatibility"] = compatibility_report(before, after)
             return self._send_json(200, result)
