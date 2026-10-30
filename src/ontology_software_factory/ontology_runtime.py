@@ -193,8 +193,13 @@ def build_agent_task_contract(
     verified = validate_ontology_binding(binding)
     validate_role_ontology_contract(role, verified, project_root)
     role_inputs = [str(value) for value in role["inputEntityTypes"]]
-    entity_type = "Requirement" if "Requirement" in role_inputs else role_inputs[0]
-    entity_slug = re.sub(r"(?<!^)(?=[A-Z])", "-", entity_type).lower()
+    input_types = []
+    if "Requirement" in role_inputs:
+        input_types.append("Requirement")
+    if step_id not in {"requirement-analysis", "requirement-analyst"} and "Artifact" in role_inputs:
+        input_types.append("Artifact")
+    if not input_types:
+        input_types.append(role_inputs[0])
     task_key = idempotency_key or f"ontology-task:{run_id}:{step_id}:{attempt}"
     contract = {
         "taskId": f"sf:task:{run_id}.{step_id}.{attempt}",
@@ -207,11 +212,11 @@ def build_agent_task_contract(
         "ontologySchemaVersion": verified["schemaVersion"],
         "objective": str(objective).strip(),
         "inputs": [{
-            "entityId": f"sf:{entity_slug}:{run_id}.{step_id}",
+            "entityId": f"sf:{re.sub(r'(?<!^)(?=[A-Z])', '-', entity_type).lower()}:{run_id}.{step_id}",
             "entityType": entity_type,
             "schemaVersion": verified["schemaVersion"],
-            "evidenceRef": f"workflow-input:{run_id}",
-        }],
+            "evidenceRef": f"{'workflow-input' if entity_type == 'Requirement' else 'upstream-agent-artifact'}:{run_id}",
+        } for entity_type in input_types],
         "expectedOutputEntityTypes": list(role["outputEntityTypes"]),
         "acceptanceCriteria": [{
             "id": "AC-ONTOLOGY-BOUND-OUTPUT",
