@@ -138,6 +138,16 @@ class WorkflowEngine:
         run = self.get_run(run_id)
         if run.get("status") == "paused":
             raise IntegrationEventDeferred("Workflow Run is paused; keep Factory Assignment result pending")
+        if run.get("status") != "running":
+            ignored = self._event(
+                "factory.assignment.result_ignored", "",
+                actor="factory-assignment-projector",
+                payload={"planId": plan_id, "assignmentId": assignment_id, "taskId": task_id},
+            )
+            self.store.record_ignored_integration_event(
+                run_id, ignored, event_id, f"Workflow Run is {run.get('status')}"
+            )
+            return {"run": self.get_run(run_id), "deduplicated": False, "ignored": True}
         plan_record = self.store.get_factory_orchestrator_plan(plan_id)
         if plan_record is None or plan_record.get("workflowRunId") != run_id:
             raise WorkflowError("Factory Assignment event references an unknown plan", 404)
