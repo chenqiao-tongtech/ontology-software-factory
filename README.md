@@ -25,9 +25,9 @@
 - [安全边界与当前限制](#安全边界与当前限制)
 - [验收与进一步阅读](#验收与进一步阅读)
 
-## 主控智能体与模块化本体：计划持久化阶段
+## 主控智能体与模块化本体：Assignment 调度阶段
 
-已加入 `factory-orchestrator` 受限规划角色、`factory-orchestration` Skill、结构化 AgentPlan Schema/示例、Typed Output 模型和确定性计划校验。当前支持通过 `POST /api/runs/{runId}/orchestrator-plan` 将计划绑定到已有 Workflow Run；系统校验计划与运行时锁定的本体快照一致，并在 SQLite 事务中保存不可变计划、SHA-256 摘要及 `factory.plan.submitted` 事件。重复提交相同计划幂等，复用计划 ID 但修改内容会被拒绝。主控角色仍仅具备只读工具权限。软件工厂本体包含主控计划、Workflow Run、Tool/Connector、来源系统和本体生命周期概念，并通过模块清单校验类与关系的完整、唯一归属。
+已加入 `factory-orchestrator` 受限规划角色、`factory-orchestration` Skill、结构化 AgentPlan Schema/示例、Typed Output 模型和确定性计划校验。`POST /api/runs/{runId}/orchestrator-plan` 将计划绑定到已有 Workflow Run，并在 SQLite 事务中保存不可变计划、SHA-256 摘要及审计事件。新增 Assignment 调度器：按 Phase 依赖检查可执行任务，使用稳定幂等键创建 `agent.factory-assignment` Worker Task；Worker 按计划指定的 Role、Skill 和运行时本体快照执行，并生成 Agent Result、制品摘要和证据。运行详情接口增加 `factoryPlanExecutions` 派生视图。
 
 本轮新增校验命令：
 
