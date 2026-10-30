@@ -58,7 +58,10 @@ class AgentWorkflowStepHandler:
         try:
             binding = validate_ontology_binding(payload.get("ontologyBinding", {}))
             role = json.loads((self.project_root / "agents" / "roles" / f"{role_id}.json").read_text(encoding="utf-8"))
-            validate_role_ontology_contract(role, binding)
+            validate_role_ontology_contract(role, binding, self.project_root)
+            requested_skill = payload.get("skillId")
+            if requested_skill and requested_skill not in role.get("skillIds", []):
+                raise ValueError("Workflow Skill reference is not declared by the selected Role")
             workflow_attempt = int(payload.get("workflowAttempt", 1))
             task_contract = build_agent_task_contract(
                 self.project_root, role=role, binding=binding, run_id=run_id, step_id=step_id,
