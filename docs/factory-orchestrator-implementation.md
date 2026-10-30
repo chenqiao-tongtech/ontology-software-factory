@@ -1,7 +1,7 @@
-# Factory Orchestrator and Modular Ontology: implementation increment 3
+# Factory Orchestrator and Modular Ontology: implementation increment 4
 
 **Date:** 2026-10-30  
-**Status:** validated plan intake, dependency-aware Assignment dispatch, Agent Worker execution and durable Workflow event projection are implemented; independent approval workflow and Harness-wide tool mediation remain pending.
+**Status:** autonomous plan proposal through OpenAI Agents Runtime, deterministic intake, independent plan approval, dependency-aware Assignment dispatch, persisted Phase state, durable result projection and OpenAI Agent Harness Run-usage ledger are implemented. Enterprise identity, distributed scheduling and cross-Provider/Connector mediation remain pending.
 
 ## Delivered
 
@@ -22,6 +22,27 @@
 - Added `POST /api/runs/{runId}/orchestrator-plan`; `GET /api/runs/{runId}` now includes `orchestratorPlans`.
 - Added tests for valid persistence, Run/ontology mismatch, idempotent replay and plan-ID payload conflicts.
 
+### Autonomous plan generation
+
+- Added `FactoryOrchestratorService`, which invokes the locked `factory-orchestrator` Role and `factory-orchestration` Skill through the existing Agent Runtime.
+- The service uses the Workflow Run's immutable ontology snapshot and Role/Skill lock. The model receives the saved requirement, acceptance guidance and bounded planning limits.
+- The control plane replaces the model-supplied Plan ID, Workflow Run ID and ontology binding with trusted values before deterministic plan validation and persistence.
+- Added `POST /api/runs/{runId}/orchestrator-plan/generate`. The endpoint requires the optional OpenAI Agents SDK runtime and a configured model/API key. It creates a proposal only; it does not dispatch Worker tasks.
+
+### Independent plan approval
+
+- Added `factory_plan_approvals` with one approval record per immutable Plan digest. New plans start in `pending`.
+- Added `WorkflowEngine.decide_factory_orchestrator_plan()` and `POST /api/runs/{runId}/orchestrator-plan/approval`. Approval/rejection decisions require a non-empty actor and reason, are written with the Plan digest to the Workflow event ledger, and cannot be issued by the `factory-orchestrator` actor.
+- Dispatcher fails closed when the approval record is missing, its digest does not match the Plan, or the decision is pending/rejected. Approval is required for every Plan, including low-risk proposals.
+- The local console does not authenticate the supplied actor label. A production deployment must bind decisions to an authenticated human/policy principal and enforce separation of duties outside this local reference implementation.
+
+### Persisted Phase state
+
+- Added `factory_plan_phases` with `pending`, `running`, `succeeded` and `failed` states, timestamps and error metadata.
+- Dispatch records Phase start; the transactional Assignment result projector updates the Phase when all its Assignments reach terminal outcomes and appends `factory.phase.*` events.
+- Run detail exposes `factoryPlanApprovals` and `factoryPlanPhases`. Phase dependency checks use the persisted state; Worker retry/backoff remains managed by Task Runtime.
+- Phase-level manual retry, plan cancellation propagation and multi-process scheduler coordination are not yet implemented.
+
 ### Assignment dispatch and Worker execution
 
 - Added `FactoryPlanDispatcher` to instantiate plan Assignments as idempotent `agent.factory-assignment` Worker tasks.
@@ -39,8 +60,10 @@
 - Tool availability is the intersection of Role declarations, runtime tool implementations and `policies/tool-permissions.json`. ToolRegistry validates each input against `tools/registry.json` before invoking the trusted handler.
 - The gateway applies per-Agent-task tool-call budgets, approval checks, the configured file Kill Switch and metadata-only audit records. Shared context fields are assembled under the Role context allowlist and included in the pinned Agent context.
 - The gateway covers the tools exposed by the OpenAI Agents SDK adapter, including workspace tools when an isolated workspace is present. Other Agent providers and non-Agent connector execution paths are not yet routed through this gateway.
-- Current budgets are in-memory and scoped to an Agent execution. Actual provider token usage is not yet sampled into Harness, and budget usage is not shared across multiple Assignments in one Workflow Run. The default audit path is `.local-runs/harness-audit.jsonl`; `FACTORY_HARNESS_AUDIT` and `FACTORY_HARNESS_KILL_SWITCH` can override the audit and Kill Switch paths.
-- High/critical plans or any plan with `requiresHumanApproval=true` are not dispatched by this endpoint. A separate independent approval workflow is still required before such plans can execute.
+- Added a Workflow SQLite usage ledger for Run-level tool calls, context bytes, input tokens and output tokens. Tool-call reservations are checked transactionally across Agent executions; token usage is recorded from the OpenAI Agents SDK result usage object when supplied. Missing provider usage remains unknown.
+- Added Tool permission policy version and SHA-256 digest to the immutable Workflow Run Role/Skill lock. A changed policy version or digest prevents further Agent execution under that old Run lock.
+- Per-Agent task tool-call limits remain in place; the AgentPlan Run-level `maxToolCalls` limit is enforced across Assignment executions. Default Run token limits are 100,000 input and 40,000 output tokens.
+- Harness usage events and totals are exposed in Workflow Run detail. The default audit path is `.local-runs/harness-audit.jsonl`; `FACTORY_HARNESS_AUDIT` and `FACTORY_HARNESS_KILL_SWITCH` can override the audit and Kill Switch paths.
 - Existing fixed-stage Agent Proposal workflow and its outbox/inbox path remain unchanged.
 
 ### Ontology module baseline
@@ -66,7 +89,7 @@ make test
 
 ## Explicit implementation boundaries
 
-The `factory-orchestrator` Agent Role is not yet automatically invoked to produce a plan. A submitted plan can now instantiate Assignment Worker tasks through an explicit dispatch API. The dispatcher derives Phase progress from Worker task records; Phase state is not yet an independently persisted Workflow state machine. Multi-process scheduling coordination, automated plan generation, independent approval records, cross-Agent persistent budgets, actual model token accounting and mediation for non-OpenAI Agent/connector execution paths remain pending. Plan submission is a recorded planning artifact; it is not an approval or authorization to execute.
+The `factory-orchestrator` is now invoked through an explicit plan-generation API; it does not run automatically at Workflow Run creation. Every Plan requires a separate approval decision before dispatch. Phase state and Run-level Harness usage are persisted in the local SQLite store. The approval actor field is an audit label rather than an authenticated identity. Multi-process scheduling coordination, Phase-level manual retry, enterprise identity/PDP, Secret Broker, distributed budget coordination, model-cost pricing and mediation for non-OpenAI Agent/Connector execution paths remain pending. Plan generation, approval and dispatch remain separate operations.
 
 The ontology module manifest is not yet a module package manager. It does not independently publish module releases, resolve external module dependencies, migrate instances or update a graph database. Existing ontology snapshots, digest approvals and consumer-impact analysis remain the operational governance mechanisms.
 
