@@ -169,36 +169,44 @@ class HarnessRuntime:
         payload: dict[str, Any],
         approval_ref: str | None = None,
     ) -> Any:
-        if self.kill_switch_path and self.kill_switch_path.exists():
-            raise HarnessDenied("Harness kill switch is active")
-        if not run_id or not task_id or not principal.principal_id:
-            raise HarnessDenied("principal, run_id and task_id are required")
-        definition = self._tool_defs.get(tool_id)
-        if definition is None:
-            raise HarnessDenied(f"unknown tool: {tool_id}")
-        approved = False
-        if definition.get("approvalRequired") is True:
-            approved = bool(
-                approval_ref
-                and self.approval_validator(approval_ref, run_id, tool_id)
-            )
-            if not approved:
-                raise HarnessDenied("valid independent approval record is required")
-        with self._lock:
-            usage = self._usage_for(run_id)
-            if usage.tool_calls >= self.budget.max_tool_calls:
-                raise HarnessBudgetExceeded("tool call budget exceeded")
-            usage.tool_calls += 1
         started = time.monotonic()
-        status = "succeeded"
+        status = "denied"
         result: Any = None
+        approved = False
         try:
+            if self.kill_switch_path and self.kill_switch_path.exists():
+                raise HarnessDenied("Harness kill switch is active")
+            if not run_id or not task_id or not principal.principal_id:
+                raise HarnessDenied("principal, run_id and task_id are required")
+            definition = self._tool_defs.get(tool_id)
+            if definition is None:
+                raise HarnessDenied(f"unknown tool: {tool_id}")
+            if definition.get("approvalRequired") is True:
+                approved = bool(
+                    approval_ref
+                    and self.approval_validator(approval_ref, run_id, tool_id)
+                )
+                if not approved:
+                    raise HarnessDenied("valid independent approval record is required")
+            with self._lock:
+                usage = self._usage_for(run_id)
+                if usage.tool_calls >= self.budget.max_tool_calls:
+                    status = "budget_exceeded"
+                    raise HarnessBudgetExceeded("tool call budget exceeded")
+                usage.tool_calls += 1
             result = self.tool_registry.invoke(
                 principal.role_id, tool_id, payload, approval_granted=approved
             )
+            status = "succeeded"
             return result
-        except Exception as exc:
-            status = "denied" if isinstance(exc, (PermissionError, ValueError)) else "failed"
+        except HarnessBudgetExceeded:
+            status = "budget_exceeded"
+            raise
+        except (HarnessDenied, ToolPolicyError, PermissionError, ValueError):
+            status = "denied"
+            raise
+        except Exception:
+            status = "failed"
             raise
         finally:
             elapsed_ms = int((time.monotonic() - started) * 1000)
@@ -215,7 +223,6 @@ class HarnessRuntime:
                 "taskId": task_id,
                 "principalId": principal.principal_id,
                 "roleId": principal.role_id,
-                "tenantId": principal.tenant_id,
                 "toolId": tool_id,
                 "status": status,
                 "approvalRef": approval_ref if approved else None,
