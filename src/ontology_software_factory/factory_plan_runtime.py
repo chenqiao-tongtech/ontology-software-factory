@@ -172,7 +172,10 @@ class FactoryPlanDispatcher:
             if not all(phase_status.get(dep) == "succeeded" for dep in phase["dependsOn"]):
                 blocked.append(phase["phaseId"])
                 continue
-            phase_enqueued = False
+            phase_enqueued = any(
+                f"factory:{run['id']}:{plan['planId']}:{assignment['assignmentId']}" in by_key
+                for assignment in phase["assignments"]
+            )
             for assignment in phase["assignments"]:
                 key = f"factory:{run['id']}:{plan['planId']}:{assignment['assignmentId']}"
                 if key in by_key:
