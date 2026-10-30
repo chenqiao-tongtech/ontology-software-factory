@@ -17,10 +17,13 @@
   ],
   "toolIds": [
     "catalog.read",
-    "workspace.read",
+    "contract.validate",
+    "dependencies.inspect",
+    "ontology.definition.read",
     "repository.branch.write",
+    "source.catalog.read",
     "tests.run",
-    "contract.validate"
+    "workspace.read"
   ],
   "allowedActions": [
     "requirement.read",
