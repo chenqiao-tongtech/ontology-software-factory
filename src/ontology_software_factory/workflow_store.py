@@ -185,7 +185,9 @@ class SQLiteWorkflowStore:
                         raise ValueError("planId already exists with a different run or payload")
                     return {"planId": plan_id, "workflowRunId": run_id, "status": "submitted", "digest": digest, "createdAt": existing["created_at"], "plan": json.loads(existing["payload_json"])}, False
                 self._conn.execute("INSERT INTO factory_orchestrator_plans(plan_id,run_id,payload_sha256,payload_json,created_at) VALUES(?,?,?,?,?)", (plan_id, run_id, digest, plan_json, event["at"]))
-                self._insert_event(run_id, event)
+                persisted_event = dict(event)
+                persisted_event["payload"] = {**event.get("payload", {}), "planDigest": digest}
+                self._insert_event(run_id, persisted_event)
                 self._conn.commit()
                 return {"planId": plan_id, "workflowRunId": run_id, "status": "submitted", "digest": digest, "createdAt": event["at"], "plan": json.loads(plan_json)}, True
             except ValueError:
