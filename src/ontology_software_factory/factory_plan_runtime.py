@@ -241,7 +241,8 @@ class FactoryPlanDispatcher:
                         "actor": "factory-plan-dispatcher",
                         "action": "factory.phase.running",
                         "summary": f"Factory Phase {phase['phaseId']} started",
-                        "payload": {"planId": plan["planId"], "phaseId": phase["phaseId"]},
+                        "payload": {"planId": plan["planId"], "phaseId": phase["phaseId"],
+                                    "attempt": phase_attempt},
                     },
                 )
         updated = get_factory_plan_execution(self.task_store, plan_record, self.workflow_store)
