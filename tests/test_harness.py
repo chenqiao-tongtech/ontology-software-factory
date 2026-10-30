@@ -30,7 +30,7 @@ class HarnessRuntimeTests(unittest.TestCase):
         self.harness = HarnessRuntime(
             project_root=ROOT, tool_registry=self.registry,
             audit_path=self.root / "audit.jsonl",
-            budget=HarnessBudget(max_tool_calls=2, max_context_bytes=4096, max_input_tokens=100, max_output_tokens=100),
+            budget=HarnessBudget(max_tool_calls=1, max_context_bytes=4096, max_input_tokens=100, max_output_tokens=100),
             approval_validator=lambda ref, run, tool: ref == "approval-1" and run == "run-1" and tool == "release.simulation.promote",
             kill_switch_path=self.root / "KILL",
         )
