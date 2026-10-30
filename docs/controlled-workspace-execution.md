@@ -30,7 +30,9 @@
 
 **默认不执行 Agent 生成的代码。** 推荐使用 Docker 容器执行固定测试套件。先构建项目测试镜像：
 
-    docker build -f runners/container/Dockerfile.test-runner -t ontology-software-factory-test-runner:py311-v1 .
+    make docker-test-image
+
+# 等价命令：docker build -f runners/container/Dockerfile.test-runner -t ontology-software-factory-test-runner:py311-v1 .
 
 确认 Docker Engine 可用且本地已有该镜像后，在可信开发环境显式开启：
 
@@ -101,7 +103,7 @@ Trivy cache 必须由可信运维流程预先填充。容器扫描无网络、�
 
     export FACTORY_WORKSPACE_BACKEND=git-worktree
 
-创建后会得到 `agent/run-<run-id>` 本地分支。Agent 的候选写入落在该 Worktree 中，Patch 仍会保存为可审查证据。该能力不 push、不创建 GitHub/GitLab PR、不 commit，也不 merge；运行时不暴露 Git 任意命令。若分支或 Worktree 已存在但与预期不一致，会拒绝复用。
+创建前要求源仓库 Git 工作区干净；创建后会得到 `agent/run-<run-id>` 本地分支。Agent 的候选写入落在该 Worktree 中，Patch 仍会保存为可审查证据。该能力不 push、不创建 GitHub/GitLab PR、不 commit，也不 merge；运行时不暴露 Git 任意命令。若分支或 Worktree 已存在但与预期不一致，会拒绝复用。
 
 ## 当前未实现的边界
 
