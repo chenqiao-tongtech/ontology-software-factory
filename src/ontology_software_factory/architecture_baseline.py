@@ -36,12 +36,12 @@ def validate_baseline(root: Path, baseline: dict[str, Any]) -> list[str]:
     _unique_ids(roadmap, "id", "roadmap", errors)
 
     principle_ids = {item.get("id") for item in principles}
-    required_principles = {f"AP-{i:02d}" for i in range(1, 14)}
+    required_principles = {f"AP-{i:02d}" for i in range(1, 15)}
     missing_principles = sorted(required_principles - principle_ids)
     if missing_principles:
         errors.append(f"missing principles: {', '.join(missing_principles)}")
     constraint_ids = {item.get("id") for item in constraints}
-    required_constraints = {f"C-{i:02d}" for i in range(1, 10)}
+    required_constraints = {f"C-{i:02d}" for i in range(1, 11)}
     missing_constraints = sorted(required_constraints - constraint_ids)
     if missing_constraints:
         errors.append(f"missing constraints: {', '.join(missing_constraints)}")
