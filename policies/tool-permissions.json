@@ -8,24 +8,30 @@
       "contract.validate"
     ],
     "solution-architect": [
-      "documents.read",
+      "architecture.plan.write",
       "catalog.read",
-      "contract.validate"
+      "contract.validate",
+      "documents.read",
+      "workspace.read"
     ],
     "implementation-agent": [
-      "workspace.write.candidate",
+      "catalog.read",
+      "repository.branch.write",
       "tests.run",
-      "catalog.read"
+      "workspace.read",
+      "workspace.write.candidate"
     ],
     "test-agent": [
-      "tests.run",
-      "contract.validate",
-      "documents.read"
-    ],
-    "security-reviewer": [
       "contract.validate",
       "documents.read",
-      "catalog.read"
+      "tests.run",
+      "workspace.read"
+    ],
+    "security-reviewer": [
+      "catalog.read",
+      "contract.validate",
+      "documents.read",
+      "security.scan"
     ],
     "release-coordinator": [
       "catalog.read",
