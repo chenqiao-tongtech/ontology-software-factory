@@ -1,7 +1,9 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
+from ontology_software_factory.ontology_versioning import create_snapshot
 from ontology_software_factory.software_factory_pipeline import (
     PipelineValidationError, SoftwareFactoryPipeline,
 )
@@ -44,6 +46,30 @@ class PipelineTests(unittest.TestCase):
             self.assertFalse(proposed["applied_to_repository"])
             self.assertTrue((Path(temp) / "run-001" / "proposed_changes/src/demo.py").is_file())
             self.assertTrue((Path(temp) / "run-001" / "run-report.json").is_file())
+
+    def test_real_runtime_pipeline_records_pinned_ontology_and_task_contracts(self):
+        class OntologyAwareFakeRunner(FakeRunner):
+            requires_ontology_binding = True
+            project_root = ROOT
+
+            def run_agent(self, role_id, task_input, *, ontology_binding, task_contract):
+                result = super().run_agent(role_id, task_input)
+                result["ontology_binding"] = {
+                    key: ontology_binding[key]
+                    for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")
+                }
+                result["task_contract_digest"] = "test-task-contract-digest"
+                return result
+
+        ontology = json.loads((ROOT / "ontology/software-factory-ontology.json").read_text(encoding="utf-8"))
+        binding = create_snapshot(ontology, actor="test", reason="direct pipeline binding")
+        with tempfile.TemporaryDirectory() as temp:
+            result = SoftwareFactoryPipeline(
+                OntologyAwareFakeRunner(), artifact_root=temp, ontology_binding=binding
+            ).run("Build a hello API", run_id="run-bound")
+            self.assertTrue(all(stage["ontology_binding"]["snapshotId"] == binding["snapshotId"] for stage in result.stages))
+            self.assertTrue(all(stage["task_contract"]["ontologyDigest"] == binding["digest"] for stage in result.stages))
+            self.assertTrue(all(stage["task_contract_digest"] == "test-task-contract-digest" for stage in result.stages))
 
     def test_empty_requirement_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
