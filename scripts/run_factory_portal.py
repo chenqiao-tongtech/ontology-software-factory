@@ -406,6 +406,34 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
     terms: dict[str, dict] = {}
     source_cfg = next((s for s in source_configs() if s["id"] == scan["id"]), {"path": "."})
     for asset in scan.get("assets", []):
+        if source_cfg.get("type") == "sqlite":
+            table_name = str(asset.get("name", "")).strip()
+            if table_name:
+                labels = [(table_name, "sql-table")]
+                labels.extend(
+                    (str(column.get("name", "")).strip(), "sql-column")
+                    for column in asset.get("columns", [])
+                    if isinstance(column, dict)
+                )
+                for label, kind in labels:
+                    if len(label) < 3 or len(label) > 90:
+                        continue
+                    key = label.lower()
+                    evidence = {"sourceId": scan["id"], "path": f"sqlite:{table_name}", "kind": kind}
+                    if key in terms:
+                        if evidence not in terms[key]["evidence"]:
+                            terms[key]["evidence"].append(evidence)
+                    else:
+                        terms[key] = {
+                            "termId": "term-" + re.sub(r"[^a-z0-9]+", "-", key).strip("-")[:50] + "-" + uuid.uuid5(uuid.NAMESPACE_URL, key).hex[:6],
+                            "label": label,
+                            "kind": kind,
+                            "evidence": [evidence],
+                            "proposedType": "CandidateConcept",
+                            "confidence": 0.5,
+                            "status": "candidate",
+                        }
+            continue
         rel = asset.get("path", "")
         if source_cfg.get("type") in {"github", "gitlab"}:
             stem = Path(rel).stem
