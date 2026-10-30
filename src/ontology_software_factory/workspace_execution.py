@@ -138,6 +138,7 @@ class WorkspaceExecution:
         self.max_write_bytes = max_write_bytes
         self.max_output_chars = max_output_chars
         self.operations: list[dict[str, Any]] = []
+        self.tool_evidence: list[dict[str, Any]] = []
         self.evidence_root = self.root / ".agent-evidence"
         self.evidence_root.mkdir(exist_ok=True)
 
@@ -346,7 +347,11 @@ class WorkspaceExecution:
                   "commandId": suite_id, "argv": argv, "executedAt": datetime.now(timezone.utc).isoformat(),
                   "workspaceOnly": True, "sandbox": sandbox}
         evidence = self._write_evidence("tests", suite_id, report, output)
-        return {**report, "evidence": evidence}
+        result = {**report, "evidence": evidence}
+        self.tool_evidence.append(result)
+        self.operations.append({"operation": "tests.run", "suiteId": suite_id,
+                                "status": status, "reportSha256": evidence["reportSha256"]})
+        return result
 
     def run_security_scan(self, scanner_id: str, *, timeout_seconds: int = 90) -> dict[str, Any]:
         if scanner_id not in {"semgrep", "gitleaks", "trivy"}:
