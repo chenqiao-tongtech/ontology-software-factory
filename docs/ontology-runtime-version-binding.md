@@ -74,6 +74,18 @@ Evidence metadata 包含 `ontologySnapshotId`、`ontologyDigest` 和 `ontologyVe
 
 注意：Agent Result 封套证明执行器按 Role 声明登记了哪些输出类型，不等于模型生成内容已经通过业务数据库写入或领域专家验收。当前结构化 Pydantic 输出模型与领域实体之间仍是参考映射，复杂实体还需要后续专门的领域对象映射器和业务校验器。
 
+## 5. 当前工具能力边界
+
+本次版本绑定不会自动补齐尚未实现的工具适配器。当前 `OpenAIAgentsRuntime` 实际注册的函数工具只有：
+
+- `documents.read`：读取 allowlist 内的项目文档。
+- `catalog.read`：列出已配置 Role / Skill 标识。
+- `contract.validate`：对输入 JSON 和 JSON Schema 做结构校验。
+
+Role / Skill 配置中还声明了 `workspace.read`、`architecture.plan.write`、`repository.branch.write`、`tests.run`、`artifacts.read`、`test-report.write`、`security.scan`、`security.finding.write` 等工具，但这些工具尚未全部接入当前 OpenAI Agents Runtime。Runtime 会记录每个 Skill 未能提供的工具 ID，并在 Agent 指令中明确禁止声称执行了不可用工具。
+
+因此当前真实 LLM Workflow 能生成需求分析、架构方案、实现候选文件、测试策略和安全审查意见；它**不会**通过 Agent 工具直接修改仓库分支、执行测试命令或运行安全扫描。实现候选文件由 Workflow Handler 保存到独立 artifacts 目录，不会应用到源码树。测试和安全扫描必须由现有质量 Gate / 受控 Runner 另行执行，缺少真实报告时不得宣称通过。
+
 ## 5. 直接 Agent Pipeline
 
 `SoftwareFactoryPipeline` 对标记为需要本体绑定的真实 Runtime，同样解析活动快照、生成 Agent Task 契约并传入 Runtime。确定性 Fake Runner 测试替身不要求外部快照，不会触发真实模型调用。
