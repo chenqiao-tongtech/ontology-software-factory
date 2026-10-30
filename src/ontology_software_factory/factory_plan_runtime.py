@@ -115,8 +115,15 @@ class FactoryPlanDispatcher:
             for assignment in phase["assignments"]:
                 if not set(assignment["outputEntityTypes"]) <= pinned_classes:
                     raise ValueError("assignment output types are not present in the pinned ontology snapshot")
-        if plan.get("riskAssessment", {}).get("requiresHumanApproval"):
-            return {"status": "approval_required", "enqueued": [], "execution": get_factory_plan_execution(self.task_store, plan_record)}
+        approval = self.task_store.get_factory_plan_approval(plan["planId"]) if hasattr(self.task_store, "get_factory_plan_approval") else None
+        if approval is None or approval.get("planDigest") != plan_record.get("digest"):
+            raise ValueError("independent plan approval record is missing or does not match the immutable plan digest")
+        if approval.get("status") == "rejected":
+            return {"status": "approval_rejected", "enqueued": [],
+                    "execution": get_factory_plan_execution(self.task_store, plan_record)}
+        if approval.get("status") != "approved":
+            return {"status": "approval_required", "enqueued": [],
+                    "execution": get_factory_plan_execution(self.task_store, plan_record)}
         for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion"):
             if plan.get("ontologyBinding", {}).get(key) != binding.get(key):
                 raise ValueError(f"plan is not pinned to this Workflow Run: {key}")
@@ -143,6 +150,7 @@ class FactoryPlanDispatcher:
             if not all(phase_status.get(dep) == "succeeded" for dep in phase["dependsOn"]):
                 blocked.append(phase["phaseId"])
                 continue
+            phase_enqueued = False
             for assignment in phase["assignments"]:
                 key = f"factory:{run['id']}:{plan['planId']}:{assignment['assignmentId']}"
                 if key in by_key:
@@ -177,6 +185,18 @@ class FactoryPlanDispatcher:
                 by_key[key] = task
                 enqueued.append({"assignmentId": assignment["assignmentId"], "taskId": task["id"], "deduplicated": duplicate})
                 slots -= 1
+                phase_enqueued = True
+            if phase_enqueued:
+                self.task_store.mark_factory_phase_running(
+                    run_id=run["id"], plan_id=plan["planId"], phase_id=phase["phaseId"],
+                    event={
+                        "at": datetime.now(timezone.utc).isoformat(),
+                        "actor": "factory-plan-dispatcher",
+                        "action": "factory.phase.running",
+                        "summary": f"Factory Phase {phase['phaseId']} started",
+                        "payload": {"planId": plan["planId"], "phaseId": phase["phaseId"]},
+                    },
+                )
         updated = get_factory_plan_execution(self.task_store, plan_record)
         return {
             "status": updated["status"], "enqueued": enqueued,
