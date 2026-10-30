@@ -106,3 +106,59 @@ def evaluate_quality(run_dir:str|Path, *, catalog_path:str|Path|None=None, polic
  report={'schemaVersion':'1.0.0','reportId':f'quality-{run_dir.name}','runId':run_dir.name,'profile':profile,'evaluatedAt':datetime.now(timezone.utc).isoformat(),'status':status,'releaseAllowed':status=='passed','policyVersion':policy['policyVersion'],'checks':checks,'findings':findings,'externalTools':external,'limitation':'built-in checks and external Trivy/Gitleaks (when installed) cover the candidate configuration directory only. This is NOT a source-code SAST, full dependency SCA, Kafka binary/container scan, live cluster validation, or legal license review.'}
  out=run_dir/'evidence/quality-gate-report.json'; out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
  return report
+
+
+def evaluate_agent_workspace_evidence(
+    test_evidence: list[dict[str, Any]], security_evidence: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Fail-closed release evidence gate for real Agent candidate workspaces."""
+    checks: list[dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
+    test_runs = [item for item in test_evidence if isinstance(item, dict)
+                 and item.get("suiteId") == "python-unit-tests"]
+    if not test_runs:
+        checks.append({"checkId": "container-python-unit-tests", "status": "incomplete",
+                       "detail": "No Python unit-test execution evidence was attached"})
+    else:
+        test = test_runs[-1]
+        passed = (test.get("status") == "passed" and test.get("sandbox") == "docker"
+                  and isinstance(test.get("evidence"), dict)
+                  and bool(test["evidence"].get("reportSha256")))
+        checks.append({"checkId": "container-python-unit-tests",
+                       "status": "passed" if passed else "failed" if test.get("status") == "failed" else "incomplete",
+                       "detail": f"status={test.get('status')}; sandbox={test.get('sandbox')}"})
+        if test.get("status") == "failed":
+            findings.append({"id": "UNIT_TEST_FAILURE", "severity": "blocker",
+                             "detail": "Container unit test suite failed"})
+    for scanner_id in ("semgrep", "gitleaks", "trivy"):
+        runs = [item for item in security_evidence if isinstance(item, dict)
+                and item.get("scannerId") == scanner_id]
+        if not runs:
+            checks.append({"checkId": f"container-{scanner_id}", "status": "incomplete",
+                           "detail": "No container scanner evidence was attached"})
+            continue
+        scan = runs[-1]
+        passed = (scan.get("status") == "passed" and scan.get("sandbox") == "docker"
+                  and isinstance(scan.get("evidence"), dict)
+                  and bool(scan["evidence"].get("reportSha256")))
+        status = "passed" if passed else "failed" if scan.get("status") == "findings" else "incomplete"
+        checks.append({"checkId": f"container-{scanner_id}", "status": status,
+                       "detail": f"status={scan.get('status')}; sandbox={scan.get('sandbox')}"})
+        if status == "failed":
+            findings.append({"id": f"{scanner_id.upper()}_FINDINGS", "severity": "blocker",
+                             "detail": f"{scanner_id} reported security findings"})
+    blocking = any(item["status"] == "failed" for item in checks)
+    incomplete = any(item["status"] == "incomplete" for item in checks)
+    status = "blocked" if blocking else "incomplete" if incomplete else "passed"
+    return {
+        "schemaVersion": "1.0.0",
+        "status": status,
+        "releaseAllowed": status == "passed",
+        "checks": checks,
+        "findings": findings,
+        "policy": {
+            "requiredTestSuite": "python-unit-tests",
+            "requiredContainerScanners": ["semgrep", "gitleaks", "trivy"],
+            "hostExecutionAccepted": False,
+        },
+    }

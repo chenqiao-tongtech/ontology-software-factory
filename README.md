@@ -168,6 +168,7 @@ ontology-software-factory/
 python -m pip install -e .
 make validate
 make test
+make docker-test-image
 ```
 
 `make validate` 会校验架构基线、MVP 范围、领域契约、资产目录、Agent/Skills、多智能体拓扑、Workflow 定义、本体发现配置，以及 Agent Role、Skill、Workflow、Tool 和 JSON Schema 契约对本体类的引用。`make test` 运行完整 unittest 套件。测试中使用的 Fake Provider、fixture 和模拟服务用于验证本地逻辑，不代表外部 LLM/MCP/NVIDIA/Cognee 服务已经连通。
@@ -405,3 +406,6 @@ python scripts/run_ontology_discovery.py \
 
 
 本阶段 Agent 受控工作区、Run 级 Role/Skill 锁、Docker 固定测试执行和 Git Worktree 本地候选分支说明见 [controlled workspace execution](docs/controlled-workspace-execution.md)。
+
+
+本阶段进一步加入 Run 级 Workflow/Role/Skill 内容锁、Docker 固定测试执行、digest 固定的容器安全扫描与 Agent Workspace 证据门禁；Git Worktree 仅创建本地候选分支，不自动 push/PR/merge。详见 [受控工作区与执行手册](docs/controlled-workspace-execution.md)。

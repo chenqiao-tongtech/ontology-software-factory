@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ontology_software_factory.production_pipeline import run_pipeline
-from ontology_software_factory.quality_gate import evaluate_quality
+from ontology_software_factory.quality_gate import evaluate_quality, evaluate_agent_workspace_evidence
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,6 +28,31 @@ class QualityGateTests(unittest.TestCase):
         destination = root / rid
         shutil.copytree(self.baseline_root / rid, destination)
         return destination
+
+    def test_agent_workspace_gate_requires_container_test_and_all_scanners(self):
+        evidence = {"reportSha256": "a" * 64}
+        tests = [{"suiteId": "python-unit-tests", "status": "passed", "sandbox": "docker", "evidence": evidence}]
+        scans = [{"scannerId": name, "status": "passed", "sandbox": "docker", "evidence": evidence}
+                 for name in ("semgrep", "gitleaks", "trivy")]
+        report = evaluate_agent_workspace_evidence(tests, scans)
+        self.assertEqual(report["status"], "passed")
+        self.assertTrue(report["releaseAllowed"])
+
+    def test_agent_workspace_gate_is_incomplete_without_real_execution_evidence(self):
+        report = evaluate_agent_workspace_evidence([], [])
+        self.assertEqual(report["status"], "incomplete")
+        self.assertFalse(report["releaseAllowed"])
+
+    def test_agent_workspace_gate_blocks_security_findings(self):
+        evidence = {"reportSha256": "a" * 64}
+        tests = [{"suiteId": "python-unit-tests", "status": "passed", "sandbox": "docker", "evidence": evidence}]
+        scans = [{"scannerId": name, "status": "passed", "sandbox": "docker", "evidence": evidence}
+                 for name in ("semgrep", "gitleaks", "trivy")]
+        scans[1] = {**scans[1], "status": "findings"}
+        report = evaluate_agent_workspace_evidence(tests, scans)
+        self.assertEqual(report["status"], "blocked")
+        self.assertFalse(report["releaseAllowed"])
+        self.assertTrue(report["findings"])
 
     def test_development_config_gate_passes_without_claiming_external_scan(self):
         with tempfile.TemporaryDirectory() as d:

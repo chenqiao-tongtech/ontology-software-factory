@@ -81,6 +81,13 @@ class WorkspaceManager:
             )
             if root_result.returncode != 0 or Path(root_result.stdout.strip()).resolve() != self.project_root:
                 raise WorkspacePolicyError("git-worktree backend requires project_root to be the Git repository root")
+            status_result = subprocess.run(
+                [git, "-C", str(self.project_root), "status", "--porcelain", "--untracked-files=all"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, timeout=15, shell=False, check=False,
+            )
+            if status_result.returncode != 0 or status_result.stdout.strip():
+                raise WorkspacePolicyError("Git Worktree backend requires a clean source checkout")
             branch_name = f"agent/run-{run_id.lower()}"
             if not target.exists():
                 proc = subprocess.run(
@@ -355,45 +362,123 @@ class WorkspaceExecution:
                                 "status": status, "reportSha256": evidence["reportSha256"]})
         return result
 
+    def _run_scanner_container(
+        self, scanner_id: str, image: str, report_path: Path, timeout_seconds: int
+    ) -> tuple[int, str, bool, str]:
+        if not re.fullmatch(r".+@sha256:[0-9a-f]{64}", image):
+            return 127, "Scanner image must be configured by immutable sha256 digest", False, "image_not_pinned"
+        docker = shutil.which("docker")
+        if not docker:
+            return 127, "Docker CLI is not installed", False, "unavailable"
+        inspect = subprocess.run(
+            [docker, "image", "inspect", image], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            timeout=15, shell=False, check=False,
+        )
+        if inspect.returncode != 0:
+            return 127, "Pinned scanner image is not present locally; image pulls are disabled", False, "image_missing"
+        uid = str(os.getuid()) if hasattr(os, "getuid") else "10001"
+        gid = str(os.getgid()) if hasattr(os, "getgid") else "10001"
+        base = [
+            docker, "run", "--rm", "--pull=never", "--network=none", "--read-only",
+            "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128",
+            "--memory=1g", "--cpus=1", "--user", f"{uid}:{gid}",
+            "--tmpfs", "/tmp:rw,noexec,nosuid,size=256m", "--env", "HOME=/tmp",
+            "--volume", f"{self.root}:/workspace:ro",
+            "--volume", f"{report_path.parent}:/evidence:rw",
+        ]
+        report_name = report_path.name
+        if scanner_id == "semgrep":
+            rules = self.project_root / "runners" / "container" / "semgrep-rules.yml"
+            if not rules.is_file():
+                return 127, "local Semgrep rules file is missing", False, "rules_missing"
+            base.extend(["--volume", f"{rules}:/opt/semgrep-rules.yml:ro",
+                         "--entrypoint", "semgrep"])
+            command = ["scan", "--json", "--error", "--output", f"/evidence/{report_name}",
+                       "--config", "/opt/semgrep-rules.yml", "/workspace"]
+        elif scanner_id == "gitleaks":
+            base.extend(["--entrypoint", "gitleaks"])
+            command = ["dir", "--report-format", "json", "--report-path", f"/evidence/{report_name}",
+                       "--redact", "100", "--no-banner", "/workspace"]
+        else:
+            cache_value = os.getenv("FACTORY_TRIVY_CACHE_DIR", "").strip()
+            if not cache_value:
+                return 127, "FACTORY_TRIVY_CACHE_DIR must point to a pre-populated local Trivy cache", False, "cache_missing"
+            cache = Path(cache_value).expanduser().resolve()
+            if not cache.is_dir() or cache.is_symlink():
+                return 127, "configured Trivy cache directory is unavailable or unsafe", False, "cache_missing"
+            base.extend(["--volume", f"{cache}:/scanner-cache:ro", "--entrypoint", "trivy"])
+            command = ["fs", "--format", "json", "--output", f"/evidence/{report_name}",
+                       "--exit-code", "1", "--scanners", "vuln,misconfig,secret",
+                       "--severity", "HIGH,CRITICAL", "--skip-db-update", "--skip-java-db-update",
+                       "--cache-dir", "/scanner-cache", "/workspace"]
+        try:
+            proc = subprocess.run(
+                [*base, image, *command], cwd=self.root,
+                env={"PATH": os.environ.get("PATH", ""), "LANG": "C.UTF-8"},
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace",
+                timeout=timeout_seconds, shell=False, check=False,
+            )
+            return proc.returncode, proc.stdout, False, "docker"
+        except subprocess.TimeoutExpired as exc:
+            output = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+            return 124, output + "\\nSCANNER_TIMEOUT", True, "docker"
+
     def run_security_scan(self, scanner_id: str, *, timeout_seconds: int = 90) -> dict[str, Any]:
         if scanner_id not in {"semgrep", "gitleaks", "trivy"}:
             raise WorkspacePolicyError("scanner is not in the fixed scanner allowlist")
-        if os.getenv("FACTORY_ENABLE_LOCAL_SECURITY_SCANS", "").lower() not in {"1", "true", "yes"}:
-            return {"status": "blocked", "scannerId": scanner_id, "executed": False,
-                    "reason": "local scanner execution is disabled; set FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1 after reviewing scanner and workspace trust boundaries",
-                    "evidence": None}
-        executable = shutil.which(scanner_id)
-        if not executable:
-            return {"status": "incomplete", "scannerId": scanner_id, "executed": False,
-                    "reason": f"{scanner_id} executable is not installed", "evidence": None}
+        container_enabled = os.getenv("FACTORY_ENABLE_CONTAINER_SECURITY_SCANS", "").lower() in {"1", "true", "yes"}
+        local_enabled = os.getenv("FACTORY_ENABLE_LOCAL_SECURITY_SCANS", "").lower() in {"1", "true", "yes"}
+        if not container_enabled and not local_enabled:
+            result = {"status": "blocked", "scannerId": scanner_id, "executed": False,
+                      "reason": "security scan execution is disabled", "evidence": None}
+            self.tool_evidence.append(result)
+            return result
         report_dir = self.evidence_root / "security"
         report_dir.mkdir(parents=True, exist_ok=True)
         report_path = report_dir / f"{scanner_id}-report.json"
-        if scanner_id == "semgrep":
-            argv = [executable, "scan", "--json", "--output", str(report_path), "--config", "auto", str(self.root)]
-        elif scanner_id == "gitleaks":
-            argv = [executable, "dir", "--report-format", "json", "--report-path", str(report_path),
-                    "--redact", "100", "--no-banner", str(self.root)]
-        else:
-            argv = [executable, "fs", "--format", "json", "--output", str(report_path),
-                    "--scanners", "vuln,misconfig,secret", "--severity", "HIGH,CRITICAL",
-                    "--skip-db-update", "--skip-java-db-update", str(self.root)]
-        env = {"PATH": os.environ.get("PATH", ""), "HOME": str(self.root / ".scanner-home"),
-               "TMPDIR": str(self.root / ".scanner-tmp"), "LANG": "C.UTF-8"}
-        Path(env["HOME"]).mkdir(exist_ok=True)
-        Path(env["TMPDIR"]).mkdir(exist_ok=True)
         started = time.monotonic()
         timed_out = False
-        try:
-            proc = subprocess.run(argv, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
-                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                  text=True, encoding="utf-8", errors="replace",
-                                  timeout=timeout_seconds, shell=False, check=False)
-            exit_code, output = proc.returncode, proc.stdout
-        except subprocess.TimeoutExpired as exc:
-            timed_out, exit_code = True, 124
-            output = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-            output += "\nSCANNER_TIMEOUT"
+        if container_enabled:
+            image = os.getenv(f"FACTORY_{scanner_id.upper()}_IMAGE", "").strip()
+            if not image:
+                exit_code, output, timed_out, sandbox = 127, "scanner image digest is not configured", False, "image_not_configured"
+            else:
+                exit_code, output, timed_out, sandbox = self._run_scanner_container(
+                    scanner_id, image, report_path, timeout_seconds
+                )
+        else:
+            executable = shutil.which(scanner_id)
+            if not executable:
+                result = {"status": "incomplete", "scannerId": scanner_id, "executed": False,
+                          "reason": f"{scanner_id} executable is not installed", "evidence": None}
+                self.tool_evidence.append(result)
+                self.operations.append({"operation": "security.scan", "scannerId": scanner_id, "status": "incomplete"})
+                return result
+            if scanner_id == "semgrep":
+                argv = [executable, "scan", "--json", "--output", str(report_path), "--config", "auto", str(self.root)]
+            elif scanner_id == "gitleaks":
+                argv = [executable, "dir", "--report-format", "json", "--report-path", str(report_path),
+                        "--redact", "100", "--no-banner", str(self.root)]
+            else:
+                argv = [executable, "fs", "--format", "json", "--output", str(report_path),
+                        "--scanners", "vuln,misconfig,secret", "--severity", "HIGH,CRITICAL",
+                        "--skip-db-update", "--skip-java-db-update", str(self.root)]
+            env = {"PATH": os.environ.get("PATH", ""), "HOME": str(self.root / ".scanner-home"),
+                   "TMPDIR": str(self.root / ".scanner-tmp"), "LANG": "C.UTF-8"}
+            Path(env["HOME"]).mkdir(exist_ok=True)
+            Path(env["TMPDIR"]).mkdir(exist_ok=True)
+            try:
+                proc = subprocess.run(argv, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                      text=True, encoding="utf-8", errors="replace",
+                                      timeout=timeout_seconds, shell=False, check=False)
+                exit_code, output, sandbox = proc.returncode, proc.stdout, "host-process-not-containerized"
+            except subprocess.TimeoutExpired as exc:
+                timed_out, exit_code, sandbox = True, 124, "host-process-not-containerized"
+                output = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+                output += "\\nSCANNER_TIMEOUT"
         output = output[:self.max_output_chars]
         parsed = None
         if report_path.is_file():
@@ -401,7 +486,8 @@ class WorkspaceExecution:
                 parsed = json.loads(report_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 parsed = None
-        if timed_out or parsed is None:
+        if timed_out or parsed is None or sandbox in {"unavailable", "image_missing", "image_not_pinned",
+                                                       "image_not_configured", "rules_missing", "cache_missing"}:
             status = "incomplete"
         elif exit_code == 0:
             status = "passed"
@@ -409,11 +495,64 @@ class WorkspaceExecution:
             status = "findings"
         else:
             status = "incomplete"
+        if scanner_id == "semgrep" and isinstance(parsed, dict) and parsed.get("results"):
+            status = "findings"
+        if scanner_id == "trivy" and isinstance(parsed, dict):
+            for item in parsed.get("Results") or []:
+                if any(str(v.get("Severity", "")).upper() in {"HIGH", "CRITICAL"}
+                       for v in item.get("Vulnerabilities") or []):
+                    status = "findings"
+                if any(str(v.get("Severity", "")).upper() in {"HIGH", "CRITICAL"}
+                       for v in item.get("Misconfigurations") or []):
+                    status = "findings"
+                if any(str(v.get("Severity", "")).upper() in {"HIGH", "CRITICAL"}
+                       for v in item.get("Secrets") or []):
+                    status = "findings"
+        if scanner_id == "gitleaks" and isinstance(parsed, list) and parsed:
+            status = "findings"
         report = {"schemaVersion": "1.0.0", "runId": self.run_id, "scannerId": scanner_id,
                   "status": status, "exitCode": exit_code, "durationMs": round((time.monotonic()-started)*1000),
                   "executedAt": datetime.now(timezone.utc).isoformat(), "workspaceOnly": True,
                   "reportSha256": sha256_file(report_path) if report_path.is_file() else None,
                   "reportPath": report_path.relative_to(self.root).as_posix() if report_path.is_file() else None,
-                  "sandbox": "host-process; not an OS/container sandbox"}
+                  "sandbox": sandbox}
         evidence = self._write_evidence("security", scanner_id, report, output)
-        return {**report, "evidence": evidence, "findings": parsed if status == "findings" else None}
+        finding_summary: list[dict[str, Any]] = []
+        if status == "findings" and scanner_id == "semgrep" and isinstance(parsed, dict):
+            for item in (parsed.get("results") or [])[:20]:
+                extra = item.get("extra") or {}
+                finding_summary.append({
+                    "ruleId": item.get("check_id"), "path": item.get("path"),
+                    "line": (item.get("start") or {}).get("line"),
+                    "severity": extra.get("severity"), "message": str(extra.get("message", ""))[:500],
+                })
+        elif status == "findings" and scanner_id == "gitleaks" and isinstance(parsed, list):
+            for item in parsed[:20]:
+                finding_summary.append({
+                    "ruleId": item.get("RuleID"), "path": item.get("File"),
+                    "line": item.get("StartLine"), "description": str(item.get("Description", ""))[:300],
+                })
+        elif status == "findings" and scanner_id == "trivy" and isinstance(parsed, dict):
+            for item in parsed.get("Results") or []:
+                for field, id_field in (("Vulnerabilities", "VulnerabilityID"),
+                                         ("Misconfigurations", "ID"), ("Secrets", "RuleID")):
+                    for finding in (item.get(field) or []):
+                        if str(finding.get("Severity", "")).upper() in {"HIGH", "CRITICAL"}:
+                            finding_summary.append({
+                                "id": finding.get(id_field), "target": item.get("Target"),
+                                "severity": finding.get("Severity"),
+                                "title": str(finding.get("Title") or finding.get("Title", ""))[:300],
+                            })
+                        if len(finding_summary) >= 20:
+                            break
+                    if len(finding_summary) >= 20:
+                        break
+                if len(finding_summary) >= 20:
+                    break
+        result = {**report, "evidence": evidence,
+                  "findingCount": len(finding_summary) if status == "findings" else 0,
+                  "findings": finding_summary if status == "findings" else None}
+        self.tool_evidence.append(result)
+        self.operations.append({"operation": "security.scan", "scannerId": scanner_id,
+                                "status": status, "reportSha256": evidence["reportSha256"]})
+        return result

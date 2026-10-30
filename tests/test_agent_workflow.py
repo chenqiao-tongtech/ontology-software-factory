@@ -46,7 +46,21 @@ class FakeAgentRuntime:
                 "rationale": "reviewable prototype only", "evidence_gaps": ["generated code not executed"],
             },
         }
-        return {"role_id": role_id, "model": "fake", "latency_ms": 1, "tool_ids": [], "output": outputs[role_id]}
+        workspace_evidence = []
+        fixture_evidence = {"reportSha256": "a" * 64, "logSha256": "b" * 64}
+        if role_id == "test-agent":
+            workspace_evidence.append({
+                "suiteId": "python-unit-tests", "status": "passed", "sandbox": "docker",
+                "evidence": fixture_evidence, "fixtureOnly": True,
+            })
+        if role_id == "security-reviewer":
+            for scanner_id in ("semgrep", "gitleaks", "trivy"):
+                workspace_evidence.append({
+                    "scannerId": scanner_id, "status": "passed", "sandbox": "docker",
+                    "evidence": fixture_evidence, "fixtureOnly": True,
+                })
+        return {"role_id": role_id, "model": "fake", "latency_ms": 1, "tool_ids": [],
+                "output": outputs[role_id], "workspace_evidence": workspace_evidence}
 
 
 def load_definition():

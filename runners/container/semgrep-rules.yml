@@ -1,0 +1,31 @@
+rules:
+  - id: python-dynamic-eval-exec
+    languages: [python]
+    severity: ERROR
+    message: Avoid dynamic eval/exec on untrusted or externally influenced input.
+    patterns:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: exec(...)
+  - id: python-subprocess-shell-true
+    languages: [python]
+    severity: ERROR
+    message: Avoid shell=True; use a fixed argv list and shell=False.
+    pattern: subprocess.$FUNC(..., shell=True, ...)
+  - id: python-hardcoded-secret-assignment
+    languages: [python]
+    severity: ERROR
+    message: Potential hard-coded credential assignment.
+    patterns:
+      - pattern: $KEY = "$VALUE"
+      - metavariable-regex:
+          metavariable: $KEY
+          regex: (?i).*(api[_-]?key|password|secret|token).*
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: .{8,}
+  - id: python-unsafe-yaml-load
+    languages: [python]
+    severity: WARNING
+    message: Use yaml.safe_load for untrusted YAML.
+    pattern: yaml.load($DATA, ...)

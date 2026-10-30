@@ -30,7 +30,9 @@
 
 **默认不执行 Agent 生成的代码。** 推荐使用 Docker 容器执行固定测试套件。先构建项目测试镜像：
 
-    docker build -f runners/container/Dockerfile.test-runner -t ontology-software-factory-test-runner:py311-v1 .
+    make docker-test-image
+
+# 等价命令：docker build -f runners/container/Dockerfile.test-runner -t ontology-software-factory-test-runner:py311-v1 .
 
 确认 Docker Engine 可用且本地已有该镜像后，在可信开发环境显式开启：
 
@@ -51,11 +53,21 @@
 
 执行器使用固定 argv、shell=False、无 stdin 和最长 120 秒超时；结果包含 suite ID、退出码、耗时、执行后端、日志与 JSON 报告 SHA-256。模型不能提交自定义 shell 字符串。Docker 镜像缺失时返回 incomplete，不会自动 pull，也不会回退到宿主机执行。
 
-**重要：固定命令和独立目录并不等于 OS 沙箱。** 目前宿主机进程仍可访问该用户有权访问的文件和系统资源。不要在生产机或含敏感凭据的开发机上开启此开关执行不可信代码。生产执行必须先接入容器/微虚机沙箱、只读基础镜像、资源配额、网络隔离、短期凭据和审计。
+**重要：宿主机回退模式不是 OS 沙箱。** 该模式仍可访问当前用户有权访问的文件和系统资源。不要在生产机或含敏感凭据的开发机上开启此开关执行不可信代码。生产执行应使用受控容器/微虚机，并结合只读基础镜像、资源配额、网络隔离、短期凭据和审计。
 
 ## 安全扫描开关
 
-默认不启动外部扫描器。确认安装工具并评估其运行边界后，显式开启：
+推荐通过容器扫描器运行。运维方先将 Semgrep、Gitleaks、Trivy 镜像拉入受控本地 Registry/主机，并将每个镜像 digest 配置为完整的 repo@sha256:... 值：
+
+    export FACTORY_ENABLE_CONTAINER_SECURITY_SCANS=1
+    export FACTORY_SEMGREP_IMAGE='registry.example/semgrep@sha256:<64位digest>'
+    export FACTORY_GITLEAKS_IMAGE='registry.example/gitleaks@sha256:<64位digest>'
+    export FACTORY_TRIVY_IMAGE='registry.example/trivy@sha256:<64位digest>'
+    export FACTORY_TRIVY_CACHE_DIR='/var/lib/factory/trivy-cache'
+
+Trivy cache 必须由可信运维流程预先填充。容器扫描无网络、只读挂载源工作区、仅证据目录可写、只读 rootfs、capability drop、no-new-privileges 和资源限制。运行时只 inspect 本地镜像，不自动 pull。Semgrep 使用仓库内 runners/container/semgrep-rules.yml 离线规则集。
+
+仅当容器扫描不可用、且可信操作员接受宿主机执行风险时，才使用本机 CLI 回退：
 
     export FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1
 
@@ -67,7 +79,7 @@
 
 缺少可执行文件时返回 incomplete；超时、报告缺失或 JSON 无法解析也返回 incomplete；扫描器返回发现时返回 findings，不会伪装成通过。报告和日志保存在工作区的 .agent-evidence/security/，并记录摘要。Trivy 使用本地缓存数据库参数，不在该调用中主动更新数据库；如果本地数据库不可用，结果可能是不完整。
 
-扫描范围是当前工作区快照，不自动证明部署镜像、外部依赖仓库、运行时环境或生产集群安全。Semgrep 自动规则配置可能需要网络访问，部署方应按企业规则源和网络策略进一步收紧。
+扫描范围是当前工作区快照，不自动证明部署镜像、外部依赖仓库、运行时环境或生产集群安全。容器模式使用本地 Semgrep 基础规则，不访问在线规则仓库；企业应维护和审查扩展规则。
 
 ## 证据位置
 
@@ -91,15 +103,15 @@
 
     export FACTORY_WORKSPACE_BACKEND=git-worktree
 
-创建后会得到 `agent/run-<run-id>` 本地分支。Agent 的候选写入落在该 Worktree 中，Patch 仍会保存为可审查证据。该能力不 push、不创建 GitHub/GitLab PR、不 commit，也不 merge；运行时不暴露 Git 任意命令。若分支或 Worktree 已存在但与预期不一致，会拒绝复用。
+创建前要求源仓库 Git 工作区干净；创建后会得到 `agent/run-<run-id>` 本地分支。Agent 的候选写入落在该 Worktree 中，Patch 仍会保存为可审查证据。该能力不 push、不创建 GitHub/GitLab PR、不 commit，也不 merge；运行时不暴露 Git 任意命令。若分支或 Worktree 已存在但与预期不一致，会拒绝复用。
 
 ## 当前未实现的边界
 
 - Git Worktree 目前只创建本地分支；尚未实现受控 commit、远程 push、PR 创建和审批后合并。
-- Docker 隔离已覆盖固定 Python 测试套件；Semgrep/Gitleaks/Trivy 仍是显式启用的本机 CLI 扫描器，不应把它们描述为容器内扫描。
-- 尚未把扫描报告自动接入所有产品交付 Quality Gate；Agent Workflow 会保存测试/扫描报告摘要，最终放行策略仍需由独立质量门禁消费。
+- Docker 隔离覆盖固定 Python 测试套件和 digest 固定的 Semgrep/Gitleaks/Trivy 扫描；本机 CLI 回退仍保留为显式危险选项。
+- Agent Workflow 的 security-review 阶段已加入 fail-closed 证据门禁：要求 Docker Python 单元测试和 Semgrep/Gitleaks/Trivy 三份容器扫描报告都成功并具有报告摘要，发现项则阻断，缺失/不完整则保持不放行。
 - Run 级 Role/Skill 锁定当前通过内容摘要检测漂移；不把 Skill 历史文件内容复制进 Run，也不提供外部签名或 KMS 证明。
-- 尚未把扫描报告自动接入所有产品交付 Quality Gate；当前工具输出可作为证据输入，仍需策略层消费并判定。
+- Agent Workspace 证据门禁已在真实 Agent Workflow 的 security-review 阶段执行；它尚未替代或统一其他产品交付流水线的 Quality Gate。
 - 工作区位于本机临时目录，不是多租户生产存储；清理和保留周期由本地操作员负责。
 
 ## 验证

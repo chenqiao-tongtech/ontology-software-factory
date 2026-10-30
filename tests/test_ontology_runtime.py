@@ -63,6 +63,19 @@ class OntologyRuntimeBindingTests(unittest.TestCase):
         finally:
             skill_path.write_text(original, encoding="utf-8")
 
+    def test_workflow_run_lock_detects_definition_content_drift(self):
+        definition_path = ROOT / "workflows/definitions/agent-proposal-v1.json"
+        original = definition_path.read_text(encoding="utf-8")
+        definition = json.loads(original)
+        lock = build_runtime_contract_lock(ROOT, definition, self.snapshot)
+        try:
+            definition["description"] = definition.get("description", "") + " changed after run creation"
+            definition_path.write_text(json.dumps(definition, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            with self.assertRaises(OntologyBindingError):
+                validate_runtime_contract_lock(ROOT, lock, "implementation-agent", self.snapshot)
+        finally:
+            definition_path.write_text(original, encoding="utf-8")
+
     def test_workflow_run_lock_digest_is_tamper_evident(self):
         definition = json.loads((ROOT / "workflows/definitions/agent-proposal-v1.json").read_text(encoding="utf-8"))
         lock = build_runtime_contract_lock(ROOT, definition, self.snapshot)
