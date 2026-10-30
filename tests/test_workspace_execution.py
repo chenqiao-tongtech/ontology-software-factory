@@ -80,6 +80,17 @@ class WorkspaceExecutionTests(unittest.TestCase):
         self.assertIn("--security-opt=no-new-privileges", command)
         self.assertIn("--pull=never", command)
 
+    def test_missing_container_image_is_incomplete_and_never_falls_back_to_host(self):
+        inspect = Mock(returncode=1, stdout="image missing")
+        with patch.dict(os.environ, {"FACTORY_ENABLE_CONTAINER_EXECUTION": "1",
+                                     "FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION": "1"}):
+            with patch("ontology_software_factory.workspace_execution.shutil.which", return_value="/usr/bin/docker"):
+                with patch("ontology_software_factory.workspace_execution.subprocess.run", return_value=inspect) as run:
+                    result = self.service.run_tests("python-unit-tests")
+        self.assertEqual(result["status"], "incomplete")
+        self.assertEqual(run.call_count, 1)
+        self.assertIn("image pulls are disabled", result.get("reason", "") + result.get("sandbox", ""))
+
     def test_git_worktree_backend_creates_a_local_run_branch(self):
         import shutil
         import subprocess
