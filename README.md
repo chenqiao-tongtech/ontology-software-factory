@@ -1,4 +1,3 @@
-# ontology-software-factory
 # Ontology-driven Software Factory
 
 > **面向企业软件配置交付的本体驱动、多智能体、可验证参考实现**  
@@ -18,6 +17,7 @@
 - [快速开始](#快速开始)
 - [主要演示与运行命令](#主要演示与运行命令)
 - [本地 Web 控制台](#本地-web-控制台)
+- [四阶段统一平台 Portal](#四阶段统一平台-portal)
 - [界面截图](#界面截图)
 - [真实 LLM 与 Agent Runtime（可选）](#真实-llm-与-agent-runtime可选)
 - [安全边界与当前限制](#安全边界与当前限制)
@@ -247,7 +247,8 @@ make observability
 | `make demo-ontology-discovery` | 用离线 Fixture 生成并校验本体候选。 |
 | `make demo-ontology-discovery-worker` | 通过 Worker 队列演示本体发现及证据回写。 |
 | `make observability` | 生成本地运行/成本观测报告。 |
-| `make clean-local` | 删除 `.local-runs`、`.local-environments`、`deliverables` 和观测报告。请先备份需要保留的演示数据。 |
+| `make portal` | 启动统一软件工厂 Portal（默认 `127.0.0.1:8770`）。 |
+| `make clean-local` | 删除 `.local-runs`、`.local-environments`、`.local-portal`、`deliverables` 和观测报告。请先备份需要保留的演示数据。 |
 
 常用脚本的具体参数可通过 `python scripts/<script>.py --help` 查看。
 
@@ -264,6 +265,26 @@ make observability
 | Agent Workflow Console | `python scripts/run_agent_workflow_console.py` | `http://127.0.0.1:8769` | 持久化多 Agent 工作流、Worker 任务派发、Relay 回写和人工复核；需要真实 Agent Runtime 依赖与模型凭据。 |
 
 可通过 `--host`、`--port` 和 `--db` 参数调整地址或本地 SQLite 文件位置；非回环绑定前必须自行添加身份认证、授权、网络控制与数据保护措施。
+
+## 四阶段统一平台 Portal
+
+在既有代码上新增统一的深色可视化操作台，整合企业资产、本体、Agent、质量安全和交付发布模块。启动方式：
+
+```bash
+make portal
+# 浏览器访问 http://127.0.0.1:8770
+```
+
+| 功能模块 | 当前实现 | 重要边界 |
+|---|---|---|
+| 平台基础 | 统一导航、REST API、稳定对象 ID、本地状态与事件账本、同源写操作校验 | 本地 JSON 状态；无企业登录、多租户 IAM 或不可篡改审计存储 |
+| 企业资产接入与本体工作台 | 目录/文档/SQLite 只读元数据扫描、本地 Git 元数据、GitHub.com/GitLab.com HTTPS 仓库元数据只读 API、交互式 SVG 关系图、候选来源路径、审批提案 | 没有 OAuth/SSO、自托管 GitLab 或 Webhook；远端候选仅依据文件路径，本地候选使用规则抽取且不调用 LLM；审批不自动修改正式本体 |
+| Agent 与质量安全 | 离线 Agent 阶段状态机、事件证据、真实校验脚本/测试套件、可选 Semgrep/Gitleaks/Trivy 扫描器检查 | 离线 Agent 不调用真实模型；扫描器缺失/未执行不能显示 PASS；非容器隔离测试床 |
+| 交付发布 | 触发现有端到端流水线，显示配置包 manifest、哈希、配置范围 SBOM、独立审批和本地升级/回退演练 | 不包含 Kafka 二进制，不部署真实环境；SBOM 只描述配置交付包 |
+
+私有远端仓库需要在同一个 shell 中设置环境变量后再执行 `make portal`：`export GITHUB_TOKEN=...` 或 `export GITLAB_TOKEN=...`。门户源代码在 `apps/factory-portal/`，服务端入口在 `scripts/run_factory_portal.py`，详细阶段、接口和验收边界见 [`docs/platform/four-stage-platform-delivery.md`](docs/platform/four-stage-platform-delivery.md)，实施与验证记录见 [`docs/platform/four-stage-implementation-report.md`](docs/platform/four-stage-implementation-report.md)。首次运行时会在 `.local-portal/` 创建本地 JSON 状态和合成 SQLite 数据库；该目录已忽略，不应提交。可接入已有本机代码/文档目录或 SQLite 数据库，请谨慎配置路径。
+
+**安全说明：** Portal 默认只绑定 `127.0.0.1` 且不带登录认证。不要直接暴露到局域网或公网。目录连接器只扫描限定扩展名并跳过隐藏目录、依赖目录和大文件；SQLite 使用只读连接。生产部署仍需企业身份认证、角色授权、服务端数据存储、外部系统凭据管理、隔离执行器和正式安全评审。
 
 ## 界面截图
 
@@ -283,7 +304,7 @@ make observability
 | 多智能体任务队列与 Outbox 事件 | 全部截图缩略总览 |
 | <a href="docs/screenshots/11-multi-agent-worker-outbox-evidence.png"><img src="docs/screenshots/11-multi-agent-worker-outbox-evidence.png" alt="多智能体 Worker 与 Outbox 截图" width="500"></a> | <a href="docs/screenshots/00-contact-sheet.png"><img src="docs/screenshots/00-contact-sheet.png" alt="演示截图总览" width="500"></a> |
 
-**阅读边界：** `01–05` 是仓库现有控制台界面；`06–09` 是根据真实 CLI/Worker 输出 JSON 整理的说明性审查视图，工程目前没有独立的本体 Web 管理页面；`10–11` 使用现有 Agent Workflow Console 前端，底层 Workflow、SQLite Worker 与 Outbox/Relay 使用项目实际运行代码，但执行器是临时 Fixture Runtime，没有调用真实 LLM。示例 Benchmark 的 F1 指标不能外推为真实模型质量，候选仍须经领域专家复核。细节见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
+**阅读边界：** `01–05` 是此前已有控制台截图；`06–09` 是根据真实 CLI/Worker 输出 JSON 整理的说明性审查视图；`10–11` 使用现有 Agent Workflow Console 前端与实际 Workflow/Worker/Outbox 状态流转，但采用 Fixture Runtime。新增统一 Portal 可通过 `make portal` 在本机运行，本次代码交付尚未附新的浏览器截图。示例 Benchmark 的 F1 指标不能外推为真实模型质量，候选仍须经领域专家复核。细节见 [`docs/screenshots/README.md`](docs/screenshots/README.md) 和 [`docs/platform/four-stage-platform-delivery.md`](docs/platform/four-stage-platform-delivery.md)。
 
 ## 真实 LLM 与 Agent Runtime（可选）
 
