@@ -139,10 +139,10 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                 # snapshot with the workflow run so later promotions cannot change in-flight work.
                 binding = load_active_ontology_binding(ROOT)
                 team = json.loads((ROOT / "agents/teams/software-factory-mvp.json").read_text(encoding="utf-8"))
-    additional_roles = [item["roleId"] for item in team.get("registeredRoles", [])]
-    runtime_contract_lock = build_runtime_contract_lock(
-        ROOT, load_definition(), binding, additional_role_ids=additional_roles
-    )
+                additional_roles = [item["roleId"] for item in team.get("registeredRoles", [])]
+                runtime_contract_lock = build_runtime_contract_lock(
+                    ROOT, load_definition(), binding, additional_role_ids=additional_roles
+                )
                 run = self.engine.create_run(
                     str(body.get("title", "真实多 Agent 软件提案")),
                     str(body.get("requestedBy", "local-operator")), "review",
