@@ -204,6 +204,11 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                     self._json(404, {"error": "orchestrator plan not found"})
                     return
                 dispatch = self.plan_dispatcher.dispatch_ready(run, plan_record)
+                phase = next(
+                    item for item in self.workflow_store.list_factory_plan_phases(
+                        run_id, str(body.get("planId", ""))
+                    ) if item["phaseId"] == str(body.get("phaseId", ""))
+                )
                 self._json(200, {"phase": phase, "dispatch": dispatch})
                 return
             if path.endswith("/orchestrator-plan/dispatch") and path.startswith("/api/runs/"):
