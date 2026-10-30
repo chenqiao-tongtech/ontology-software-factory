@@ -73,11 +73,26 @@ Content-Type: application/json
 {"planId":"sf:agent-plan:..."}
 ```
 
+失败 Phase 可由独立操作人授权重试：
+
+```http
+POST /api/runs/{runId}/orchestrator-plan/retry-phase
+Content-Type: application/json
+
+{
+  "planId": "sf:agent-plan:...",
+  "phaseId": "requirements-analysis",
+  "actor": "local-operator",
+  "reason": "已修复依赖环境问题，批准重新执行该阶段。"
+}
+```
+
+
 Worker 执行后调用现有 `POST /api/worker/run-once` 和 `POST /api/relay/drain`。查询 `GET /api/runs/{runId}` 可查看 `orchestratorPlans`、`factoryPlanApprovals`、`factoryPlanPhases`、`factoryAssignmentResults`、`harnessUsage` 和 `harnessUsageEvents`。
 
 ### 持久化 Phase 状态
 
-Phase 状态保存在 Workflow SQLite 数据库中，状态包括 `pending`、`running`、`succeeded` 和 `failed`。Worker 结果通过事务 Outbox/Workflow Inbox 回写后更新 Phase 状态并追加事件；下游 Phase 只有在所有前置 Phase 成功后才能派发。Worker 自身的瞬时失败重试仍由现有 Task Runtime 负责，Phase 级人工重试与跨进程调度协调仍待扩展。
+Phase 状态保存在 Workflow SQLite 数据库中，状态包括 `pending`、`running`、`succeeded` 和 `failed`，并记录独立的 Phase attempt。Worker 结果通过事务 Outbox/Workflow Inbox 回写后更新 Phase 状态并追加事件；下游 Phase 只有在所有前置 Phase 成功后才能派发。Worker 自身的瞬时失败由 Task Runtime 自动重试；超过 Worker 重试次数后，独立操作人可通过控制台对失败 Phase 发起最多 3 次 Phase 级重试。每次重试使用新的幂等键和制品目录，旧 attempt 的迟到结果会被忽略。
 
 ### Harness Run 级预算与策略版本锁
 
