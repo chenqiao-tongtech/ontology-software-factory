@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "baseline_id": "software-factory-architecture-baseline",
-  "baseline_version": "1.1.0",
+  "baseline_version": "1.2.0",
   "project": {
     "name": "ontology-software-factory",
     "reference_case": "围绕已批准 Kafka 版本进行标准化配置、客户化配置、校验和候选交付；不重写 Kafka。",
@@ -75,6 +75,11 @@
       "id": "AP-13",
       "name": "多智能体协作显式化与可控",
       "rule": "团队拓扑、角色边界、任务交接、上下文范围、并行汇合、独立验证和修复上限必须显式配置；Workflow 控制派发，Agent 不自行扩权或批准自己的高风险结果。"
+    },
+    {
+      "id": "AP-14",
+      "name": "主控规划受控",
+      "rule": "主控 Agent 只提出有界结构化计划；Workflow Engine 负责校验、状态转换与任务派发，Agent 不改变权威状态、不授予权限。"
     }
   ],
   "constraints": [
@@ -122,6 +127,11 @@
       "id": "C-09",
       "name": "多智能体协作边界",
       "rule": "MVP 使用有界专业 Agent 团队与确定性 Workflow 控制器；消息通过版本化 Handoff 契约，权威状态以运行账本/证据引用为准，独立工具和门禁验证候选结果。"
+    },
+    {
+      "id": "C-10",
+      "name": "主控权限边界",
+      "rule": "Factory Orchestrator 不直接派发任务、不修改 Workflow 状态、不授予工具权限、不自批或发布本体。"
     }
   ],
   "subsystems": [
@@ -278,6 +288,12 @@
           "name": "独立本体 Critic 角色与 Skill",
           "path": "agents/roles/ontology-critic-agent.json",
           "status": "partial"
+        },
+        {
+          "id": "S4.M8",
+          "name": "Factory Orchestrator Role / Skill / Plan Contract",
+          "path": "agents/roles/factory-orchestrator.json",
+          "status": "partial"
         }
       ]
     },
@@ -313,6 +329,18 @@
           "name": "本体发现审查工作流",
           "path": "workflows/definitions/ontology-discovery-review-v1.json",
           "status": "partial"
+        },
+        {
+          "id": "S5.M5",
+          "name": "Deterministic Orchestrator Plan Validator",
+          "path": "src/ontology_software_factory/factory_orchestration.py",
+          "status": "partial"
+        },
+        {
+          "id": "S5.M6",
+          "name": "Factory Orchestrator Plan Schema",
+          "path": "contracts/schemas/factory-orchestrator-plan.schema.json",
+          "status": "implemented"
         }
       ]
     },
@@ -534,7 +562,27 @@
       "OntologySourceEvidence",
       "OntologyEvaluation",
       "OntologyApproval",
-      "OntologyRevision"
+      "OntologyRevision",
+      "FactoryOrchestrator",
+      "AgentPlan",
+      "PlanPhase",
+      "AgentAssignment",
+      "PlanValidationDecision",
+      "OntologyModule",
+      "OntologySnapshot",
+      "OntologyReleaseManifest",
+      "OntologyChangeRequest",
+      "OntologySourceSnapshot",
+      "OntologyExtractionRun",
+      "WorkflowRun",
+      "Tool",
+      "ToolInvocation",
+      "Connector",
+      "ConnectorOperation",
+      "SourceSystem",
+      "SourceAsset",
+      "APIContract",
+      "EventSchema"
     ]
   },
   "roadmap": [
@@ -727,7 +775,9 @@
     "examples/multi-agent-handoffs/requirement-to-architecture.json",
     "contracts/schemas/agent-team.schema.json",
     "docs/adr/0016-bounded-multi-agent-collaboration-as-core.md",
-    "docs/acceptance/multi-agent-architecture-checklist.md"
+    "docs/acceptance/multi-agent-architecture-checklist.md",
+    "docs/factory-orchestrator-and-ontology-architecture.md",
+    "docs/factory-orchestrator-implementation.md"
   ],
   "multi_agent_architecture": {
     "pattern": "bounded_specialist_team_with_deterministic_workflow_control",
