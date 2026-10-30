@@ -164,3 +164,27 @@ PYTHONPATH=src python -m unittest discover -s tests -p 'test_source_connectors.p
 ```
 
 随后再恢复当前 `main` 缺失的 Portal API / CLI 入口，运行全量 `make validate` 和 `make test`，重新记录真实基线。
+
+
+## 7. 已提交的第二批代码：质量扫描报告 fail-closed
+
+对当前 Portal 的质量扫描实现进行复核后，发现原逻辑主要依据扫描器进程退出码判定结果；例如 Trivy 在默认配置下可能以 0 退出码返回包含发现项的 JSON 报告。仅判断退出码可能把“扫描执行完成”误认为“扫描无发现”。
+
+本分支已调整 `scripts/run_factory_portal.py`：
+
+- 增加 `scanner_report_status`，分别解析 Semgrep 的 `results/errors`、Gitleaks JSON 数组、Trivy 的 `Vulnerabilities/Misconfigurations/Secrets`。
+- 报告缺失、无法解析或结构不符合预期时标记 `incomplete`。
+- 报告包含发现项时标记 `findings`，即使扫描器退出码为 0 也将总体质量运行置为 `failed`。
+- 只有报告存在、可解析且发现项为 0 时，扫描结果才标记为 `completed`。
+- 汇总报告单独统计 `incomplete`，不再把工具未安装/报告不可用默认为通过。
+
+新增 `tests/test_quality_scan_reports.py`，覆盖三类扫描报告解析、错误报告和“Trivy 退出码为 0 但报告包含漏洞时必须失败”的集成场景。
+
+**验收限制**：代码与测试已提交到本工作分支；本次未实际执行 Python 测试。合并前需运行：
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -p 'test_source_connectors.py' -v
+PYTHONPATH=src python -m unittest discover -s tests -p 'test_quality_scan_reports.py' -v
+make validate
+make test
+```
