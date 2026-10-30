@@ -261,6 +261,64 @@
       "requiresHumanApproval": false,
       "mvpEnabled": true,
       "scope": "仅新建候选文件，默认拒绝覆盖；不可修改正式本体、策略或工作流。"
+    },
+    {
+      "toolId": "ontology.definition.read",
+      "description": "读取已批准的本体类与关系元数据",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "conceptName": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "additionalProperties": false
+      },
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只读当前项目已批准的元数据；不读取秘密或发起外部连接。"
+    },
+    {
+      "toolId": "source.catalog.read",
+      "description": "读取已登记连接器的能力和实现状态，不发起外部连接",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "ontology-source",
+              "agent-action"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只读当前项目已批准的元数据；不读取秘密或发起外部连接。"
+    },
+    {
+      "toolId": "dependencies.inspect",
+      "description": "读取项目声明的 Python 依赖与可选依赖",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只读当前项目已批准的元数据；不读取秘密或发起外部连接。"
     }
   ]
 }
