@@ -61,16 +61,17 @@ def _phase_projection(plan: dict[str, Any], tasks_by_key: dict[str, dict[str, An
     return phases
 
 
-def get_factory_plan_execution(task_store: Any, plan_record: dict[str, Any]) -> dict[str, Any]:
+def get_factory_plan_execution(task_store: Any, plan_record: dict[str, Any],
+                               workflow_store: Any | None = None) -> dict[str, Any]:
     """Return a derived execution view from durable Worker task/result records."""
     plan = plan_record["plan"]
     tasks = task_store.list_tasks(500)
     by_key = {item["idempotencyKey"]: item for item in tasks}
     phases = _phase_projection(plan, by_key)
-    if hasattr(task_store, "list_factory_plan_phases"):
+    if workflow_store is not None and hasattr(workflow_store, "list_factory_plan_phases"):
         persisted = {
             item["phaseId"]: item["status"]
-            for item in task_store.list_factory_plan_phases(
+            for item in workflow_store.list_factory_plan_phases(
                 plan["workflowRunId"], plan["planId"]
             )
         }
@@ -100,8 +101,10 @@ def get_factory_plan_execution(task_store: Any, plan_record: dict[str, Any]) -> 
 class FactoryPlanDispatcher:
     """Enqueue only dependency-ready assignments; Worker concurrency is lease-controlled."""
 
-    def __init__(self, task_store: Any, *, project_root: str | Path, queue: str = "default"):
+    def __init__(self, task_store: Any, *, project_root: str | Path, queue: str = "default",
+                 workflow_store: Any | None = None):
         self.task_store = task_store
+        self.workflow_store = workflow_store
         self.project_root = Path(project_root).resolve()
         self.queue = queue
 
@@ -125,12 +128,12 @@ class FactoryPlanDispatcher:
             for assignment in phase["assignments"]:
                 if not set(assignment["outputEntityTypes"]) <= pinned_classes:
                     raise ValueError("assignment output types are not present in the pinned ontology snapshot")
-        approval = self.task_store.get_factory_plan_approval(plan["planId"]) if hasattr(self.task_store, "get_factory_plan_approval") else None
+        approval = self.workflow_store.get_factory_plan_approval(plan["planId"]) if self.workflow_store is not None else None
         if approval is None or approval.get("planDigest") != plan_record.get("digest"):
             raise ValueError("independent plan approval record is missing or does not match the immutable plan digest")
         if approval.get("status") == "rejected":
             return {"status": "approval_rejected", "enqueued": [],
-                    "execution": get_factory_plan_execution(self.task_store, plan_record)}
+                    "execution": get_factory_plan_execution(self.task_store, plan_record, self.workflow_store)}
         if approval.get("status") != "approved":
             return {"status": "approval_required", "enqueued": [],
                     "execution": get_factory_plan_execution(self.task_store, plan_record)}
@@ -202,7 +205,9 @@ class FactoryPlanDispatcher:
                 slots -= 1
                 phase_enqueued = True
             if phase_enqueued:
-                self.task_store.mark_factory_phase_running(
+                if self.workflow_store is None:
+                    raise ValueError("Workflow store is required for persistent Factory Phase state")
+                self.workflow_store.mark_factory_phase_running(
                     run_id=run["id"], plan_id=plan["planId"], phase_id=phase["phaseId"],
                     event={
                         "at": datetime.now(timezone.utc).isoformat(),
@@ -212,7 +217,7 @@ class FactoryPlanDispatcher:
                         "payload": {"planId": plan["planId"], "phaseId": phase["phaseId"]},
                     },
                 )
-        updated = get_factory_plan_execution(self.task_store, plan_record)
+        updated = get_factory_plan_execution(self.task_store, plan_record, self.workflow_store)
         return {
             "status": updated["status"], "enqueued": enqueued,
             "blockedPhases": blocked, "execution": updated,
