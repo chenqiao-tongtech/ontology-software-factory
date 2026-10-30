@@ -264,6 +264,43 @@ class WorkspaceExecution:
                            "logSha256": sha256_file(log_path)})
         return result
 
+    def _run_container_command(
+        self, argv: list[str], *, timeout_seconds: int, image: str = "python:3.11-slim"
+    ) -> tuple[int, str, bool, str]:
+        docker = shutil.which("docker")
+        if not docker:
+            return 127, "Docker CLI is not installed", False, "unavailable"
+        inspect = subprocess.run(
+            [docker, "image", "inspect", image], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            timeout=15, shell=False, check=False,
+        )
+        if inspect.returncode != 0:
+            return 127, "Required container image is not present locally; image pulls are disabled", False, "image_missing"
+        uid = str(os.getuid()) if hasattr(os, "getuid") else "10001"
+        gid = str(os.getgid()) if hasattr(os, "getgid") else "10001"
+        command = [
+            docker, "run", "--rm", "--pull=never", "--network=none", "--read-only",
+            "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128",
+            "--memory=1g", "--cpus=1", "--user", f"{uid}:{gid}",
+            "--tmpfs", "/tmp:rw,noexec,nosuid,size=256m",
+            "--env", "PYTHONPATH=/workspace/src", "--env", "PYTHONIOENCODING=utf-8",
+            "--env", "PYTHONUTF8=1", "--env", "HOME=/tmp",
+            "--volume", f"{self.root}:/workspace:rw", "--workdir", "/workspace",
+            image, *argv,
+        ]
+        try:
+            proc = subprocess.run(
+                command, cwd=self.root, env={"PATH": os.environ.get("PATH", ""), "LANG": "C.UTF-8"},
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace",
+                timeout=timeout_seconds, shell=False, check=False,
+            )
+            return proc.returncode, proc.stdout, False, "docker"
+        except subprocess.TimeoutExpired as exc:
+            output = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+            return 124, output + "\\nRUNNER_TIMEOUT: container suite exceeded the configured timeout", True, "docker"
+
     def run_tests(self, suite_id: str, *, timeout_seconds: int = 120) -> dict[str, Any]:
         suites = {
             "kafka-profile-regression": [sys.executable, "-m", "unittest", "tests.test_kafka_profile", "-v"],
@@ -273,34 +310,38 @@ class WorkspaceExecution:
             raise WorkspacePolicyError("test suite is not in the fixed command allowlist")
         if not 1 <= timeout_seconds <= 120:
             raise WorkspacePolicyError("test timeout must be between 1 and 120 seconds")
-        if os.getenv("FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION", "").lower() not in {"1", "true", "yes"}:
+        container_enabled = os.getenv("FACTORY_ENABLE_CONTAINER_EXECUTION", "").lower() in {"1", "true", "yes"}
+        host_enabled = os.getenv("FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION", "").lower() in {"1", "true", "yes"}
+        if not container_enabled and not host_enabled:
             return {"status": "blocked", "suiteId": suite_id, "executed": False,
-                    "reason": "host execution is disabled; configure an OS/container sandbox or explicitly set FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION=1 for a trusted local demo",
+                    "reason": "execution disabled; enable Docker execution with FACTORY_ENABLE_CONTAINER_EXECUTION=1",
                     "evidence": None}
-        env = {"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(self.root / "src"),
-               "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
-               "HOME": str(self.root / ".agent-home"), "LANG": "C.UTF-8"}
-        Path(env["HOME"]).mkdir(exist_ok=True)
         argv = suites[suite_id]
         started = time.monotonic()
-        timed_out = False
-        try:
-            proc = subprocess.run(argv, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
-                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                  text=True, encoding="utf-8", errors="replace",
-                                  timeout=timeout_seconds, shell=False, check=False)
-            exit_code, output = proc.returncode, proc.stdout
-        except subprocess.TimeoutExpired as exc:
-            timed_out, exit_code = True, 124
-            output = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-            output += "\nRUNNER_TIMEOUT: test suite exceeded the configured timeout"
+        if container_enabled:
+            exit_code, output, timed_out, sandbox = self._run_container_command(argv, timeout_seconds=timeout_seconds)
+        else:
+            env = {"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(self.root / "src"),
+                   "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
+                   "HOME": str(self.root / ".agent-home"), "LANG": "C.UTF-8"}
+            Path(env["HOME"]).mkdir(exist_ok=True)
+            try:
+                proc = subprocess.run(argv, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                      text=True, encoding="utf-8", errors="replace",
+                                      timeout=timeout_seconds, shell=False, check=False)
+                exit_code, output, timed_out, sandbox = proc.returncode, proc.stdout, False, "host-unsafe-demo"
+            except subprocess.TimeoutExpired as exc:
+                timed_out, exit_code, sandbox = True, 124, "host-unsafe-demo"
+                output = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+                output += "\\nRUNNER_TIMEOUT: test suite exceeded the configured timeout"
         duration = round((time.monotonic() - started) * 1000)
         output = output[:self.max_output_chars]
         status = "timed_out" if timed_out else ("passed" if exit_code == 0 else "failed")
         report = {"schemaVersion": "1.0.0", "runId": self.run_id, "suiteId": suite_id,
                   "status": status, "exitCode": exit_code, "durationMs": duration,
                   "commandId": suite_id, "argv": argv, "executedAt": datetime.now(timezone.utc).isoformat(),
-                  "workspaceOnly": True, "sandbox": "host-process; not an OS/container sandbox"}
+                  "workspaceOnly": True, "sandbox": sandbox}
         evidence = self._write_evidence("tests", suite_id, report, output)
         return {**report, "evidence": evidence}
 
