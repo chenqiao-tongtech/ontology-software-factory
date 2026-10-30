@@ -151,10 +151,12 @@ class AgentWorkflowTests(unittest.TestCase):
             binding = create_snapshot(ontology, actor="test", reason="security block fixture")
             runtime_lock = build_runtime_contract_lock(ROOT, load_definition(), binding)
             requirement = {"workflowRunId": "run-test", "workflowStepId": "requirement-analysis", "workflowAttempt": 1,
+                           "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
                            "ontologyBinding": binding, "runtimeContractLock": runtime_lock,
                            "input": {"requirement": "Build a tiny app"}}
             handler(requirement, TaskContext("t1", "workflow-key-1", "w", 1, 9999999999, ("normalized-requirement",)))
             architecture = {"workflowRunId": "run-test", "workflowStepId": "architecture-design", "workflowAttempt": 1,
+                            "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
                             "ontologyBinding": binding, "runtimeContractLock": runtime_lock, "input": {"requirement": "Build a tiny app"}}
             handler(architecture, TaskContext("t2", "workflow-key-2", "w", 1, 9999999999, ("architecture-decision-record", "interface-contract")))
             implementation = {"workflowRunId": "run-test", "workflowStepId": "implementation-proposal", "workflowAttempt": 1,
