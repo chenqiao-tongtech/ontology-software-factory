@@ -160,13 +160,16 @@ class AgentWorkflowTests(unittest.TestCase):
                             "ontologyBinding": binding, "runtimeContractLock": runtime_lock, "input": {"requirement": "Build a tiny app"}}
             handler(architecture, TaskContext("t2", "workflow-key-2", "w", 1, 9999999999, ("architecture-decision-record", "interface-contract")))
             implementation = {"workflowRunId": "run-test", "workflowStepId": "implementation-proposal", "workflowAttempt": 1,
-                              "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
+                              "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
+                              "ontologyBinding": binding, "runtimeContractLock": runtime_lock, "input": {"requirement": "Build a tiny app"}}
             handler(implementation, TaskContext("t3", "workflow-key-3", "w", 1, 9999999999, ("candidate-change-set", "change-summary")))
             test = {"workflowRunId": "run-test", "workflowStepId": "test-strategy", "workflowAttempt": 1,
-                    "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
+                              "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
+                    "ontologyBinding": binding, "runtimeContractLock": runtime_lock, "input": {"requirement": "Build a tiny app"}}
             handler(test, TaskContext("t4", "workflow-key-4", "w", 1, 9999999999, ("test-strategy",)))
             security = {"workflowRunId": "run-test", "workflowStepId": "security-review", "workflowAttempt": 1,
-                        "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
+                              "workflowId": runtime_lock["workflowId"], "workflowVersion": runtime_lock["workflowVersion"],
+                        "ontologyBinding": binding, "runtimeContractLock": runtime_lock, "input": {"requirement": "Build a tiny app"}}
             with self.assertRaises(PermanentTaskError):
                 handler(security, TaskContext("t5", "workflow-key-5", "w", 1, 9999999999, ("security-review-summary", "evidence-gaps")))
 
