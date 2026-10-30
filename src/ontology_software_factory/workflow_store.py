@@ -5,6 +5,7 @@ multi-node deployments, use a production database and transactional outbox.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import threading
@@ -54,6 +55,14 @@ class SQLiteWorkflowStore:
                 processed_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_workflow_inbox_run ON workflow_inbox(run_id, processed_at);
+            CREATE TABLE IF NOT EXISTS factory_orchestrator_plans (
+                plan_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                payload_sha256 TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_factory_plans_run ON factory_orchestrator_plans(run_id, created_at);
         """)
         self._conn.commit()
 
@@ -160,6 +169,42 @@ class SQLiteWorkflowStore:
             except Exception:
                 self._conn.rollback()
                 raise
+
+    def insert_factory_orchestrator_plan(self, run_id: str, plan: dict[str, Any], event: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """Persist an immutable validated plan and its workflow event in one transaction."""
+        plan_json = json.dumps(plan, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256(plan_json.encode("utf-8")).hexdigest()
+        plan_id = str(plan.get("planId", ""))
+        with self._lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                existing = self._conn.execute("SELECT run_id, payload_sha256, payload_json, created_at FROM factory_orchestrator_plans WHERE plan_id=?", (plan_id,)).fetchone()
+                if existing:
+                    self._conn.rollback()
+                    if existing["run_id"] != run_id or existing["payload_sha256"] != digest:
+                        raise ValueError("planId already exists with a different run or payload")
+                    return {"planId": plan_id, "workflowRunId": run_id, "status": "submitted", "digest": digest, "createdAt": existing["created_at"], "plan": json.loads(existing["payload_json"])}, False
+                self._conn.execute("INSERT INTO factory_orchestrator_plans(plan_id,run_id,payload_sha256,payload_json,created_at) VALUES(?,?,?,?,?)", (plan_id, run_id, digest, plan_json, event["at"]))
+                self._insert_event(run_id, event)
+                self._conn.commit()
+                return {"planId": plan_id, "workflowRunId": run_id, "status": "submitted", "digest": digest, "createdAt": event["at"], "plan": json.loads(plan_json)}, True
+            except ValueError:
+                raise
+            except Exception:
+                self._conn.rollback()
+                raise
+
+    def get_factory_orchestrator_plan(self, plan_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute("SELECT plan_id,run_id,payload_sha256,payload_json,created_at FROM factory_orchestrator_plans WHERE plan_id=?", (plan_id,)).fetchone()
+        if row is None:
+            return None
+        return {"planId": row["plan_id"], "workflowRunId": row["run_id"], "status": "submitted", "digest": row["payload_sha256"], "createdAt": row["created_at"], "plan": json.loads(row["payload_json"])}
+
+    def list_factory_orchestrator_plans(self, run_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute("SELECT plan_id,run_id,payload_sha256,payload_json,created_at FROM factory_orchestrator_plans WHERE run_id=? ORDER BY created_at,plan_id", (run_id,)).fetchall()
+        return [{"planId": row["plan_id"], "workflowRunId": row["run_id"], "status": "submitted", "digest": row["payload_sha256"], "createdAt": row["created_at"], "plan": json.loads(row["payload_json"])} for row in rows]
 
     def has_processed_integration_event(self, event_id: str) -> bool:
         with self._lock:
