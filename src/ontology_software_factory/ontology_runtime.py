@@ -318,6 +318,7 @@ def build_agent_task_contract(
     timeout_seconds: int = 900,
     max_attempts: int = 3,
     idempotency_key: str | None = None,
+    output_entity_types: list[str] | None = None,
 ) -> dict[str, Any]:
     """Create the formal task envelope used for a single pinned Agent execution."""
     verified = validate_ontology_binding(binding)
@@ -331,6 +332,9 @@ def build_agent_task_contract(
         input_types.append("Artifact")
     if not input_types:
         input_types.append(role_inputs[0])
+    expected_outputs = list(output_entity_types) if output_entity_types is not None else list(role["outputEntityTypes"])
+    if not expected_outputs or not set(expected_outputs) <= set(role["outputEntityTypes"]):
+        raise OntologyBindingError("Agent Task output types must be a non-empty subset of the Role contract")
     role_digest = hashlib.sha256(canonical_json(role).encode("utf-8")).hexdigest()
     task_key = idempotency_key or f"ontology-task:{run_id}:{step_id}:{attempt}"
     contract = {
@@ -351,7 +355,7 @@ def build_agent_task_contract(
             "schemaVersion": verified["schemaVersion"],
             "evidenceRef": f"{'workflow-input' if entity_type == 'Requirement' else 'upstream-agent-artifact'}:{run_id}",
         } for entity_type in input_types],
-        "expectedOutputEntityTypes": list(role["outputEntityTypes"]),
+        "expectedOutputEntityTypes": expected_outputs,
         "acceptanceCriteria": [{
             "id": "AC-ONTOLOGY-BOUND-OUTPUT",
             "description": "Output must match the Role's typed output contract and the pinned ontology version. "
@@ -396,11 +400,13 @@ def validate_agent_task_contract(
         "ontologySnapshotId": verified["snapshotId"],
         "ontologyDigest": verified["digest"],
         "ontologySchemaVersion": verified["schemaVersion"],
-        "expectedOutputEntityTypes": list(role["outputEntityTypes"]),
     }
     for key, value in expected.items():
         if contract.get(key) != value:
             raise OntologyBindingError(f"Agent Task does not match pinned runtime context: {key}")
+    expected_outputs = contract.get("expectedOutputEntityTypes")
+    if not isinstance(expected_outputs, list) or not expected_outputs or not set(expected_outputs) <= set(role["outputEntityTypes"]):
+        raise OntologyBindingError("Agent Task output types exceed the Role contract")
     validate_typed_entity_references(
         contract.get("inputs", []),
         ontology_classes=_class_names(verified["ontology"]),
@@ -431,6 +437,7 @@ def build_agent_result_contract(
     artifact_uri: str,
     completed_at: str,
     status: str = "succeeded",
+    output_entity_types: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build and validate the semantic result envelope persisted with every Agent stage."""
     verified = validate_ontology_binding(binding)
@@ -439,6 +446,9 @@ def build_agent_result_contract(
     summary = output.get("summary")
     if not isinstance(summary, str) or not summary.strip():
         summary = f"{role.get('displayName', role['roleId'])} returned typed structured output"
+    result_output_types = list(output_entity_types) if output_entity_types is not None else list(role["outputEntityTypes"])
+    if not result_output_types or not set(result_output_types) <= set(role["outputEntityTypes"]):
+        raise OntologyBindingError("Agent Result output types must be a non-empty subset of the Role contract")
     result = {
         "taskId": task_contract["taskId"],
         "roleId": role["roleId"],
@@ -455,7 +465,7 @@ def build_agent_result_contract(
             "entityType": entity_type,
             "schemaVersion": verified["schemaVersion"],
             "uri": artifact_uri,
-        } for entity_type in role["outputEntityTypes"]],
+        } for entity_type in result_output_types],
         "evidenceRefs": [{
             "evidenceType": "artifact_digest",
             "refId": str(item.get("uri", "")),
