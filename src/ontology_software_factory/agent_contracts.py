@@ -6,7 +6,7 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[2]
-ENTITY_TYPES = {"Requirement","Product","Component","Version","Artifact","Build","TestRun","Vulnerability","Release","Deployment","Incident","OntologyCandidate","OntologyTermCandidate","OntologyRelationCandidate","OntologyConstraintCandidate","CompetencyQuestion","OntologySourceEvidence","OntologyEvaluation","OntologyApproval","OntologyRevision"}
+ENTITY_TYPES = {"Requirement","Product","Component","Version","Artifact","Build","TestRun","Vulnerability","Release","Deployment","Incident","OntologyCandidate","OntologyTermCandidate","OntologyRelationCandidate","OntologyConstraintCandidate","CompetencyQuestion","OntologySourceEvidence","OntologyEvaluation","OntologyApproval","OntologyRevision","AgentTeam","AgentRole","Skill","AgentTask","AgentHandoff","AgentResult","ContextReference","CoordinationDecision","ReviewDecision","FactoryOrchestrator","AgentPlan","PlanPhase","AgentAssignment","PlanValidationDecision","OntologyModule","OntologySnapshot","OntologyReleaseManifest","OntologyChangeRequest","OntologySourceSnapshot","OntologyExtractionRun","WorkflowRun","Tool","ToolInvocation","Connector","ConnectorOperation","SourceSystem","SourceAsset","APIContract","EventSchema"}
 
 def read_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as stream:
