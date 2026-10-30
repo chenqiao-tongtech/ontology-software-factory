@@ -521,7 +521,7 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 
 ## 13. 架构决策与变更管理
 
-当前关键决策记录位于 docs/adr/，包括 MVP 边界、集成优先、受控工作流、JSON Schema 优先、本体/资产版本、Agent Role/Skill、Workflow 状态机、Worker 派发、Outbox/Inbox、LLM Provider 和 Agent Runtime 等决策。
+当前关键决策记录位于 docs/adr/，包括 MVP 边界、集成优先、受控工作流、JSON Schema 优先、本体/资产版本、Agent Role/Skill、Workflow 状态机、Worker 派发、Outbox/Inbox、LLM Provider、Agent Runtime、Factory Plan 独立审批与 Phase 状态、Harness Run 级预算和工具策略版本锁等决策。
 
 新增组件、外部依赖、持久化技术、权限模型、执行隔离方式或服务边界时，应提交 ADR，说明背景、备选方案、选择理由、成本、风险、迁移策略和重新评估条件。架构变更同步更新机器可读基线、子系统分解、依赖清单、安装指南、验收矩阵和本说明书版本记录。
 
