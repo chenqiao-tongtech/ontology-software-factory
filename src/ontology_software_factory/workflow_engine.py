@@ -111,7 +111,7 @@ class WorkflowEngine:
         first["status"] = "running"
         first["attempt"] = 1
         first["startedAt"] = timestamp
-        event = self._event("run.created", f"创建工作流运行：{run['title']}", actor=requested_by, payload={"workflowVersion": run["workflowVersion"], "ontologySnapshotId": (ontology_binding or {}).get("snapshotId"), "ontologyDigest": (ontology_binding or {}).get("digest")})
+        event = self._event("run.created", f"创建工作流运行：{run['title']}", actor=requested_by, payload={"workflowVersion": run["workflowVersion"], "ontologySnapshotId": (ontology_binding or {}).get("snapshotId"), "ontologyDigest": (ontology_binding or {}).get("digest"), "ontologyVersion": (ontology_binding or {}).get("ontologyVersion"), "ontologySchemaVersion": (ontology_binding or {}).get("schemaVersion")})
         self.store.insert_new_run(run, event)
         return self.get_run(run_id)
 
