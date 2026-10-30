@@ -114,6 +114,19 @@ class OntologyGovernanceApiTests(unittest.TestCase):
         self.assertEqual(result["activeSnapshotId"], first)
         self.assertEqual(result["release"]["action"], "rollback")
 
+    def test_promotion_cannot_override_missing_major_version_bump(self):
+        first = self._snapshot("baseline")
+        first_proposal = self._proposal(first)
+        self._approve(first_proposal)
+        self._request("POST", f"/api/ontology/governance/proposals/{first_proposal}/execute", {"actor": "executor", "reason": "activate baseline"})
+        self._write_ontology("1.1.0", ["Requirement"])
+        second = self._snapshot("breaking change without major bump")
+        proposal = self._proposal(second)
+        self._request("POST", f"/api/ontology/governance/proposals/{proposal}/decision", {
+            "actor": "reviewer", "decision": "approve", "notes": "trying to override version rule",
+            "acceptBreakingChanges": True,
+        }, 400)
+
     def test_stale_proposal_cannot_overwrite_new_active_pointer(self):
         first = self._snapshot("baseline")
         proposal = self._proposal(first)
