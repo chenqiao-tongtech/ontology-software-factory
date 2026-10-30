@@ -43,6 +43,7 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
     worker: TaskWorker
     relay: WorkflowOutboxRelay
     plan_dispatcher: FactoryPlanDispatcher
+    orchestrator_service: FactoryOrchestratorService
     static_path: Path
     input_root: Path
 
@@ -153,6 +154,30 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                 target.write_text(json.dumps({"requirement": requirement.strip()}, ensure_ascii=False, indent=2), encoding="utf-8")
                 self._json(201, {"run": run})
                 return
+            if path.endswith("/orchestrator-plan/generate") and path.startswith("/api/runs/"):
+                run_id = unquote(path[len("/api/runs/"):-len("/orchestrator-plan/generate")].strip("/"))
+                run = self.engine.get_run(run_id)
+                run_input = self._run_input(run_id)
+                requirement = body.get("requirement", run_input.get("requirement", ""))
+                result = self.orchestrator_service.generate_and_submit(
+                    self.engine, run, requirement=str(requirement),
+                    requested_by=str(body.get("requestedBy", run.get("requestedBy", "local-operator"))),
+                )
+                self._json(201, result)
+                return
+            if path.endswith("/orchestrator-plan/approval") and path.startswith("/api/runs/"):
+                run_id = unquote(path[len("/api/runs/"):-len("/orchestrator-plan/approval")].strip("/"))
+                decision = str(body.get("decision", ""))
+                if decision not in {"approve", "reject"}:
+                    self._json(400, {"error": "decision must be approve or reject"})
+                    return
+                result = self.engine.decide_factory_orchestrator_plan(
+                    run_id, str(body.get("planId", "")),
+                    "approved" if decision == "approve" else "rejected",
+                    actor=str(body.get("actor", "")), reason=str(body.get("reason", "")),
+                )
+                self._json(200, {"approval": result})
+                return
             if path.endswith("/orchestrator-plan") and path.startswith("/api/runs/"):
                 run_id = unquote(path[len("/api/runs/"):-len("/orchestrator-plan")].strip("/"))
                 plan = body.get("plan")
@@ -251,6 +276,9 @@ def main() -> int:
     AgentWorkflowConsoleHandler.relay = relay
     AgentWorkflowConsoleHandler.plan_dispatcher = FactoryPlanDispatcher(
         task_store, project_root=ROOT
+    )
+    AgentWorkflowConsoleHandler.orchestrator_service = FactoryOrchestratorService(
+        runtime, project_root=ROOT
     )
     AgentWorkflowConsoleHandler.static_path = ROOT / "apps" / "agent-workflow-console" / "index.html"
     AgentWorkflowConsoleHandler.input_root = ROOT / "data" / "real-agent-workflow" / "inputs"
