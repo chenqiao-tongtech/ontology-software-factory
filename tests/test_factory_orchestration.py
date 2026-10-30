@@ -60,6 +60,12 @@ class FactoryOrchestrationTests(unittest.TestCase):
         with self.assertRaisesRegex(FactoryPlanError, "active ontology binding"):
             validate_factory_plan(ROOT, plan, ontology_binding=binding)
 
+    def test_plan_tool_budget_must_cover_at_least_one_call_per_assignment(self):
+        plan = sample_plan()
+        plan["limits"]["maxToolCalls"] = 1
+        with self.assertRaisesRegex(FactoryPlanError, "one call budget unit per assignment"):
+            validate_factory_plan(ROOT, plan)
+
     def test_plan_limits_cannot_exceed_team_topology(self):
         plan = sample_plan()
         plan["limits"]["maxParallelAssignments"] = 4
