@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0.0",
+  "sources": [
+    {
+      "id": "source-postgres-example",
+      "name": "PostgreSQL schema (example only)",
+      "type": "postgresql",
+      "connectionEnv": "FACTORY_POSTGRES_READONLY_URL",
+      "allowedHosts": ["postgres.internal.example"],
+      "enabled": false,
+      "fixture": true
+    },
+    {
+      "id": "source-mysql-example",
+      "name": "MySQL schema (example only)",
+      "type": "mysql",
+      "connectionEnv": "FACTORY_MYSQL_READONLY_URL",
+      "allowedHosts": ["mysql.internal.example"],
+      "enabled": false,
+      "fixture": true
+    }
+  ]
+}
