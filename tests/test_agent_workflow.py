@@ -105,10 +105,20 @@ class AgentWorkflowTests(unittest.TestCase):
             task_store.close()
             wf_store.close()
 
+    def test_agent_worker_rejects_missing_ontology_binding(self):
+        from ontology_software_factory.task_runtime import TaskContext, PermanentTaskError
+        with tempfile.TemporaryDirectory() as temp:
+            handler = AgentWorkflowStepHandler(FakeAgentRuntime(), artifact_root=Path(temp) / "artifacts")
+            payload = {"workflowRunId": "run-test", "workflowStepId": "requirement-analysis",
+                       "workflowAttempt": 1, "input": {"requirement": "Build a tiny app"}}
+            with self.assertRaises(PermanentTaskError):
+                handler(payload, TaskContext("t1", "idempotency-key-1", "w", 1, 9999999999,
+                                             ("normalized-requirement",)))
+
     def test_security_block_stops_before_human_approval(self):
         class BlockingRuntime(FakeAgentRuntime):
-            def run_agent(self, role_id, task_input):
-                result = super().run_agent(role_id, task_input)
+            def run_agent(self, role_id, task_input, *, ontology_binding, task_contract):
+                result = super().run_agent(role_id, task_input, ontology_binding=ontology_binding, task_contract=task_contract)
                 if role_id == "security-reviewer":
                     result["output"]["release_recommendation"] = "blocked"
                 return result
