@@ -87,6 +87,7 @@ class OntologyGovernanceApiTests(unittest.TestCase):
             "actor": "requester", "decision": "approve", "notes": "self approval",
         }, 400)
         self._approve(proposal)
+        self._request("POST", f"/api/ontology/governance/proposals/{proposal}/execute", {"actor": "reviewer", "reason": "same as approver"}, 400)
         result = self._request("POST", f"/api/ontology/governance/proposals/{proposal}/execute", {"actor": "executor", "reason": "activate reviewed baseline"})
         self.assertEqual(result["activeSnapshotId"], first)
         self.assertFalse(result["release"]["formalFileModified"])
