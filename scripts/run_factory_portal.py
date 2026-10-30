@@ -240,6 +240,7 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
             tables = [
                 {
                     "name": asset.name,
+                    "assetId": asset.asset_id,
                     "kind": asset.kind,
                     "columns": [
                         {
@@ -296,6 +297,7 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
                 "kind": (asset.metadata or {}).get("suffix", "").lstrip("."),
                 "bytes": asset.size_bytes,
                 "sha256": asset.content_sha256,
+                "assetId": asset.asset_id,
             }
             for asset in scanned.assets[:30]
         ]
@@ -396,6 +398,20 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
     """Extract a small, deterministic candidate term set; no document bodies are returned to UI."""
     terms: dict[str, dict] = {}
     source_cfg = next((s for s in source_configs() if s["id"] == scan["id"]), {"path": "."})
+    scan_details = scan.get("details", {}) if isinstance(scan.get("details"), dict) else {}
+    def evidence_record(path: str, kind: str, asset: dict) -> dict:
+        return {
+            "sourceId": scan["id"],
+            "sourceName": source_cfg.get("name"),
+            "sourceType": source_cfg.get("type"),
+            "provider": scan_details.get("provider"),
+            "path": path,
+            "kind": kind,
+            "assetId": asset.get("assetId"),
+            "contentSha256": asset.get("sha256"),
+            "sourceRevision": asset.get("sourceRevision") or scan_details.get("sourceRevision"),
+            "scannedAt": scan.get("lastSyncAt"),
+        }
     for asset in scan.get("assets", []):
         if source_cfg.get("type") == "sqlite":
             table_name = str(asset.get("name", "")).strip()
@@ -410,7 +426,7 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
                     if len(label) < 3 or len(label) > 90:
                         continue
                     key = label.lower()
-                    evidence = {"sourceId": scan["id"], "path": f"sqlite:{table_name}", "kind": kind}
+                    evidence = evidence_record(asset.get("path", f"sqlite:{table_name}"), kind, asset)
                     if key in terms:
                         if evidence not in terms[key]["evidence"]:
                             terms[key]["evidence"].append(evidence)
@@ -432,7 +448,7 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
                 label = label.strip()
                 if len(label) >= 3 and label.lower() not in {"index", "main", "init", "test", "spec", "readme"}:
                     key = label.lower()
-                    evidence = {"sourceId": scan["id"], "path": rel, "kind": "remote-file-path"}
+                    evidence = evidence_record(rel, "remote-file-path", asset)
                     if key in terms:
                         if evidence not in terms[key]["evidence"]: terms[key]["evidence"].append(evidence)
                     else:
@@ -459,7 +475,7 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
                     continue
                 key = label.lower()
                 existing = terms.get(key)
-                evidence = {"sourceId": scan["id"], "path": rel, "kind": kind}
+                evidence = evidence_record(rel, kind, asset)
                 if existing:
                     if evidence not in existing["evidence"]: existing["evidence"].append(evidence)
                 else:
