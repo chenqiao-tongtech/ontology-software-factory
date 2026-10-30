@@ -31,8 +31,8 @@
 
 ### Independent plan approval
 
-- Added `factory_plan_approvals` with one approval record per immutable Plan digest. New plans start in `pending`.
-- Added `WorkflowEngine.decide_factory_orchestrator_plan()` and `POST /api/runs/{runId}/orchestrator-plan/approval`. Approval/rejection decisions require a non-empty actor and reason, are written with the Plan digest to the Workflow event ledger, and cannot be issued by the `factory-orchestrator` actor.
+- Added `factory_plan_approvals` with one approval record per immutable Plan digest, including the submitter identity label. New plans start in `pending`; the submitter cannot approve or reject their own Plan.
+- Added `WorkflowEngine.decide_factory_orchestrator_plan()` and `POST /api/runs/{runId}/orchestrator-plan/approval`. Approval/rejection decisions require a non-empty actor and reason, are written with the Plan digest to the Workflow event ledger, and enforce submitter/approver separation using normalized actor labels.
 - Dispatcher fails closed when the approval record is missing, its digest does not match the Plan, or the decision is pending/rejected. Approval is required for every Plan, including low-risk proposals.
 - The local console does not authenticate the supplied actor label. A production deployment must bind decisions to an authenticated human/policy principal and enforce separation of duties outside this local reference implementation.
 - Added plan-generation, approval/rejection and approved-plan dispatch controls to `apps/agent-workflow-console/index.html`; the panel displays the selected plan's approval and persisted Phase statuses.
