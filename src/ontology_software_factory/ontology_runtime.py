@@ -155,7 +155,7 @@ def build_runtime_contract_lock(
     verified = validate_ontology_binding(binding)
     root = Path(project_root).resolve()
     role_ids = sorted({str(step.get("roleId")) for step in workflow_definition.get("steps", [])
-                       if step.get("roleId")})
+                       if step.get("roleId") and step.get("executionMode") != "human"})
     roles: dict[str, Any] = {}
     for role_id in role_ids:
         role_path = root / "agents" / "roles" / f"{role_id}.json"
