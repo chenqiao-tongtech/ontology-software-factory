@@ -41,8 +41,9 @@
 
 - Added `factory_plan_phases` with `pending`, `running`, `succeeded` and `failed` states, timestamps and error metadata.
 - Dispatch records Phase start; the transactional Assignment result projector updates the Phase when all its Assignments reach terminal outcomes and appends `factory.phase.*` events.
-- Run detail exposes `factoryPlanApprovals` and `factoryPlanPhases`. Phase dependency checks use the persisted state; Worker retry/backoff remains managed by Task Runtime.
-- Phase-level manual retry, plan cancellation propagation and multi-process scheduler coordination are not yet implemented.
+- Run detail exposes `factoryPlanApprovals` and `factoryPlanPhases`. Phase dependency checks use persisted state; Worker retry/backoff remains managed by Task Runtime.
+- Added `WorkflowEngine.retry_factory_orchestrator_phase()` and `POST /api/runs/{runId}/orchestrator-plan/retry-phase`. Only a failed Phase in an approved Plan can be retried; the operator must provide an independent actor label and reason. Phase attempts are capped at three.
+- Plan cancellation propagation and multi-process scheduler coordination are not yet implemented.
 
 ### Assignment dispatch and Worker execution
 
@@ -95,7 +96,7 @@ make test
 
 ## Explicit implementation boundaries
 
-The `factory-orchestrator` is now invoked through an explicit plan-generation API; it does not run automatically at Workflow Run creation. Every Plan requires a separate approval decision before dispatch. Phase state and Run-level Harness usage are persisted in the local SQLite store. The approval actor field is an audit label rather than an authenticated identity. Multi-process scheduling coordination, Phase-level manual retry, enterprise identity/PDP, Secret Broker, distributed budget coordination, model-cost pricing and mediation for non-OpenAI Agent/Connector execution paths remain pending. Plan generation, approval and dispatch remain separate operations.
+The `factory-orchestrator` is now invoked through an explicit plan-generation API; it does not run automatically at Workflow Run creation. Every Plan requires a separate approval decision before dispatch. Phase state and Run-level Harness usage are persisted in the local SQLite store. The approval actor field is an audit label rather than an authenticated identity. Multi-process scheduling coordination, plan cancellation propagation, enterprise identity/PDP, Secret Broker, distributed budget coordination, model-cost pricing and mediation for non-OpenAI Agent/Connector execution paths remain pending. Plan generation, approval and dispatch remain separate operations.
 
 The ontology module manifest is not yet a module package manager. It does not independently publish module releases, resolve external module dependencies, migrate instances or update a graph database. Existing ontology snapshots, digest approvals and consumer-impact analysis remain the operational governance mechanisms.
 
