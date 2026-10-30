@@ -319,7 +319,10 @@ class WorkspaceExecution:
         argv = suites[suite_id]
         started = time.monotonic()
         if container_enabled:
-            exit_code, output, timed_out, sandbox = self._run_container_command(argv, timeout_seconds=timeout_seconds)
+            container_argv = ["python", *argv[1:]]
+            exit_code, output, timed_out, sandbox = self._run_container_command(
+                container_argv, timeout_seconds=timeout_seconds
+            )
         else:
             env = {"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(self.root / "src"),
                    "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
