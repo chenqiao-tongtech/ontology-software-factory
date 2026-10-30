@@ -76,6 +76,20 @@ class OntologyRuntimeBindingTests(unittest.TestCase):
         finally:
             definition_path.write_text(original, encoding="utf-8")
 
+    def test_workflow_run_lock_detects_tool_policy_drift(self):
+        definition = json.loads((ROOT / "workflows/definitions/agent-proposal-v1.json").read_text(encoding="utf-8"))
+        lock = build_runtime_contract_lock(ROOT, definition, self.snapshot)
+        policy_path = ROOT / "policies/tool-permissions.json"
+        original = policy_path.read_text(encoding="utf-8")
+        try:
+            policy = json.loads(original)
+            policy["policyVersion"] = str(policy.get("policyVersion", "1.0.0")) + "-changed"
+            policy_path.write_text(json.dumps(policy, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            with self.assertRaises(OntologyBindingError):
+                validate_runtime_contract_lock(ROOT, lock, "implementation-agent", self.snapshot)
+        finally:
+            policy_path.write_text(original, encoding="utf-8")
+
     def test_workflow_run_lock_digest_is_tamper_evident(self):
         definition = json.loads((ROOT / "workflows/definitions/agent-proposal-v1.json").read_text(encoding="utf-8"))
         lock = build_runtime_contract_lock(ROOT, definition, self.snapshot)
