@@ -5,6 +5,7 @@ candidate code on the host is disabled unless the operator explicitly opts in.
 """
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import os
@@ -98,6 +99,7 @@ class WorkspaceExecution:
         self.max_file_bytes = max_file_bytes
         self.max_write_bytes = max_write_bytes
         self.max_output_chars = max_output_chars
+        self.operations: list[dict[str, Any]] = []
         self.evidence_root = self.root / ".agent-evidence"
         self.evidence_root.mkdir(exist_ok=True)
 
@@ -129,6 +131,9 @@ class WorkspaceExecution:
         if target.stat().st_size > self.max_file_bytes:
             raise WorkspacePolicyError("workspace file exceeds the read size limit")
         content = target.read_text(encoding="utf-8", errors="replace")
+        operation = {"operation": "workspace_read", "relativePath": relative.as_posix(),
+                     "sha256": sha256_file(target), "bytes": target.stat().st_size}
+        self.operations.append(operation)
         return {"relativePath": relative.as_posix(), "content": content,
                 "sha256": sha256_file(target), "bytes": target.stat().st_size}
 
@@ -149,9 +154,54 @@ class WorkspaceExecution:
         temp = target.with_name(target.name + ".agent-tmp")
         temp.write_text(content, encoding="utf-8")
         temp.replace(target)
-        return {"relativePath": rel, "sha256": sha256_file(target),
-                "bytes": target.stat().st_size, "purpose": purpose,
-                "workspaceOnly": True, "appliedToSourceRepository": False}
+        operation = {"operation": "candidate_write", "relativePath": rel,
+                     "sha256": sha256_file(target), "bytes": target.stat().st_size,
+                     "purpose": purpose, "at": datetime.now(timezone.utc).isoformat()}
+        self.operations.append(operation)
+        return {**operation, "workspaceOnly": True, "appliedToSourceRepository": False}
+
+    def diff_patch(self) -> dict[str, Any]:
+        """Build a bounded unified diff against the source checkout for review/export."""
+        files: list[dict[str, Any]] = []
+        patches: list[str] = []
+        total = 0
+        for root_name in sorted(WRITE_ROOTS):
+            root = self.root / root_name
+            if not root.is_dir():
+                continue
+            for folder, dirnames, filenames in os.walk(root, followlinks=False):
+                dirnames[:] = [name for name in dirnames if not name.startswith(".")]
+                for filename in sorted(filenames):
+                    candidate = Path(folder) / filename
+                    if candidate.is_symlink() or filename.startswith("."):
+                        continue
+                    relative = candidate.relative_to(self.root).as_posix()
+                    original = self.project_root / relative
+                    try:
+                        new_text = candidate.read_text(encoding="utf-8")
+                        old_text = original.read_text(encoding="utf-8") if original.is_file() else ""
+                    except (OSError, UnicodeDecodeError):
+                        continue
+                    if new_text == old_text:
+                        continue
+                    action = "modified" if original.is_file() else "added"
+                    digest = sha256_file(candidate)
+                    files.append({"relativePath": relative, "action": action,
+                                  "sha256": digest, "bytes": candidate.stat().st_size})
+                    patch = "".join(difflib.unified_diff(
+                        old_text.splitlines(keepends=True), new_text.splitlines(keepends=True),
+                        fromfile=f"a/{relative}" if action == "modified" else "/dev/null",
+                        tofile=f"b/{relative}", lineterm="\n",
+                    ))
+                    patches.append(patch)
+                    total += len(patch.encode("utf-8"))
+                    if total > 1_000_000:
+                        return {"status": "incomplete", "reason": "patch exceeds 1 MB review limit",
+                                "files": files[:200], "fileCount": len(files), "patch": None}
+        patch_text = "".join(patches)
+        digest = hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
+        return {"status": "ready", "files": files[:200], "fileCount": len(files),
+                "patch": patch_text, "patchSha256": digest, "patchBytes": len(patch_text.encode("utf-8"))}
 
     def architecture_plan_write(self, relative_path: str, content: str) -> dict[str, Any]:
         relative = PurePosixPath(relative_path)
