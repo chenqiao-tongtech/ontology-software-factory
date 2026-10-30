@@ -30,6 +30,7 @@ from ontology_software_factory.source_connectors import (
     LocalDirectoryConnector,
     SQLiteSchemaConnector,
     SourceConnectorError,
+    SourceConnectorRegistry,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -239,6 +240,15 @@ def scan_remote_repository(source: dict, result: dict) -> dict:
     return result
 
 
+def build_source_connector_registry(allowed_root: Path) -> SourceConnectorRegistry:
+    """Build the explicit local connector registry used by Portal source scans."""
+    registry = SourceConnectorRegistry()
+    registry.register(LocalDirectoryConnector([allowed_root], source_type="repository", max_files=600, max_file_bytes=1_500_000))
+    registry.register(LocalDirectoryConnector([allowed_root], source_type="documents", max_files=600, max_file_bytes=1_500_000))
+    registry.register(SQLiteSchemaConnector([allowed_root]))
+    return registry
+
+
 def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
     path_label = source.get("url", source.get("path", ""))
     result = {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": str(path_label), "enabled": bool(source.get("enabled", True)), "fixture": bool(source.get("fixture")), "lastSyncAt": now_iso(), "status": "error", "assetCount": 0, "assets": [], "details": {}}
@@ -256,7 +266,7 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
         return result
     if source["type"] == "sqlite":
         try:
-            scanned = SQLiteSchemaConnector([base.parent]).scan(source["id"], base)
+            scanned = build_source_connector_registry(base.parent).scan("sqlite", source["id"], base)
             tables = [
                 {
                     "name": asset.name,
@@ -293,12 +303,7 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
         result["message"] = f"Unsupported local source type: {source['type']}"
         return result
     try:
-        scanned = LocalDirectoryConnector(
-            [base.parent],
-            source_type=source["type"],
-            max_files=600,
-            max_file_bytes=1_500_000,
-        ).scan(source["id"], base)
+        scanned = build_source_connector_registry(base.parent).scan(source["type"], source["id"], base)
         assets = [
             {
                 "path": asset.locator,
