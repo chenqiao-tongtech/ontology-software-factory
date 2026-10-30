@@ -61,6 +61,14 @@
     "ontology-critic-agent": [
       "ontology.definition.read",
       "source.catalog.read"
+    ],
+    "factory-orchestrator": [
+      "catalog.read",
+      "contract.validate",
+      "dependencies.inspect",
+      "documents.read",
+      "ontology.definition.read",
+      "source.catalog.read"
     ]
   },
   "productionToolsRequireApproval": [
