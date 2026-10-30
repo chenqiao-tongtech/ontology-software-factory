@@ -1068,6 +1068,7 @@ class PortalHandler(BaseHTTPRequestHandler):
                 if action == "promote" and active_id == snapshot_id:
                     raise ValueError("snapshot is already active")
                 active = next((item for item in snapshots if item.get("snapshotId") == active_id), None)
+                if active_id and not active: raise ValueError("active ontology pointer references a missing snapshot")
                 compat = compatibility_report(active, target) if active else {
                     "compatible": True, "baselineMissing": True, "breakingChanges": [], "reviewItems": [{"kind": "initial-baseline-review"}],
                     "reviewRequired": True, "versionOrderValid": True, "majorVersionBump": False,
@@ -1112,6 +1113,8 @@ class PortalHandler(BaseHTTPRequestHandler):
                     "snapshotDigest": proposal.get("snapshotDigest")}
                 def decide(st):
                     item = next(p for p in st["ontologyGovernanceProposals"] if p.get("proposalId") == proposal_id)
+                    if item.get("status") != "pending-approval":
+                        raise ValueError("proposal is no longer pending")
                     item["approval"] = approval
                     item["status"] = "approved" if decision == "approve" else "rejected"
                 state_update(decide)
@@ -1145,6 +1148,10 @@ class PortalHandler(BaseHTTPRequestHandler):
                     "formalFileModified": False, "runtimeActivation": "catalog-pointer-only"}
                 def execute(st):
                     item = next(p for p in st["ontologyGovernanceProposals"] if p.get("proposalId") == proposal_id)
+                    if item.get("status") != "approved":
+                        raise ValueError("proposal is no longer approved")
+                    if st.get("activeOntologySnapshotId") != item.get("expectedActiveSnapshotId"):
+                        raise ValueError("active ontology changed concurrently; create a fresh proposal")
                     item["status"] = "executed"
                     item["executedAt"] = release["executedAt"]
                     st["activeOntologySnapshotId"] = snapshot["snapshotId"]
