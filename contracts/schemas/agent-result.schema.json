@@ -18,7 +18,8 @@
     "humanReviewRequired",
     "errors",
     "completedAt",
-    "skillRefs"
+    "skillRefs",
+    "roleDigest"
   ],
   "properties": {
     "taskId": {
@@ -217,6 +218,10 @@
           }
         }
       }
+    },
+    "roleDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
     }
   }
 }
