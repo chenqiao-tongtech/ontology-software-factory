@@ -319,6 +319,7 @@ def build_agent_task_contract(
     max_attempts: int = 3,
     idempotency_key: str | None = None,
     output_entity_types: list[str] | None = None,
+    max_tool_calls: int = 50,
 ) -> dict[str, Any]:
     """Create the formal task envelope used for a single pinned Agent execution."""
     verified = validate_ontology_binding(binding)
@@ -367,7 +368,7 @@ def build_agent_task_contract(
         "resourceLimits": {
             "maxAttempts": max(1, min(int(max_attempts), 5)),
             "timeoutSeconds": max(1, min(int(timeout_seconds), 7200)),
-            "maxToolCalls": 50,
+            "maxToolCalls": max(1, min(int(max_tool_calls), 500)),
         },
         "idempotencyKey": task_key,
     }
