@@ -39,6 +39,8 @@ from ontology_software_factory.ontology_versioning import create_snapshot, diff_
 from ontology_software_factory.ontology_governance import build_consumer_graph, analyze_consumer_impact, compatibility_report
 from ontology_software_factory.source_sync import compare_asset_manifests
 from ontology_software_factory.source_webhooks import verify_source_webhook, SourceWebhookError
+from ontology_software_factory.ontology_discovery_service import run_live_ontology_discovery, to_portal_candidate, approve_llm_candidate_artifact
+from ontology_software_factory.ontology_discovery import OntologyDiscoveryError, approve_candidate, candidate_digest, save_candidate
 from ontology_software_factory.observability import build_platform_observability_report
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -983,6 +985,22 @@ class PortalHandler(BaseHTTPRequestHandler):
             result["consumerImpact"] = analyze_consumer_impact(result["impact"]["affectedClasses"], graph)
             result["compatibility"] = compatibility_report(before, after)
             return self._send_json(200, result)
+        discovery_match = re.fullmatch(r"/api/ontology/discovery-candidates/(ocand-[a-f0-9]{16})", path)
+        if discovery_match:
+            candidate_id = discovery_match.group(1)
+            artifact = (ROOT / ".local-runs" / "ontology-candidates" / f"{candidate_id}.json").resolve()
+            if artifact.parent != (ROOT / ".local-runs" / "ontology-candidates").resolve() or not artifact.is_file():
+                return self._send_json(404, {"error": "LLM discovery candidate artifact not found"})
+            candidate = load_json(artifact, None)
+            if not isinstance(candidate, dict):
+                return self._send_json(409, {"error": "LLM discovery candidate artifact is unreadable"})
+            portal_candidate = next((item for item in state_read().get("ontologyCandidates", []) if item.get("candidateId") == candidate_id), {})
+            return self._send_json(200, {
+                "candidate": candidate,
+                "candidateDigest": candidate_digest(candidate),
+                "evaluation": portal_candidate.get("evaluation"),
+                "artifactPath": str(artifact.relative_to(ROOT)),
+            })
         if path == "/api/ontology":
             state = state_read()
             sources = source_configs()
@@ -1239,14 +1257,77 @@ class PortalHandler(BaseHTTPRequestHandler):
                     {"releaseId": release["releaseId"], "snapshotId": snapshot["snapshotId"], "action": proposal["action"], "reason": reason}, actor=actor)
                 return self._send_json(200, {"release": release, "activeSnapshotId": snapshot["snapshotId"]})
             if path == "/api/ontology/discover": return self._send_json(201, {"candidate": discover_candidates()})
+            if path == "/api/ontology/discover-llm":
+                source_ids = body.get("sourceIds")
+                if not isinstance(source_ids, list) or any(not isinstance(x, str) for x in source_ids):
+                    raise ValueError("sourceIds must be a list of configured local source IDs")
+                if os.getenv("FACTORY_ENABLE_LLM_ONTOLOGY_DISCOVERY") != "1":
+                    raise ValueError("live LLM discovery is disabled; set FACTORY_ENABLE_LLM_ONTOLOGY_DISCOVERY=1")
+                if not os.getenv("OPENAI_API_KEY"):
+                    raise ValueError("OPENAI_API_KEY is required for live LLM discovery")
+                if not source_ids or len(source_ids) > 10:
+                    raise ValueError("select between 1 and 10 local source IDs")
+                selected = set(source_ids)
+                scans = source_scan_results(force=True, allow_remote=False, source_ids=selected)
+                if len(scans) != len(selected):
+                    raise ValueError("one or more selected source IDs are not registered")
+                result = run_live_ontology_discovery(
+                    source_configs(), source_ids,
+                    domain=str(body.get("domain", "software-factory")).strip() or "software-factory",
+                    root=ROOT,
+                    output_root=ROOT / ".local-runs" / "ontology-candidates",
+                    usage_path=ROOT / ".local-runs" / "ontology-candidates" / "llm-usage.jsonl",
+                    environ=os.environ,
+                    benchmark_path=ROOT / "examples" / "ontology-discovery" / "benchmarks" / "software-factory-benchmark.json",
+                )
+                portal_candidate = to_portal_candidate(result, source_configs(), scans)
+                existing = next((item for item in state_read().get("ontologyCandidates", []) if item.get("candidateId") == portal_candidate["candidateId"]), None)
+                if existing and existing.get("candidateDigest") != portal_candidate.get("candidateDigest"):
+                    raise ValueError("candidate ID already exists with a different digest; preserve the old candidate and revise source material")
+                if not existing:
+                    def add_candidate(st):
+                        st.setdefault("ontologyCandidates", []).insert(0, portal_candidate)
+                        st["ontologyCandidates"] = st["ontologyCandidates"][:50]
+                    state_update(add_candidate)
+                record_event("ontology.llm-candidate.created", "LLM 本体候选已生成并进入人工审查", {
+                    "candidateId": portal_candidate["candidateId"],
+                    "candidateDigest": portal_candidate["candidateDigest"],
+                    "termCount": len(portal_candidate["terms"]),
+                    "relationCount": portal_candidate["relationsCount"],
+                })
+                return self._send_json(201, {"candidate": portal_candidate, "evaluation": result.get("evaluation")})
+
             if path == "/api/ontology/changes":
                 cid = str(body.get("candidateId", "")); decision = str(body.get("decision", "")); actor = str(body.get("actor", "")).strip(); notes = str(body.get("notes", "")).strip()
                 if decision not in {"approve", "reject"}: raise ValueError("decision must be approve or reject")
                 if not actor or not notes: raise ValueError("actor and notes are required")
                 state = state_read(); candidate = next((c for c in state.get("ontologyCandidates", []) if c["candidateId"] == cid), None)
                 if not candidate: raise KeyError("candidate not found")
-                change = {"changeId": "ochg-" + uuid.uuid4().hex[:10], "candidateId": cid, "decision": decision, "status": "approved-proposal" if decision == "approve" else "rejected", "actor": actor[:100], "notes": notes[:1000], "createdAt": now_iso(), "termCount": len(candidate.get("terms", [])), "formalOntologyChanged": False, "note": "审批只记录治理决策，不会自动修改正式本体文件。"}
-                def mutate(st): st.setdefault("ontologyChanges", []).insert(0, change)
+                candidate_digest_value = candidate.get("candidateDigest")
+                approved_artifact = None
+                if candidate.get("engine") == "llm-structured-discovery":
+                    expected_digest = str(body.get("candidateDigest", ""))
+                    if not expected_digest or expected_digest != candidate_digest_value:
+                        raise ValueError("LLM candidate approval must include the exact reviewed candidateDigest")
+                    if decision == "approve":
+                        approval_ref = str(body.get("approvalRef", "")).strip()
+                        if not approval_ref:
+                            raise ValueError("approvalRef is required for LLM candidate approval")
+                        approved_result = approve_llm_candidate_artifact(
+                            cid,
+                            candidate_root=ROOT / ".local-runs" / "ontology-candidates",
+                            approved_root=ROOT / ".local-runs" / "ontology-approved-candidates",
+                            reviewer_id=actor,
+                            approval_ref=approval_ref,
+                            expected_digest=expected_digest,
+                        )
+                        approved_artifact = str(Path(approved_result["artifactPath"]).resolve().relative_to(ROOT))
+                change = {"changeId": "ochg-" + uuid.uuid4().hex[:10], "candidateId": cid, "decision": decision, "status": "approved-proposal" if decision == "approve" else "rejected", "actor": actor[:100], "notes": notes[:1000], "createdAt": now_iso(), "termCount": len(candidate.get("terms", [])), "candidateDigest": candidate_digest_value, "approvalRef": str(body.get("approvalRef", ""))[:200] or None, "approvedArtifactPath": approved_artifact, "formalOntologyChanged": False, "note": "审批只记录治理决策并保存摘要绑定的批准候选制品，不会自动修改正式本体文件。"}
+                def mutate(st):
+                    st.setdefault("ontologyChanges", []).insert(0, change)
+                    for item in st.setdefault("ontologyCandidates", []):
+                        if item.get("candidateId") == cid:
+                            item["status"] = change["status"]
                 state_update(mutate); record_event("ontology.change." + decision, f"本体变更提案 {change['changeId']} 已{'批准' if decision=='approve' else '驳回'}", {"candidateId": cid, "changeId": change["changeId"]}, actor=actor)
                 return self._send_json(201, {"change": change})
             if path == "/api/agents/start-demo": return self._send_json(201, {"run": create_agent_run(str(body.get("title", "软件需求到交付候选 · 离线演示")))})
@@ -1290,6 +1371,8 @@ class PortalHandler(BaseHTTPRequestHandler):
             return self._send_json(404, {"error": str(exc).strip("'")})
         except ValueError as exc:
             return self._send_json(400, {"error": str(exc)})
+        except OntologyDiscoveryError as exc:
+            return self._send_json(422, {"error": str(exc)})
         except TimeoutError as exc:
             return self._send_json(504, {"error": str(exc)})
         except Exception as exc:
