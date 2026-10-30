@@ -129,6 +129,25 @@ class AgentWorkflowStepHandler:
                 pipeline = SoftwareFactoryPipeline(self.runtime, artifact_root=self.artifact_root)
                 stored_proposed_files = pipeline._write_proposals(proposal_dir, output.get("proposed_changes", []))
                 output = {**output, "stored_proposed_files": stored_proposed_files}
+            workspace_changes = execution.get("workspace_changes")
+            workspace_change_artifact = None
+            if isinstance(workspace_changes, dict) and workspace_changes.get("status") == "ready" and workspace_changes.get("fileCount", 0):
+                patch_path = stage_dir / "workspace-changes.patch"
+                patch_path.write_text(str(workspace_changes.get("patch") or ""), encoding="utf-8")
+                patch_sha = hashlib.sha256(patch_path.read_bytes()).hexdigest()
+                workspace_change_artifact = {
+                    "fileCount": int(workspace_changes.get("fileCount", 0)),
+                    "files": workspace_changes.get("files", []),
+                    "patchSha256": patch_sha,
+                    "patchBytes": patch_path.stat().st_size,
+                    "artifactUri": f"artifact://{run_id}/{step_id}/workflow-attempt-{payload.get('workflowAttempt', 1)}/worker-attempt-{context.attempt}/workspace-changes.patch",
+                }
+            elif isinstance(workspace_changes, dict):
+                workspace_change_artifact = {
+                    "status": workspace_changes.get("status"),
+                    "reason": workspace_changes.get("reason"),
+                    "fileCount": int(workspace_changes.get("fileCount", 0)),
+                }
             artifact = {
                 "workflow_run_id": run_id, "workflow_step_id": step_id, "role_id": role_id,
                 "workflow_attempt": int(payload.get("workflowAttempt", 1)), "worker_attempt": context.attempt,
@@ -137,6 +156,8 @@ class AgentWorkflowStepHandler:
                 "ontologyBinding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")},
                 "taskContract": task_contract,
                 "unavailableSkillTools": execution.get("unavailable_skill_tools", []),
+                "workspaceOperations": execution.get("workspace_operations", []),
+                "workspaceChanges": workspace_change_artifact,
                 "output": output,
             }
             self._write_json(stage_dir / "output.json", artifact)
