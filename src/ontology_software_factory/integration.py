@@ -56,6 +56,8 @@ def enqueue_workflow_step(store: SQLiteTaskStore, run: dict[str, Any], step: dic
         "correlationId": f"corr:{run['id']}:{step['id']}:{attempt}",
         "environment": run.get("environment", "test"), "requestedBy": run.get("requestedBy", "unknown"),
         "roleId": step.get("roleId"), "skillId": step.get("skillId"),
+        "ontologyBinding": run.get("ontologyBinding"),
+        "workerMaxAttempts": worker_max_attempts,
         "input": input_payload or {},
     }
     timeout = float(step.get("timeoutSeconds", 60))
