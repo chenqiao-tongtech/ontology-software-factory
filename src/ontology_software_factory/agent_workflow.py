@@ -169,6 +169,7 @@ class AgentWorkflowStepHandler:
                 "runtimeContractLockDigest": (payload.get("runtimeContractLock") or {}).get("digest"),
                 "workspaceMetadata": execution.get("workspace_metadata"),
                 "workspaceOperations": execution.get("workspace_operations", []),
+                "workspaceEvidence": execution.get("workspace_evidence", []),
                 "workspaceChanges": workspace_change_artifact,
                 "output": output,
             }
