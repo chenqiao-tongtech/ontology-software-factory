@@ -454,6 +454,8 @@ class OpenAIAgentsRuntime:
                     run_id, task_id=task_id, provider="openai-agents",
                     model=self.model, input_tokens=input_tokens,
                     output_tokens=output_tokens,
+                    response_id=getattr(result, "last_response_id", None),
+                    latency_ms=int((time.perf_counter() - started) * 1000),
                 )
                 usage_record = {"inputTokens": input_tokens, "outputTokens": output_tokens,
                                 "totalTokens": input_tokens + output_tokens}
