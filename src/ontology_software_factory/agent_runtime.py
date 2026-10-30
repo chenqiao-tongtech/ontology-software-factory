@@ -261,6 +261,14 @@ class OpenAIAgentsRuntime:
         LOGGER.info("agent.run.completed role_id=%s latency_ms=%d item_count=%d",
                     role_id, latency_ms, len(getattr(result, "new_items", []) or []))
         workspace_changes = workspace.diff_patch() if workspace is not None else None
+        workspace_backend = __import__("os").getenv("FACTORY_WORKSPACE_BACKEND", "copy").strip().lower()
+        workspace_metadata = None
+        if workspace is not None:
+            workspace_metadata = {
+                "backend": "git-worktree" if workspace_backend == "git-worktree" else "repository-copy",
+                "branch": f"agent/run-{str(task_input.get('run_id', '')).lower()}" if workspace_backend == "git-worktree" else None,
+                "pushEnabled": False, "mergeEnabled": False,
+            }
         return {
             "role_id": role_id,
             "model": self.model,
@@ -271,6 +279,7 @@ class OpenAIAgentsRuntime:
             "task_contract_digest": task_digest,
             "unavailable_skill_tools": unavailable_skill_tools,
             "workspace_operations": list(workspace.operations) if workspace is not None else [],
+            "workspace_metadata": workspace_metadata,
             "workspace_changes": workspace_changes,
             "evidence": [{"type": "agent_run_metadata", "uri": f"runtime://{role_id}",
                            "sha256": "not_applicable", "note": "SDK result metadata; not a content attestation"}],
