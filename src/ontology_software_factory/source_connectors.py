@@ -13,7 +13,6 @@ import sqlite3
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import quote
 
 TEXT_SUFFIXES = {
     ".md", ".mdx", ".rst", ".txt", ".py", ".pyi", ".js", ".jsx", ".ts", ".tsx",
@@ -196,36 +195,39 @@ class SQLiteSchemaConnector:
             raise SourceConnectorError("database file is outside configured allowed roots")
         uri = path.as_uri() + "?mode=ro"
         assets: list[SourceAsset] = []
+        connection = None
         try:
-            with sqlite3.connect(uri, uri=True, timeout=5) as connection:
-                connection.execute("PRAGMA query_only = ON")
-                objects = connection.execute(
-                    "SELECT type, name, sql FROM sqlite_master "
-                    "WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' "
-                    "ORDER BY type, name"
-                ).fetchall()
-                for object_type, name, ddl in objects:
-                    columns = connection.execute(
-                        f"PRAGMA table_info({quote(str(name), safe='')})"
-                    ).fetchall()
-                    locator = f"{object_type}:{name}"
-                    assets.append(SourceAsset(
-                        asset_id=_asset_id(source_id, locator, object_type),
-                        source_id=source_id,
-                        kind=object_type,
-                        name=str(name),
-                        locator=locator,
-                        metadata={
-                            "columns": [
-                                {"name": row[1], "type": row[2], "notNull": bool(row[3]),
-                                 "primaryKeyPosition": int(row[5])}
-                                for row in columns
-                            ],
-                            "definition": ddl,
-                        },
-                    ))
+            connection = sqlite3.connect(uri, uri=True, timeout=5)
+            connection.execute("PRAGMA query_only = ON")
+            objects = connection.execute(
+                "SELECT type, name, sql FROM sqlite_master "
+                "WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' "
+                "ORDER BY type, name"
+            ).fetchall()
+            for object_type, name, ddl in objects:
+                identifier = '"' + str(name).replace('"', '""') + '"'
+                columns = connection.execute(f"PRAGMA table_info({identifier})").fetchall()
+                locator = f"{object_type}:{name}"
+                assets.append(SourceAsset(
+                    asset_id=_asset_id(source_id, locator, object_type),
+                    source_id=source_id,
+                    kind=object_type,
+                    name=str(name),
+                    locator=locator,
+                    metadata={
+                        "columns": [
+                            {"name": row[1], "type": row[2], "notNull": bool(row[3]),
+                             "primaryKeyPosition": int(row[5])}
+                            for row in columns
+                        ],
+                        "definition": ddl,
+                    },
+                ))
         except sqlite3.Error as exc:
             raise SourceConnectorError(f"SQLite schema scan failed: {type(exc).__name__}") from exc
+        finally:
+            if connection is not None:
+                connection.close()
         return SourceScanResult(source_id, self.source_type, "connected", tuple(assets))
 
 
