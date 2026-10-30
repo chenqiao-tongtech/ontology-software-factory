@@ -246,7 +246,7 @@ def build_source_connector_registry(allowed_root: Path, *, remote_fetcher=None, 
 
 
 def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
-    path_label = source.get("url", source.get("path", ""))
+    path_label = source.get("url", source.get("path", source.get("connectionEnv", "")))
     result = {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": str(path_label), "enabled": bool(source.get("enabled", True)), "fixture": bool(source.get("fixture")), "lastSyncAt": now_iso(), "status": "error", "assetCount": 0, "assets": [], "details": {}}
     if source.get("type") in {"github", "gitlab", "postgresql", "mysql"}:
         if not allow_remote:
