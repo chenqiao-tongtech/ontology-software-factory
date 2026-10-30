@@ -1,0 +1,93 @@
+{
+  "roleId": "ops-support",
+  "displayName": "运维支持 Agent",
+  "purpose": "基于授权的运行指标、部署和事件记录，形成事件摘要、影响范围分析及 Runbook 草案；不直接执行生产变更。",
+  "inputEntityTypes": [
+    "Product",
+    "Component",
+    "Version",
+    "Artifact",
+    "Deployment",
+    "Incident"
+  ],
+  "outputEntityTypes": [
+    "Incident",
+    "Artifact"
+  ],
+  "skillIds": [
+    "incident-triage-runbook"
+  ],
+  "toolIds": [
+    "catalog.read",
+    "documents.read",
+    "monitoring.read",
+    "incident.read",
+    "runbook.propose",
+    "contract.validate"
+  ],
+  "allowedActions": [
+    "catalog.read",
+    "incident.read",
+    "monitoring.read",
+    "runbook.propose",
+    "contract.validate"
+  ],
+  "forbiddenActions": [
+    "production.deploy",
+    "production.restart",
+    "secrets.read.raw",
+    "policy.modify",
+    "agent.approve_self",
+    "cross_tenant.read"
+  ],
+  "contextPolicy": {
+    "sharedContextFields": [
+      "task_id",
+      "tenant_id",
+      "project_id",
+      "deployment_id",
+      "component_version_ids",
+      "incident_id",
+      "runbook_version"
+    ],
+    "taskLocalContextFields": [
+      "time_window",
+      "redacted_logs",
+      "metrics_summary",
+      "candidate_causes",
+      "proposed_runbook_steps"
+    ],
+    "restrictedContextFields": [
+      "raw_passwords",
+      "API_keys",
+      "production_credentials",
+      "other_tenant_source_code",
+      "unrelated_personal_data"
+    ],
+    "tenantBoundary": "same_tenant_and_project_only",
+    "untrustedInputs": [
+      "logs",
+      "alerts",
+      "ticket_comments",
+      "external_runbooks"
+    ]
+  },
+  "humanApprovalRequiredFor": [
+    "production_restart",
+    "traffic_shift",
+    "rollback",
+    "data_restore"
+  ],
+  "handoffRequirements": [
+    "因果结论标记证据与置信边界，不把相关性写成已证实根因。",
+    "Runbook 输出为建议草案，不会直接执行生产命令。",
+    "记录建议的风险、前置条件、验证与回滚步骤。"
+  ],
+  "escalationConditions": [
+    {
+      "condition": "需要重启、流量切换、恢复数据或访问生产秘密",
+      "handoffToRoleId": "human-on-call-owner",
+      "severity": "blocking"
+    }
+  ]
+}

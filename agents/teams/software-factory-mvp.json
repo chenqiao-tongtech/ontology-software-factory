@@ -1,0 +1,195 @@
+{
+  "schemaVersion": "1.0.0",
+  "teamId": "software-factory-mvp",
+  "teamVersion": "1.0.0",
+  "pattern": "bounded_specialist_team_with_deterministic_workflow_control",
+  "controller": {
+    "component": "workflow-state-machine",
+    "type": "deterministic",
+    "llmPowered": false,
+    "ownsStateTransitions": true,
+    "mayGrantPermissions": false
+  },
+  "limits": {
+    "maxAgentHops": 16,
+    "maxRevisionLoops": 2,
+    "maxParallelAgents": 3,
+    "defaultTaskTimeoutSeconds": 300,
+    "requireBudgetAndDeadline": true
+  },
+  "registeredRoles": [
+    {
+      "roleId": "requirement-analyst",
+      "kind": "specialist",
+      "stage": "requirements",
+      "mayApproveHighRisk": false
+    },
+    {
+      "roleId": "solution-architect",
+      "kind": "specialist",
+      "stage": "planning",
+      "mayApproveHighRisk": false
+    },
+    {
+      "roleId": "implementation-agent",
+      "kind": "producer",
+      "stage": "candidate-generation",
+      "mayApproveHighRisk": false
+    },
+    {
+      "roleId": "test-agent",
+      "kind": "independent-verifier",
+      "stage": "candidate-verification",
+      "mayApproveHighRisk": false
+    },
+    {
+      "roleId": "security-reviewer",
+      "kind": "independent-verifier",
+      "stage": "candidate-verification",
+      "mayApproveHighRisk": false
+    },
+    {
+      "roleId": "release-coordinator",
+      "kind": "packager",
+      "stage": "candidate-delivery",
+      "mayApproveHighRisk": false
+    },
+    {
+      "roleId": "ops-support",
+      "kind": "post-delivery-support",
+      "stage": "operations",
+      "mayApproveHighRisk": false
+    }
+  ],
+  "stages": [
+    {
+      "stageId": "requirements",
+      "mode": "sequential",
+      "roleIds": [
+        "requirement-analyst"
+      ],
+      "requires": []
+    },
+    {
+      "stageId": "architecture",
+      "mode": "sequential",
+      "roleIds": [
+        "solution-architect"
+      ],
+      "requires": [
+        "requirements"
+      ],
+      "condition": "requirement_accepted"
+    },
+    {
+      "stageId": "candidate-generation",
+      "mode": "sequential",
+      "roleIds": [
+        "implementation-agent"
+      ],
+      "requires": [
+        "architecture"
+      ],
+      "condition": "plan_accepted"
+    },
+    {
+      "stageId": "candidate-verification",
+      "mode": "parallel_all_required",
+      "roleIds": [
+        "test-agent",
+        "security-reviewer"
+      ],
+      "requires": [
+        "candidate-generation"
+      ],
+      "condition": "candidate_snapshot_frozen"
+    },
+    {
+      "stageId": "quality-gate",
+      "mode": "deterministic_join",
+      "roleIds": [],
+      "requires": [
+        "candidate-verification"
+      ],
+      "condition": "all_required_evidence_present"
+    },
+    {
+      "stageId": "release-candidate",
+      "mode": "sequential",
+      "roleIds": [
+        "release-coordinator"
+      ],
+      "requires": [
+        "quality-gate"
+      ],
+      "condition": "gate_passed"
+    },
+    {
+      "stageId": "human-approval",
+      "mode": "human_or_policy_gate",
+      "roleIds": [],
+      "requires": [
+        "release-candidate"
+      ],
+      "condition": "approval_valid_and_matches_candidate_digest"
+    },
+    {
+      "stageId": "operations",
+      "mode": "optional_sequential",
+      "roleIds": [
+        "ops-support"
+      ],
+      "requires": [
+        "human-approval"
+      ],
+      "condition": "delivery_accepted"
+    }
+  ],
+  "failurePaths": [
+    {
+      "fromStage": "quality-gate",
+      "when": "failed_or_incomplete",
+      "action": "bounded_revision_loop",
+      "targetStage": "candidate-generation",
+      "maxIterations": 2,
+      "onExhausted": "human_review_or_stop"
+    },
+    {
+      "fromStage": "human-approval",
+      "when": "denied_or_expired",
+      "action": "stop_candidate_and_record_audit"
+    },
+    {
+      "fromStage": "candidate-verification",
+      "when": "material_disagreement",
+      "action": "human_review"
+    }
+  ],
+  "handoffRules": {
+    "schemaPath": "contracts/schemas/agent-handoff.schema.json",
+    "authoritativeState": [
+      "workflow_run_store",
+      "event_ledger",
+      "artifact_refs",
+      "evidence_refs"
+    ],
+    "contextScopes": [
+      "shared-approved",
+      "task-local",
+      "restricted-reference-only"
+    ],
+    "conflictPolicy": "verified_tool_evidence_then_approved_catalog_and_requirement_then_agent_candidate_claim; material unresolved conflict escalates to human",
+    "noSharedMutableAgentMemory": true,
+    "toolsGrantedBy": "policy-runtime-only",
+    "agentsMayMutateWorkflowState": false,
+    "agentsMayApproveOwnHighRiskResult": false
+  },
+  "acceptanceCriteria": [
+    "all_role_ids_resolve",
+    "verification_join_requires_all_roles",
+    "revision_loop_bounded",
+    "workflow_controller_not_llm_authority",
+    "handoff_contract_validated",
+    "high_risk_approval_independent"
+  ]
+}

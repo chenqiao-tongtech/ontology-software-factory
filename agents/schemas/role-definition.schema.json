@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ontology-software-factory/agent-role.schema.json",
+  "title": "Software Factory Agent Role Definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "roleId",
+    "displayName",
+    "purpose",
+    "inputEntityTypes",
+    "outputEntityTypes",
+    "skillIds",
+    "toolIds",
+    "allowedActions",
+    "forbiddenActions",
+    "contextPolicy",
+    "humanApprovalRequiredFor",
+    "handoffRequirements",
+    "escalationConditions"
+  ],
+  "properties": {
+    "roleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]+$"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputEntityTypes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Requirement",
+          "Product",
+          "Component",
+          "Version",
+          "Artifact",
+          "Build",
+          "TestRun",
+          "Vulnerability",
+          "Release",
+          "Deployment",
+          "Incident",
+          "OntologyCandidate",
+          "OntologyTermCandidate",
+          "OntologyRelationCandidate",
+          "OntologyConstraintCandidate",
+          "CompetencyQuestion",
+          "OntologySourceEvidence",
+          "OntologyEvaluation",
+          "OntologyApproval",
+          "OntologyRevision"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "outputEntityTypes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Requirement",
+          "Product",
+          "Component",
+          "Version",
+          "Artifact",
+          "Build",
+          "TestRun",
+          "Vulnerability",
+          "Release",
+          "Deployment",
+          "Incident",
+          "OntologyCandidate",
+          "OntologyTermCandidate",
+          "OntologyRelationCandidate",
+          "OntologyConstraintCandidate",
+          "CompetencyQuestion",
+          "OntologySourceEvidence",
+          "OntologyEvaluation",
+          "OntologyApproval",
+          "OntologyRevision"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "skillIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "toolIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "allowedActions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "forbiddenActions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "contextPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sharedContextFields",
+        "taskLocalContextFields",
+        "restrictedContextFields",
+        "tenantBoundary",
+        "untrustedInputs"
+      ],
+      "properties": {
+        "sharedContextFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "taskLocalContextFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "restrictedContextFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "tenantBoundary": {
+          "type": "string",
+          "enum": [
+            "same_tenant_and_project_only"
+          ]
+        },
+        "untrustedInputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "humanApprovalRequiredFor": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "handoffRequirements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "escalationConditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "condition",
+          "handoffToRoleId",
+          "severity"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string",
+            "minLength": 1
+          },
+          "handoffToRoleId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "blocking"
+            ]
+          }
+        }
+      },
+      "minItems": 1
+    }
+  }
+}

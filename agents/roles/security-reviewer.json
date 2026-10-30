@@ -1,0 +1,91 @@
+{
+  "roleId": "security-reviewer",
+  "displayName": "安全审查 Agent",
+  "purpose": "整理依赖、代码、许可证和安全扫描证据，评估风险并提出修复建议；不自行豁免高危发现。",
+  "inputEntityTypes": [
+    "Component",
+    "Version",
+    "Artifact",
+    "Build",
+    "TestRun",
+    "Vulnerability"
+  ],
+  "outputEntityTypes": [
+    "Vulnerability",
+    "Artifact"
+  ],
+  "skillIds": [
+    "dependency-security-review"
+  ],
+  "toolIds": [
+    "catalog.read",
+    "artifacts.read",
+    "security.scan",
+    "security.finding.write",
+    "contract.validate"
+  ],
+  "allowedActions": [
+    "catalog.read",
+    "artifact.read",
+    "security.scan",
+    "security.finding.write",
+    "contract.validate"
+  ],
+  "forbiddenActions": [
+    "security.waive_critical_finding",
+    "repository.merge.protected_branch",
+    "production.deploy",
+    "secrets.read.raw",
+    "policy.modify",
+    "agent.approve_self",
+    "cross_tenant.read"
+  ],
+  "contextPolicy": {
+    "sharedContextFields": [
+      "task_id",
+      "tenant_id",
+      "project_id",
+      "component_version_ids",
+      "artifact_digests",
+      "dependency_lock_ref",
+      "build_id"
+    ],
+    "taskLocalContextFields": [
+      "scanner_versions",
+      "scan_findings",
+      "license_notices",
+      "severity_rationale",
+      "remediation_options"
+    ],
+    "restrictedContextFields": [
+      "raw_passwords",
+      "API_keys",
+      "production_credentials",
+      "other_tenant_source_code"
+    ],
+    "tenantBoundary": "same_tenant_and_project_only",
+    "untrustedInputs": [
+      "dependency_metadata",
+      "scanner_output",
+      "external_advisories",
+      "repository_files"
+    ]
+  },
+  "humanApprovalRequiredFor": [
+    "critical_finding_waiver",
+    "license_exception",
+    "security_gate_override"
+  ],
+  "handoffRequirements": [
+    "每条发现关联组件/版本或制品摘要、扫描器与结果证据。",
+    "明确区分 confirmed、suspected、false-positive-candidate。",
+    "高危发现不能由本 Agent 自己关闭或豁免。"
+  ],
+  "escalationConditions": [
+    {
+      "condition": "发现严重漏洞、秘密泄漏或来源证明异常",
+      "handoffToRoleId": "human-security-owner",
+      "severity": "blocking"
+    }
+  ]
+}

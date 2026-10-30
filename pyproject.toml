@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ontology-software-factory"
+version = "0.3.0"
+description = "A governed, ontology-driven multi-agent software factory reference implementation"
+requires-python = ">=3.11"
+dependencies = ["jsonschema>=4.21,<5"]
+
+[project.optional-dependencies]
+llm = ["openai>=1.99,<4"]
+agent-runtime = ["openai>=1.99,<4", "openai-agents>=0.4,<1"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

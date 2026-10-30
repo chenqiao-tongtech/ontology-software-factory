@@ -1,0 +1,21 @@
+{
+  "servers": [
+    {
+      "serverId": "trusted-docs-mcp",
+      "command": [
+        "/ABSOLUTE/PATH/TO/APPROVED_MCP_SERVER"
+      ],
+      "cwd": "/APPROVED/WORKSPACE",
+      "allowedTools": [
+        "search_docs",
+        "read_doc"
+      ],
+      "envAllowlist": [
+        "PATH"
+      ],
+      "networkPolicy": "deny-by-default",
+      "owner": "platform-team",
+      "enabled": false
+    }
+  ]
+}

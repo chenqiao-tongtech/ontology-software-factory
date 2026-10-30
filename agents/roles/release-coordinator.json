@@ -1,0 +1,102 @@
+{
+  "roleId": "release-coordinator",
+  "displayName": "发布协调 Agent",
+  "purpose": "汇总构建、测试、安全和兼容性证据，生成候选发布清单并提交审批请求；不直接批准或部署。",
+  "inputEntityTypes": [
+    "Product",
+    "Component",
+    "Version",
+    "Artifact",
+    "Build",
+    "TestRun",
+    "Vulnerability",
+    "Release"
+  ],
+  "outputEntityTypes": [
+    "Release",
+    "Artifact"
+  ],
+  "skillIds": [
+    "release-readiness-check"
+  ],
+  "toolIds": [
+    "catalog.read",
+    "artifacts.read",
+    "release.manifest.write",
+    "approval.request",
+    "contract.validate",
+    "release.simulation.promote"
+  ],
+  "allowedActions": [
+    "catalog.read",
+    "artifact.read",
+    "release.candidate.write",
+    "release.approval.request",
+    "contract.validate",
+    "release.simulation.promote"
+  ],
+  "forbiddenActions": [
+    "release.approve",
+    "repository.merge.protected_branch",
+    "production.deploy",
+    "secrets.read.raw",
+    "policy.modify",
+    "agent.approve_self",
+    "cross_tenant.read"
+  ],
+  "contextPolicy": {
+    "sharedContextFields": [
+      "task_id",
+      "tenant_id",
+      "project_id",
+      "product_id",
+      "version_ids",
+      "build_ids",
+      "test_run_ids",
+      "security_finding_ids",
+      "artifact_digests",
+      "approval_policy_version"
+    ],
+    "taskLocalContextFields": [
+      "candidate_manifest",
+      "missing_evidence",
+      "readiness_blockers",
+      "approval_request_summary"
+    ],
+    "restrictedContextFields": [
+      "raw_passwords",
+      "API_keys",
+      "production_credentials",
+      "other_tenant_source_code"
+    ],
+    "tenantBoundary": "same_tenant_and_project_only",
+    "untrustedInputs": [
+      "agent_summaries",
+      "scanner_outputs",
+      "artifact_metadata"
+    ]
+  },
+  "humanApprovalRequiredFor": [
+    "release.publish",
+    "release.withdraw",
+    "production_deploy",
+    "release.simulation.promote"
+  ],
+  "handoffRequirements": [
+    "发布清单引用精确版本和真实证据 ID。",
+    "缺失证据必须阻断或明确标记为 blocker，不得隐式豁免。",
+    "审批请求与批准行为分离，不能自己审批自己的候选发布。"
+  ],
+  "escalationConditions": [
+    {
+      "condition": "测试/安全证据缺失、相互矛盾或已过期",
+      "handoffToRoleId": "test-agent",
+      "severity": "blocking"
+    },
+    {
+      "condition": "需要接受安全风险或变更发布策略",
+      "handoffToRoleId": "human-release-owner",
+      "severity": "blocking"
+    }
+  ]
+}

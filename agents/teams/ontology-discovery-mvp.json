@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0.0",
+  "teamId": "ontology-discovery-mvp",
+  "teamVersion": "1.0.0",
+  "pattern": "bounded_llm_discovery_with_independent_critique_and_human_promotion",
+  "controller": {"component": "workflow-state-machine", "type": "deterministic", "llmPowered": false, "ownsStateTransitions": true, "mayGrantPermissions": false},
+  "limits": {"maxAgentHops": 8, "maxRevisionLoops": 2, "maxParallelAgents": 2, "defaultTaskTimeoutSeconds": 600, "requireBudgetAndDeadline": true},
+  "registeredRoles": [
+    {"roleId": "ontology-discovery-agent", "kind": "producer", "stage": "candidate-generation", "mayApproveHighRisk": false},
+    {"roleId": "ontology-critic-agent", "kind": "independent-reviewer", "stage": "candidate-review", "mayApproveHighRisk": false}
+  ],
+  "stages": [
+    {"stageId": "source-preflight", "mode": "system", "roleIds": [], "requires": [], "condition": "sources_authorized_and_redacted"},
+    {"stageId": "terms-relations-constraints", "mode": "bounded-sequential-llm-passes", "roleIds": ["ontology-discovery-agent"], "requires": ["source-preflight"], "condition": "structured_output_and_provenance_required"},
+    {"stageId": "independent-critique", "mode": "sequential-independent-review", "roleIds": ["ontology-critic-agent"], "requires": ["terms-relations-constraints"], "condition": "critic_does_not_mutate_candidate"},
+    {"stageId": "deterministic-validation", "mode": "system", "roleIds": [], "requires": ["independent-critique"], "condition": "schema_refs_and_semantics_valid"},
+    {"stageId": "benchmark-evaluation", "mode": "system", "roleIds": [], "requires": ["deterministic-validation"], "condition": "human_reviewed_gold_benchmark_available"},
+    {"stageId": "human-domain-review", "mode": "human_or_policy_gate", "roleIds": [], "requires": ["benchmark-evaluation"], "condition": "approval_binds_exact_candidate_digest"},
+    {"stageId": "versioned-change-proposal", "mode": "system", "roleIds": [], "requires": ["human-domain-review"], "condition": "prepare_pr_not_direct_production_mutation"}
+  ],
+  "failurePaths": [
+    {"fromStage": "deterministic-validation", "when": "schema_or_provenance_invalid", "action": "bounded_revision_loop", "targetStage": "terms-relations-constraints", "maxIterations": 2, "onExhausted": "human_review_or_stop"},
+    {"fromStage": "benchmark-evaluation", "when": "below_threshold", "action": "stop_candidate_and_record_findings"},
+    {"fromStage": "human-domain-review", "when": "denied_or_expired", "action": "reject_candidate_and_record_audit"}
+  ],
+  "handoffRules": {
+    "schemaPath": "contracts/schemas/agent-handoff.schema.json",
+    "authoritativeState": ["candidate_snapshot", "source_manifest", "generation_trace", "evaluation_report", "approval_record"],
+    "contextScopes": ["shared-approved", "task-local", "restricted-reference-only"],
+    "conflictPolicy": "verified_source_evidence_then_existing_approved_ontology_then_candidate_claim; unresolved material conflict escalates to human",
+    "noSharedMutableAgentMemory": true,
+    "toolsGrantedBy": "policy-runtime-only",
+    "agentsMayMutateWorkflowState": false,
+    "agentsMayApproveOwnHighRiskResult": false,
+    "agentsMayPublishOntology": false
+  },
+  "acceptanceCriteria": ["candidate_has_provenance", "critic_is_independent", "evaluation_does_not_auto_approve", "approval_binds_digest", "production_ontology_mutation_requires_versioned_merge"]
+}

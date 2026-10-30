@@ -1,0 +1,266 @@
+{
+  "catalogVersion": "1.0.0",
+  "tools": [
+    {
+      "toolId": "catalog.read",
+      "description": "读取已批准的产品/组件/版本及资产元数据。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "仅返回调用主体有权访问的租户与产品范围。"
+    },
+    {
+      "toolId": "documents.read",
+      "description": "读取被授权的需求、架构文档、运行手册和已批准知识。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "文档权限过滤后返回；外部文档内容视为不可信输入。"
+    },
+    {
+      "toolId": "workspace.read",
+      "description": "读取当前任务隔离工作区中的文件和测试结果。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "仅当前任务 worktree；不读取其它租户或用户目录。"
+    },
+    {
+      "toolId": "contract.validate",
+      "description": "校验对象或输出是否符合已发布的契约。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只读校验；规则版本随结果返回。"
+    },
+    {
+      "toolId": "architecture.plan.write",
+      "description": "在任务分支或文档工作区生成架构计划、ADR 草案。",
+      "riskClass": "bounded-write",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "仅工作区草案，不自动批准 ADR 或改变生产系统。"
+    },
+    {
+      "toolId": "repository.branch.write",
+      "description": "在隔离分支/工作区修改代码，不执行合并。",
+      "riskClass": "bounded-write",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "仅当前任务分支；受文件范围、命令和资源上限约束。"
+    },
+    {
+      "toolId": "tests.run",
+      "description": "在受控 runner 中运行允许的测试命令。",
+      "riskClass": "bounded-execution",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "隔离 runner；超时、网络、文件系统与预算均受限。"
+    },
+    {
+      "toolId": "artifacts.read",
+      "description": "读取已登记的候选制品及报告元数据。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "仅已授权项目/租户制品；不意味着摘要或报告已被验证。"
+    },
+    {
+      "toolId": "test-report.write",
+      "description": "提交测试执行器生成的测试结果引用。",
+      "riskClass": "bounded-write",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只能引用 runner 的真实 run ID、退出码和报告；不接受模型自述替代证据。"
+    },
+    {
+      "toolId": "security.scan",
+      "description": "调用受控依赖/静态分析/秘密扫描工具。",
+      "riskClass": "bounded-execution",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "执行环境受限；扫描配置和工具版本写入记录。"
+    },
+    {
+      "toolId": "security.finding.write",
+      "description": "提交漏洞或安全审查发现。",
+      "riskClass": "bounded-write",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "可创建发现与建议，不可自行关闭严重发现或豁免门禁。"
+    },
+    {
+      "toolId": "release.manifest.write",
+      "description": "生成候选发布清单与证据索引。",
+      "riskClass": "bounded-write",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "仅生成 candidate manifest；不执行发布或部署。"
+    },
+    {
+      "toolId": "approval.request",
+      "description": "将带证据的审批请求提交给独立审批流程。",
+      "riskClass": "bounded-write",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只能请求审批；不能批准自己发起的请求。"
+    },
+    {
+      "toolId": "monitoring.read",
+      "description": "读取经授权的监控事件和运行指标。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "仅授权环境与租户；避免在日志中暴露秘密。"
+    },
+    {
+      "toolId": "incident.read",
+      "description": "读取事件与部署记录。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只读、按项目与租户隔离。"
+    },
+    {
+      "toolId": "runbook.propose",
+      "description": "生成运维处置建议或 Runbook 草案。",
+      "riskClass": "bounded-write",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只输出建议与草案，不直接执行生产命令。"
+    },
+    {
+      "toolId": "repository.merge",
+      "description": "将变更合并到受保护分支。",
+      "riskClass": "high",
+      "sideEffect": true,
+      "requiresHumanApproval": true,
+      "mvpEnabled": false,
+      "scope": "MVP 禁止 Agent 直接调用；只能由受保护的人工评审/平台流程执行。"
+    },
+    {
+      "toolId": "production.deploy",
+      "description": "向生产环境执行部署或变更。",
+      "riskClass": "critical",
+      "sideEffect": true,
+      "requiresHumanApproval": true,
+      "mvpEnabled": false,
+      "scope": "MVP 禁止 Agent 直接调用；独立部署系统、策略与审批负责执行。"
+    },
+    {
+      "toolId": "secrets.read.raw",
+      "description": "读取密钥明文或凭证文件。",
+      "riskClass": "critical",
+      "sideEffect": false,
+      "requiresHumanApproval": true,
+      "mvpEnabled": false,
+      "scope": "禁止提供给 Agent；Agent 只能传递允许的 secret reference。"
+    },
+    {
+      "toolId": "policy.modify",
+      "description": "修改安全策略、角色权限或门禁配置。",
+      "riskClass": "critical",
+      "sideEffect": true,
+      "requiresHumanApproval": true,
+      "mvpEnabled": false,
+      "scope": "禁止 Agent 执行；策略变更须走独立代码评审与发布流程。"
+    },
+    {
+      "toolId": "agent.approve_self",
+      "description": "Agent 批准自己的任务、补丁或发布。",
+      "riskClass": "critical",
+      "sideEffect": true,
+      "requiresHumanApproval": true,
+      "mvpEnabled": false,
+      "scope": "始终禁止；审批主体必须独立于请求主体。"
+    },
+    {
+      "toolId": "release.simulation.promote",
+      "description": "在本地 test/staging simulation 状态机中提升已批准候选，不触达生产环境。",
+      "riskClass": "high-impact",
+      "sideEffect": true,
+      "requiresHumanApproval": true,
+      "mvpEnabled": true,
+      "scope": "仅模拟状态文件；不执行外部部署或生产变更。"
+    },
+    {
+      "toolId": "ontology.source.inspect",
+      "description": "读取经授权的领域文档、Schema 与元数据源，并保留来源标识。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "按租户和项目过滤；内容视为不可信输入；发送模型前检查潜在密钥。"
+    },
+    {
+      "toolId": "ontology.discovery.run",
+      "description": "运行 LLM 分阶段本体候选发现，输出带来源证据的候选文件。",
+      "riskClass": "bounded-execution",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只写入候选目录；不改写正式本体；调用有预算、超时和内容上限。"
+    },
+    {
+      "toolId": "ontology.candidate.read",
+      "description": "读取本体候选、来源清单和独立 Critic 发现。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只读当前项目获授权候选。"
+    },
+    {
+      "toolId": "ontology.candidate.validate",
+      "description": "校验候选 Schema、引用、关系端点、重复项和来源证据。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "执行确定性校验；不代替领域专家审批。"
+    },
+    {
+      "toolId": "ontology.candidate.evaluate",
+      "description": "针对经领域专家维护的 gold benchmark 计算术语/关系指标。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "分数仅作为门禁信号；禁止自动批准或发布。"
+    },
+    {
+      "toolId": "ontology.catalog.import.read",
+      "description": "只读导入 NVIDIA Auto Ontology 等外部语义目录元数据作为候选发现证据。",
+      "riskClass": "low",
+      "sideEffect": false,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "只读 API；凭据在服务端保护；禁止把外部目录直接覆盖为正式本体。"
+    },
+    {
+      "toolId": "ontology.candidate.write",
+      "description": "将本体发现结果写入候选目录，输出稳定 ID 与摘要，不写入正式 ontology/。",
+      "riskClass": "bounded-write",
+      "sideEffect": true,
+      "requiresHumanApproval": false,
+      "mvpEnabled": true,
+      "scope": "仅新建候选文件，默认拒绝覆盖；不可修改正式本体、策略或工作流。"
+    }
+  ]
+}

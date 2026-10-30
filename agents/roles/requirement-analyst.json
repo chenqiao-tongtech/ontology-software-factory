@@ -1,0 +1,83 @@
+{
+  "roleId": "requirement-analyst",
+  "displayName": "需求分析 Agent",
+  "purpose": "把原始请求转化为边界明确、可验证的 Requirement 和 Acceptance Criteria；不自行补齐未确认的业务事实。",
+  "inputEntityTypes": [
+    "Requirement",
+    "Product",
+    "Component",
+    "Version",
+    "Artifact"
+  ],
+  "outputEntityTypes": [
+    "Requirement",
+    "Artifact"
+  ],
+  "skillIds": [
+    "requirement-normalization"
+  ],
+  "toolIds": [
+    "documents.read",
+    "catalog.read",
+    "contract.validate"
+  ],
+  "allowedActions": [
+    "requirement.read",
+    "requirement.spec.write",
+    "catalog.read",
+    "contract.validate"
+  ],
+  "forbiddenActions": [
+    "repository.write",
+    "repository.merge.protected_branch",
+    "production.deploy",
+    "secrets.read.raw",
+    "policy.modify",
+    "agent.approve_self",
+    "cross_tenant.read"
+  ],
+  "contextPolicy": {
+    "sharedContextFields": [
+      "task_id",
+      "tenant_id",
+      "project_id",
+      "ontology_version",
+      "requirement_ids",
+      "acceptance_criteria",
+      "workflow_state"
+    ],
+    "taskLocalContextFields": [
+      "source_request_excerpt",
+      "ambiguities",
+      "candidate_acceptance_criteria"
+    ],
+    "restrictedContextFields": [
+      "raw_passwords",
+      "API_keys",
+      "production_credentials",
+      "other_tenant_source_code"
+    ],
+    "tenantBoundary": "same_tenant_and_project_only",
+    "untrustedInputs": [
+      "source_request",
+      "issue_comments",
+      "external_documents"
+    ]
+  },
+  "humanApprovalRequiredFor": [
+    "requirement.baseline_approval",
+    "scope_change"
+  ],
+  "handoffRequirements": [
+    "每条验收标准具有稳定 ID、验证方法与可判定结果。",
+    "未知内容必须标记为待澄清，不得转成事实。",
+    "输出必须通过 Requirement 契约校验。"
+  ],
+  "escalationConditions": [
+    {
+      "condition": "业务约束互相冲突或影响范围不明确",
+      "handoffToRoleId": "human-product-owner",
+      "severity": "blocking"
+    }
+  ]
+}

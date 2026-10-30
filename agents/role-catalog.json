@@ -1,0 +1,15 @@
+{
+  "catalogVersion": "1.0.0",
+  "roleIds": [
+    "requirement-analyst",
+    "solution-architect",
+    "implementation-agent",
+    "test-agent",
+    "security-reviewer",
+    "release-coordinator",
+    "ops-support",
+    "ontology-discovery-agent",
+    "ontology-critic-agent"
+  ],
+  "description": "Role definitions are versioned policy inputs. Runtime enforcement must derive actual grants from an authenticated principal, task, tenant, policy decision and tool gateway; do not treat these JSON files as IAM themselves."
+}
