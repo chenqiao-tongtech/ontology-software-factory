@@ -57,6 +57,7 @@ def enqueue_workflow_step(store: SQLiteTaskStore, run: dict[str, Any], step: dic
         "environment": run.get("environment", "test"), "requestedBy": run.get("requestedBy", "unknown"),
         "roleId": step.get("roleId"), "skillId": step.get("skillId"),
         "ontologyBinding": run.get("ontologyBinding"),
+        "runtimeContractLock": run.get("runtimeContractLock"),
         "workerMaxAttempts": worker_max_attempts,
         "input": input_payload or {},
     }
