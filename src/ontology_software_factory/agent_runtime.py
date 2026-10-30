@@ -1,9 +1,9 @@
 """OpenAI Agents SDK adapter with role-file-driven, least-privilege tools.
 
-The imported framework is optional. No source-writing, shell, deploy, secret-reading,
-or repository-merge tool is registered by this MVP. Agents can read a small set of
-project documents and validate JSON contracts; generated changes are saved by the
-orchestrator in a separate proposal area, never applied to the source repository.
+The imported framework is optional. Run-scoped candidate workspace tools are registered
+only when the orchestrator supplies a workspace binding. Candidate writes stay in a
+repository copy outside the source checkout; no Git push, merge, deployment, secret
+reading, or policy mutation tool is registered. Host test/scanner execution is opt-in.
 """
 from __future__ import annotations
 
