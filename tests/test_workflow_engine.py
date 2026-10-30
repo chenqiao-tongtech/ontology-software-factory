@@ -194,7 +194,7 @@ class WorkflowEngineTests(unittest.TestCase):
         with self.assertRaises(WorkflowError):
             self.engine.decide_factory_orchestrator_plan(
                 run["id"], plan["planId"], "approved",
-                actor="product-owner", reason="Submitter cannot approve own plan",
+                actor="PRODUCT-OWNER", reason="Submitter cannot approve own plan",
             )
         approved = self.engine.decide_factory_orchestrator_plan(
             run["id"], plan["planId"], "approved",
