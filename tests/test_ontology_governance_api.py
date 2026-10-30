@@ -87,7 +87,7 @@ class OntologyGovernanceApiTests(unittest.TestCase):
             "actor": "requester", "decision": "approve", "notes": "self approval",
         }, 400)
         self._approve(proposal)
-        result = self._request("POST", f"/api/ontology/governance/proposals/{proposal}/execute", {})
+        result = self._request("POST", f"/api/ontology/governance/proposals/{proposal}/execute", {"actor": "executor", "reason": "activate reviewed baseline"})
         self.assertEqual(result["activeSnapshotId"], first)
         self.assertFalse(result["release"]["formalFileModified"])
         governance = self._request("GET", "/api/ontology/governance")
@@ -97,19 +97,19 @@ class OntologyGovernanceApiTests(unittest.TestCase):
         first = self._snapshot("baseline")
         first_proposal = self._proposal(first)
         self._approve(first_proposal)
-        self._request("POST", f"/api/ontology/governance/proposals/{first_proposal}/execute", {})
+        self._request("POST", f"/api/ontology/governance/proposals/{first_proposal}/execute", {"actor": "executor", "reason": "activate baseline"})
         self._write_ontology("1.1.0", ["Requirement", "Artifact", "Release"])
         second = self._snapshot("additive release")
         second_proposal = self._proposal(second)
         self._approve(second_proposal)
-        self._request("POST", f"/api/ontology/governance/proposals/{second_proposal}/execute", {})
+        self._request("POST", f"/api/ontology/governance/proposals/{second_proposal}/execute", {"actor": "executor", "reason": "activate additive version"})
         rollback = self._proposal(first, action="rollback")
         self._request("POST", f"/api/ontology/governance/proposals/{rollback}/decision", {
             "actor": "reviewer", "decision": "approve", "notes": "rollback review",
             "acceptBreakingChanges": False,
         }, 400)
         self._approve(rollback, accept=True)
-        result = self._request("POST", f"/api/ontology/governance/proposals/{rollback}/execute", {})
+        result = self._request("POST", f"/api/ontology/governance/proposals/{rollback}/execute", {"actor": "executor", "reason": "restore previous snapshot"})
         self.assertEqual(result["activeSnapshotId"], first)
         self.assertEqual(result["release"]["action"], "rollback")
 
@@ -121,7 +121,7 @@ class OntologyGovernanceApiTests(unittest.TestCase):
         state = portal.state_read()
         state["activeOntologySnapshotId"] = "different-snapshot"
         portal.dump(portal.STATE_PATH, state)
-        self._request("POST", f"/api/ontology/governance/proposals/{proposal}/execute", {}, 400)
+        self._request("POST", f"/api/ontology/governance/proposals/{proposal}/execute", {"actor": "executor", "reason": "stale execution"}, 400)
 
 
 if __name__ == "__main__":
