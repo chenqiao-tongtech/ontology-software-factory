@@ -42,7 +42,9 @@ class RemoteRepositoryConnector:
         segments = [part for part in parsed.path.strip("/").split("/") if part]
         if (self.provider == "github" and len(segments) != 2) or (self.provider == "gitlab" and len(segments) < 2):
             raise SourceConnectorError("repository URL path is invalid")
-        token_name = "GITHUB_TOKEN" if self.provider == "github" else "GITLAB_TOKEN"
+        token_name = self.token_env or ("GITHUB_TOKEN" if self.provider == "github" else "GITLAB_TOKEN")
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token_name):
+            raise SourceConnectorError("token environment variable name is invalid")
         token = os.getenv(token_name)
         if self.provider == "github":
             owner, repository = segments
