@@ -238,6 +238,12 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
         except FileNotFoundError:
             self._json(404, {"error": "workflow input not found"})
+        except WorkflowError as exc:
+            self._json(exc.status_code, {"error": str(exc)})
+        except FileNotFoundError as exc:
+            self._json(404, {"error": str(exc)})
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._json(400, {"error": str(exc)})
         except Exception as exc:
             self._json(500, {"error_type": type(exc).__name__, "message": "request failed; raw details omitted"})
 
