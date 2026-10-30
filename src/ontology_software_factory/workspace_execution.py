@@ -67,7 +67,37 @@ class WorkspaceManager:
         target = raw_target.resolve()
         if self.workspace_root not in target.parents:
             raise WorkspacePolicyError("workspace path escaped workspace root")
-        if not target.exists():
+        backend = os.getenv("FACTORY_WORKSPACE_BACKEND", "copy").strip().lower()
+        if backend not in {"copy", "git-worktree"}:
+            raise WorkspacePolicyError("workspace backend must be copy or git-worktree")
+        if backend == "git-worktree":
+            git = shutil.which("git")
+            if not git:
+                raise WorkspacePolicyError("git-worktree backend requires the Git CLI")
+            root_result = subprocess.run(
+                [git, "-C", str(self.project_root), "rev-parse", "--show-toplevel"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, timeout=15, shell=False, check=False,
+            )
+            if root_result.returncode != 0 or Path(root_result.stdout.strip()).resolve() != self.project_root:
+                raise WorkspacePolicyError("git-worktree backend requires project_root to be the Git repository root")
+            branch_name = f"agent/run-{run_id.lower()}"
+            if not target.exists():
+                proc = subprocess.run(
+                    [git, "-C", str(self.project_root), "worktree", "add", "-b", branch_name, str(target), "HEAD"],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, timeout=60, shell=False, check=False,
+                )
+                if proc.returncode != 0:
+                    raise WorkspacePolicyError("cannot create isolated Git worktree: " + proc.stdout[-2000:])
+            current = subprocess.run(
+                [git, "-C", str(target), "branch", "--show-current"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, timeout=15, shell=False, check=False,
+            )
+            if current.returncode != 0 or current.stdout.strip() != branch_name:
+                raise WorkspacePolicyError("existing run workspace does not match its expected local branch")
+        elif not target.exists():
             shutil.copytree(
                 self.project_root, target,
                 ignore=shutil.ignore_patterns(*IGNORE_NAMES, "*.pyc", "*.sqlite3", "*.log"),
@@ -76,6 +106,14 @@ class WorkspaceManager:
         if target.is_symlink() or not target.is_dir():
             raise WorkspacePolicyError("workspace root is not a regular directory")
         return target
+
+    def describe(self, run_id: str) -> dict[str, Any]:
+        backend = os.getenv("FACTORY_WORKSPACE_BACKEND", "copy").strip().lower()
+        if backend == "git-worktree":
+            return {"backend": "git-worktree", "branch": f"agent/run-{run_id.lower()}",
+                    "pushEnabled": False, "mergeEnabled": False}
+        return {"backend": "repository-copy", "branch": None,
+                "pushEnabled": False, "mergeEnabled": False}
 
 
 class WorkspaceExecution:
