@@ -108,9 +108,12 @@ function renderPlatformObservability(){
    ? '工作流运行：'+esc(real.workflowRuns?.total??0)+' · Worker 任务：'+esc(real.workerTasks?.total??0)
    : '未连接：'+esc(real.reason||'数据库不可用')+' · 可通过 FACTORY_AGENT_WORKFLOW_DB 配置只读数据库路径';
  const realStatus='Workflow 状态：'+esc(JSON.stringify(real.workflowRuns?.byStatus||{}))+' · Worker 状态：'+esc(JSON.stringify(real.workerTasks?.byStatus||{}));
+ const harness=p.harnessAudit||{},connectors=p.connectorAudit||{};
+ const auditPanel='<div class="panel-title" style="margin-top:16px">Harness / Connector 执行审计</div><div class="grid2" style="margin-top:8px"><div class="panel"><b>Harness 工具调用</b><div class="stat-num" style="font-size:21px">'+esc(harness.available?harness.total:'未连接')+'</div><div class="small-note">状态：'+esc(JSON.stringify(harness.byStatus||{}))+'</div><div class="small-note">工具：'+esc(JSON.stringify(harness.byOperation||{}))+'</div></div><div class="panel"><b>本体数据源连接器</b><div class="stat-num" style="font-size:21px">'+esc(connectors.available?connectors.total:'未连接')+'</div><div class="small-note">状态：'+esc(JSON.stringify(connectors.byStatus||{}))+'</div><div class="small-note">连接器：'+esc(JSON.stringify(connectors.byOperation||{}))+'</div></div></div>';
  root.innerHTML=cardsHtml
   +'<div class="grid2" style="margin-top:12px"><div><div class="panel-title" style="margin-bottom:8px">Portal Agent Runtime 状态分布</div><div class="list">'+agentStatusHtml+'</div><div class="small-note" style="margin-top:8px">运行模式：'+esc(JSON.stringify(agents.byRuntimeMode||{}))+'</div><div class="panel-title" style="margin:14px 0 8px">质量门禁</div><div class="small-note">状态分布：'+esc(JSON.stringify(quality.byStatus||{}))+' · 阻断 '+esc(summary.qualityBlocked??0)+' · 不完整 '+esc(summary.qualityIncomplete??0)+'</div></div><div><div class="panel-title" style="margin-bottom:8px">最近 Portal Agent 运行</div><div class="list">'+recentAgentHtml+'</div></div></div>'
   +'<div class="panel-title" style="margin-top:16px">真实 Agent Workflow / Worker Runtime</div><div class="grid2" style="margin-top:8px"><div><div class="small-note">'+realSummary+'</div><div class="small-note">'+realStatus+'</div></div><div class="list">'+realRunHtml+'</div></div>'
+  +auditPanel
   +'<div class="small-note" style="margin-top:12px">费用仅在配置模型单价时估算；未配置费率显示“未知”。真实 Agent Workflow 数据通过 SQLite 只读查询读取；本地 Fixture 运行单独统计。此页面仍不是分布式生产遥测平台。</div>';
 }
 function eventHtml(e){return `<div class="event"><div class="event-dot"></div><div><b>${esc(e.summary||e.type)}</b><p>${esc(e.type||'event')} · ${esc(e.eventId||'')}</p><time>${fmtTime(e.at)}</time></div></div>`}
