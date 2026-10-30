@@ -3,20 +3,27 @@
   "defaultDeny": true,
   "roles": {
     "requirement-analyst": [
-      "documents.read",
       "catalog.read",
-      "contract.validate"
+      "contract.validate",
+      "documents.read",
+      "ontology.definition.read",
+      "source.catalog.read"
     ],
     "solution-architect": [
       "architecture.plan.write",
       "catalog.read",
       "contract.validate",
+      "dependencies.inspect",
       "documents.read",
+      "ontology.definition.read",
       "workspace.read"
     ],
     "implementation-agent": [
       "catalog.read",
+      "dependencies.inspect",
+      "ontology.definition.read",
       "repository.branch.write",
+      "source.catalog.read",
       "tests.run",
       "workspace.read",
       "workspace.write.candidate"
@@ -24,24 +31,36 @@
     "test-agent": [
       "contract.validate",
       "documents.read",
+      "source.catalog.read",
       "tests.run",
       "workspace.read"
     ],
     "security-reviewer": [
       "catalog.read",
       "contract.validate",
+      "dependencies.inspect",
       "documents.read",
-      "security.scan"
+      "security.scan",
+      "source.catalog.read"
     ],
     "release-coordinator": [
       "catalog.read",
       "contract.validate",
+      "dependencies.inspect",
       "release.simulation.promote"
     ],
     "ops-support": [
       "documents.read",
       "catalog.read",
       "tests.run"
+    ],
+    "ontology-discovery-agent": [
+      "ontology.definition.read",
+      "source.catalog.read"
+    ],
+    "ontology-critic-agent": [
+      "ontology.definition.read",
+      "source.catalog.read"
     ]
   },
   "productionToolsRequireApproval": [
