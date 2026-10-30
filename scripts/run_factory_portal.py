@@ -511,6 +511,34 @@ def available_scanners() -> list[dict]:
         ("semgrep", "代码静态分析"), ("gitleaks", "密钥泄漏扫描"), ("trivy", "依赖/镜像/配置扫描")]]
 
 
+def scanner_report_status(name: str, report: object) -> tuple[str, int]:
+    """Return clean/findings/incomplete from a scanner's machine-readable report."""
+    if name == "semgrep":
+        if not isinstance(report, dict) or not isinstance(report.get("results"), list):
+            return "incomplete", 0
+        if report.get("errors"):
+            return "incomplete", 0
+        return ("findings" if report["results"] else "clean", len(report["results"]))
+    if name == "gitleaks":
+        if not isinstance(report, list):
+            return "incomplete", 0
+        return ("findings" if report else "clean", len(report))
+    if name == "trivy":
+        if not isinstance(report, dict) or not isinstance(report.get("Results"), list):
+            return "incomplete", 0
+        count = 0
+        for result in report["Results"]:
+            if not isinstance(result, dict):
+                return "incomplete", 0
+            for key in ("Vulnerabilities", "Misconfigurations", "Secrets"):
+                entries = result.get(key) or []
+                if not isinstance(entries, list):
+                    return "incomplete", 0
+                count += len(entries)
+        return ("findings" if count else "clean", count)
+    return "incomplete", 0
+
+
 def run_quality(checks: list[str]) -> dict:
     run_id = "quality-" + uuid.uuid4().hex[:10]
     results = []
@@ -551,12 +579,29 @@ def run_quality(checks: list[str]) -> dict:
                 proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=180)
                 # Keep a bounded console excerpt; scanner output may contain source snippets.
                 summary = (proc.stderr or proc.stdout or "").strip()[-1200:]
-                results.append({"id": name, "kind": "security-scan", "status": "completed" if proc.returncode == 0 else "findings-or-error", "exitCode": proc.returncode, "durationSeconds": round(time.monotonic()-start, 3), "reportPath": str(report_path.relative_to(ROOT)) if report_path.exists() else None, "reportPresent": report_path.exists(), "summary": summary or "Scanner exited without console summary; inspect report if present."})
+                report_state, finding_count = ("incomplete", 0)
+                if report_path.is_file():
+                    try:
+                        parsed_report = json.loads(report_path.read_text(encoding="utf-8"))
+                        report_state, finding_count = scanner_report_status(name, parsed_report)
+                    except (OSError, json.JSONDecodeError):
+                        report_state = "incomplete"
+                if proc.returncode != 0:
+                    scan_status = "findings" if report_state == "findings" else "findings-or-error"
+                elif report_state == "findings":
+                    scan_status = "findings"
+                elif report_state == "clean":
+                    scan_status = "completed"
+                else:
+                    scan_status = "incomplete"
+                results.append({"id": name, "kind": "security-scan", "status": scan_status, "exitCode": proc.returncode, "durationSeconds": round(time.monotonic()-start, 3), "reportPath": str(report_path.relative_to(ROOT)) if report_path.exists() else None, "reportPresent": report_path.exists(), "reportParsed": report_state != "incomplete", "findingCount": finding_count, "summary": summary or "Scanner completed; machine-readable report was evaluated."})
             except subprocess.TimeoutExpired:
                 results.append({"id": name, "kind": "security-scan", "status": "timeout", "exitCode": None, "durationSeconds": round(time.monotonic()-start, 3), "summary": "Scanner timed out"})
     passed = sum(1 for r in results if r["status"] == "passed")
-    failed = sum(1 for r in results if r["status"] in {"failed", "timeout", "findings-or-error"})
-    report = {"runId": run_id, "createdAt": now_iso(), "status": "failed" if failed else ("passed" if all(r["status"] in {"passed", "completed"} for r in results) and results else "incomplete"), "passed": passed, "failedOrNeedsReview": failed, "results": results, "scanners": available_scanners(), "note": "Scanner completed is not the same as zero findings. Always inspect the actual scanner report and policy before release."}
+    failed = sum(1 for r in results if r["status"] in {"failed", "timeout", "findings-or-error", "findings"})
+    incomplete = sum(1 for r in results if r["status"] in {"not-installed", "incomplete", "rejected"})
+    overall_status = "failed" if failed else ("incomplete" if incomplete or not results else "passed")
+    report = {"runId": run_id, "createdAt": now_iso(), "status": overall_status, "passed": passed, "failedOrNeedsReview": failed, "incomplete": incomplete, "results": results, "scanners": available_scanners(), "note": "Security scans pass only when the report is present, parseable, and contains zero findings; missing or malformed reports block release."}
     def change(state):
         state.setdefault("qualityRuns", []).insert(0, report)
         state["qualityRuns"] = state["qualityRuns"][:30]
