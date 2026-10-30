@@ -348,6 +348,7 @@ class OpenAIAgentsRuntime:
             ),
             kill_switch_path=os.getenv("FACTORY_HARNESS_KILL_SWITCH") or None,
             usage_store=self.usage_store, policy_version=registry.policy_version,
+            policy_digest=registry.policy_digest,
         )
         principal = HarnessPrincipal(
             principal_id=task_id, role_id=role_id,
