@@ -265,7 +265,7 @@ class WorkspaceExecution:
         return result
 
     def _run_container_command(
-        self, argv: list[str], *, timeout_seconds: int, image: str = "python:3.11-slim"
+        self, argv: list[str], *, timeout_seconds: int, image: str = "ontology-software-factory-test-runner:py311-v1"
     ) -> tuple[int, str, bool, str]:
         docker = shutil.which("docker")
         if not docker:
