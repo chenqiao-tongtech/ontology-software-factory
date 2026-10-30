@@ -12,6 +12,7 @@ from .ontology_discovery import (
     OntologyDiscoveryError,
     OntologyDiscoveryPipeline,
     SourceMaterial,
+    approve_candidate,
     candidate_digest,
     evaluate_candidate,
     save_candidate,
