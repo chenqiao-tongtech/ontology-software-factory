@@ -367,6 +367,7 @@ def build_agent_result_contract(
             "summary": f"{item.get('type', 'evidence')} SHA-256 {item.get('sha256', '')}",
         } for item in evidence if item.get("uri")],
         "humanReviewRequired": True,
+        "blockedReasons": [str(output.get("rationale") or "Agent stage was blocked by its review policy")] if status == "blocked" else [],
         "errors": [],
         "completedAt": completed_at,
     }
