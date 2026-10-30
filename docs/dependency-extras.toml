@@ -1,5 +1,9 @@
-# Merge into the existing [project.optional-dependencies] block in your repository.
-# Do not replace your project's whole pyproject.toml just to add these extras.
+# Optional dependency reference (synchronized with the root pyproject.toml).
+# The root pyproject.toml is authoritative. Update both files when dependency
+# constraints change; this file is documentation/reference, not an install manifest.
+
 [project.optional-dependencies]
-llm = ["openai>=3.0.0,<4"]
-agent-runtime = ["openai>=3.0.0,<4", "openai-agents>=0.21.0,<1", "pydantic>=2.8,<3"]
+llm = ["openai>=1.99,<4"]
+agent-runtime = ["openai>=1.99,<4", "openai-agents>=0.4,<1"]
+postgres = ["psycopg[binary]>=3.2,<4"]
+mysql = ["PyMySQL>=1.1,<2"]
