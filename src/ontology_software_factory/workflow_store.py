@@ -441,6 +441,65 @@ class SQLiteWorkflowStore:
                 self._conn.rollback()
                 raise
 
+    def retry_factory_plan_phase(
+        self, *, run_id: str, plan_id: str, phase_id: str, actor: str,
+        reason: str, event: dict[str, Any], max_attempts: int = 3,
+    ) -> dict[str, Any]:
+        actor = str(actor).strip()
+        reason = str(reason).strip()
+        if not actor or actor.casefold() == "factory-orchestrator":
+            raise ValueError("an independent operator actor is required for Phase retry")
+        if not reason:
+            raise ValueError("Phase retry requires an auditable reason")
+        with self._lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                row = self._conn.execute(
+                    "SELECT status,attempt FROM factory_plan_phases WHERE plan_id=? AND phase_id=? AND run_id=?",
+                    (plan_id, phase_id, run_id),
+                ).fetchone()
+                if row is None:
+                    self._conn.rollback()
+                    raise ValueError("Factory Plan Phase not found")
+                if row["status"] != "failed":
+                    self._conn.rollback()
+                    raise ValueError(f"only a failed Phase can be retried; current status is {row['status']}")
+                if int(row["attempt"]) >= int(max_attempts):
+                    self._conn.rollback()
+                    raise ValueError(f"Factory Plan Phase reached its {max_attempts}-attempt retry limit")
+                approval = self._conn.execute(
+                    "SELECT status,requested_by FROM factory_plan_approvals WHERE plan_id=? AND run_id=?",
+                    (plan_id, run_id),
+                ).fetchone()
+                if approval is None or approval["status"] != "approved":
+                    self._conn.rollback()
+                    raise ValueError("an approved Factory Plan is required before Phase retry")
+                if actor.casefold() == str(approval["requested_by"]).strip().casefold():
+                    self._conn.rollback()
+                    raise ValueError("Plan submitter cannot authorize its own Phase retry")
+                next_attempt = int(row["attempt"]) + 1
+                self._conn.execute(
+                    "UPDATE factory_plan_phases SET status='pending',attempt=?,started_at=NULL,finished_at=NULL,"
+                    "error_json='{}',updated_at=? WHERE plan_id=? AND phase_id=?",
+                    (next_attempt, event["at"], plan_id, phase_id),
+                )
+                self._insert_event(run_id, {
+                    **event, "actor": actor,
+                    "payload": {
+                        **event.get("payload", {}), "planId": plan_id, "phaseId": phase_id,
+                        "previousAttempt": int(row["attempt"]), "attempt": next_attempt,
+                        "reason": reason,
+                    },
+                })
+                self._conn.commit()
+            except ValueError:
+                raise
+            except Exception:
+                self._conn.rollback()
+                raise
+        return next(item for item in self.list_factory_plan_phases(run_id, plan_id)
+                    if item["phaseId"] == phase_id)
+
     def record_harness_usage(
         self, *, event_id: str, run_id: str, task_id: str, event_type: str,
         policy_version: str, occurred_at: str, policy_digest: str = "unknown", tool_calls: int = 0,
@@ -543,6 +602,7 @@ class SQLiteWorkflowStore:
         self, *, run_id: str, plan_id: str, assignment_id: str, task_id: str,
         status: str, output: dict[str, Any], evidence: list[dict[str, Any]],
         error: dict[str, Any], event_id: str, event: dict[str, Any],
+        phase_attempt: int = 1,
     ) -> bool:
         """Atomically persist a Factory Assignment result, workflow event and inbox receipt."""
         if status not in {"succeeded", "failed", "dead_letter"}:
@@ -563,17 +623,24 @@ class SQLiteWorkflowStore:
                 if plan is None:
                     self._conn.rollback()
                     raise ValueError("Factory Assignment result references an unknown plan or Workflow Run")
+                phase_row = self._conn.execute(
+                    "SELECT attempt FROM factory_plan_phases WHERE plan_id=? AND phase_id=? AND run_id=?",
+                    (plan_id, event.get("payload", {}).get("phaseId"), run_id),
+                ).fetchone()
+                if phase_row is None or int(phase_row["attempt"]) != int(phase_attempt):
+                    self._conn.rollback()
+                    raise ValueError("Factory Assignment result belongs to a stale or unknown Phase attempt")
                 self._conn.execute(
                     """INSERT INTO factory_assignment_results(
-                        plan_id,assignment_id,run_id,task_id,status,output_json,evidence_json,error_json,event_id,updated_at
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                        plan_id,assignment_id,run_id,task_id,status,output_json,evidence_json,error_json,event_id,updated_at,phase_attempt
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(plan_id,assignment_id) DO UPDATE SET
                         task_id=excluded.task_id,status=excluded.status,output_json=excluded.output_json,
                         evidence_json=excluded.evidence_json,error_json=excluded.error_json,
-                        event_id=excluded.event_id,updated_at=excluded.updated_at""",
+                        event_id=excluded.event_id,updated_at=excluded.updated_at,phase_attempt=excluded.phase_attempt""",
                     (plan_id, assignment_id, run_id, task_id, status,
                      json.dumps(output, ensure_ascii=False), json.dumps(evidence, ensure_ascii=False),
-                     json.dumps(error, ensure_ascii=False), event_id, event["at"]),
+                     json.dumps(error, ensure_ascii=False), event_id, event["at"], int(phase_attempt)),
                 )
                 self._insert_event(run_id, event)
                 self._conn.execute(
@@ -591,8 +658,8 @@ class SQLiteWorkflowStore:
                     statuses = []
                     for assignment in phase_payload.get("assignments", []):
                         status_row = self._conn.execute(
-                            "SELECT status FROM factory_assignment_results WHERE plan_id=? AND assignment_id=?",
-                            (plan_id, assignment["assignmentId"]),
+                            "SELECT status FROM factory_assignment_results WHERE plan_id=? AND assignment_id=? AND phase_attempt=?",
+                            (plan_id, assignment["assignmentId"], int(phase_attempt)),
                         ).fetchone()
                         statuses.append(status_row["status"] if status_row else "pending")
                     terminal_statuses = {"succeeded", "failed", "dead_letter"}
@@ -603,22 +670,24 @@ class SQLiteWorkflowStore:
                         else "running"
                     )
                     old_phase = self._conn.execute(
-                        "SELECT status FROM factory_plan_phases WHERE plan_id=? AND phase_id=?",
+                        "SELECT status,started_at,attempt FROM factory_plan_phases WHERE plan_id=? AND phase_id=?",
                         (plan_id, phase_id),
                     ).fetchone()
                     if old_phase and old_phase["status"] != phase_status:
+                        finished_at = event["at"] if phase_status in {"succeeded", "failed"} else None
+                        started_at = old_phase["started_at"] or event["at"]
                         self._conn.execute(
-                            "UPDATE factory_plan_phases SET status=?,finished_at=?,error_json=?,updated_at=? "
-                            "WHERE plan_id=? AND phase_id=?",
-                            (phase_status, event["at"],
+                            "UPDATE factory_plan_phases SET status=?,started_at=?,finished_at=?,error_json=?,updated_at=? "
+                            "WHERE plan_id=? AND phase_id=? AND attempt=?",
+                            (phase_status, started_at, finished_at,
                              json.dumps(error, ensure_ascii=False) if phase_status == "failed" else "{}",
-                             event["at"], plan_id, phase_id),
+                             event["at"], plan_id, phase_id, int(phase_attempt)),
                         )
                         self._insert_event(run_id, {
                             **event, "action": f"factory.phase.{phase_status}",
                             "summary": f"Factory Phase {phase_id} is {phase_status}",
                             "payload": {"planId": plan_id, "phaseId": phase_id,
-                                        "assignmentStatuses": statuses},
+                                        "assignmentStatuses": statuses, "attempt": int(phase_attempt)},
                         })
                 self._conn.commit()
                 return True
@@ -628,7 +697,7 @@ class SQLiteWorkflowStore:
 
     def list_factory_assignment_results(self, run_id: str, plan_id: str | None = None) -> list[dict[str, Any]]:
         query = (
-            "SELECT plan_id,assignment_id,run_id,task_id,status,output_json,evidence_json,error_json,event_id,updated_at "
+            "SELECT plan_id,assignment_id,run_id,task_id,status,output_json,evidence_json,error_json,event_id,updated_at,phase_attempt "
             "FROM factory_assignment_results WHERE run_id=?"
         )
         params: tuple[Any, ...] = (run_id,)
@@ -644,6 +713,7 @@ class SQLiteWorkflowStore:
             "status": row["status"], "output": json.loads(row["output_json"]),
             "evidence": json.loads(row["evidence_json"]), "error": json.loads(row["error_json"]),
             "eventId": row["event_id"], "updatedAt": row["updated_at"],
+            "phaseAttempt": int(row["phase_attempt"]),
         } for row in rows]
 
     def has_processed_integration_event(self, event_id: str) -> bool:
