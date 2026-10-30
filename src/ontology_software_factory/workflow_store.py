@@ -123,6 +123,28 @@ class SQLiteWorkflowStore:
             self._conn.execute(
                 "ALTER TABLE harness_usage_events ADD COLUMN policy_digest TEXT NOT NULL DEFAULT 'unknown'"
             )
+        # Backfill approval and Phase rows for plans created before these tables existed.
+        legacy_plans = self._conn.execute(
+            "SELECT plan_id,run_id,payload_sha256,payload_json,created_at FROM factory_orchestrator_plans"
+        ).fetchall()
+        for legacy in legacy_plans:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO factory_plan_approvals("
+                "plan_id,run_id,plan_digest,status,requested_at,requested_by"
+                ") VALUES(?,?,?,'pending',?,'factory-orchestrator')",
+                (legacy["plan_id"], legacy["run_id"], legacy["payload_sha256"], legacy["created_at"]),
+            )
+            try:
+                legacy_plan = json.loads(legacy["payload_json"])
+            except (TypeError, json.JSONDecodeError):
+                continue
+            for phase in legacy_plan.get("phases", []) if isinstance(legacy_plan, dict) else []:
+                if isinstance(phase, dict) and phase.get("phaseId"):
+                    self._conn.execute(
+                        "INSERT OR IGNORE INTO factory_plan_phases(plan_id,phase_id,run_id,status,updated_at) "
+                        "VALUES(?,?,?,'pending',?)",
+                        (legacy["plan_id"], phase["phaseId"], legacy["run_id"], legacy["created_at"]),
+                    )
         self._conn.commit()
 
     def close(self) -> None:
