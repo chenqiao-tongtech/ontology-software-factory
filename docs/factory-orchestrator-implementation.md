@@ -1,7 +1,7 @@
-# Factory Orchestrator and Modular Ontology: implementation increment 1
+# Factory Orchestrator and Modular Ontology: implementation increment 2
 
 **Date:** 2026-10-30  
-**Status:** committed foundation contracts; runtime orchestration integration remains pending.
+**Status:** validated plan intake and immutable Workflow Run persistence are implemented; assignment-level Worker task instantiation remains pending.
 
 ## Delivered
 
@@ -13,6 +13,14 @@
 - Added a typed Pydantic output model to the optional Agent Runtime model registry.
 - Added a read-only tool allowlist. The role cannot dispatch tasks, mutate Workflow state, grant permissions, approve its own plan, publish ontology, merge protected branches or deploy production.
 - Added deterministic validation for phase dependencies, cycles, Role/Skill registration, output entity types, assignment counts, parallelism and topology limits.
+
+### Persistent plan intake
+
+- Added a `factory_orchestrator_plans` SQLite table with immutable plan payload, canonical SHA-256 digest, plan ID uniqueness and Workflow Run association.
+- Added `WorkflowEngine.submit_factory_orchestrator_plan()`: verifies the target Run, checks the plan Run ID, validates against the Run-pinned ontology binding, and persists the plan plus `factory.plan.submitted` event in one SQLite transaction.
+- Repeated submission of the same `planId` and identical payload is idempotent. Reusing the ID with a different Run or payload is rejected.
+- Added `POST /api/runs/{runId}/orchestrator-plan`; `GET /api/runs/{runId}` now includes `orchestratorPlans`.
+- Added tests for valid persistence, Run/ontology mismatch, idempotent replay and plan-ID payload conflicts.
 
 ### Ontology module baseline
 
@@ -37,7 +45,7 @@ make test
 
 ## Explicit implementation boundaries
 
-This increment does **not** yet connect the orchestrator role to the persistent Workflow Engine. The plan validator is a deterministic intake primitive and CI contract check; it does not create Workflow Steps, dispatch Workers, execute tools or persist an AgentPlan. The existing agent proposal workflow continues to use its current fixed stage sequence.
+The `factory-orchestrator` Agent Role is not yet automatically invoked by the workflow console. The current increment provides an API intake path for a submitted plan and persists the validated plan with the Workflow Run. It does **not** yet instantiate assignment-level Worker tasks, schedule phase dependencies, execute dynamically selected Roles/Skills, or replace the existing fixed agent-proposal stage sequence. Plan submission is a recorded planning artifact; it is not an approval or authorization to execute.
 
 The ontology module manifest is not yet a module package manager. It does not independently publish module releases, resolve external module dependencies, migrate instances or update a graph database. Existing ontology snapshots, digest approvals and consumer-impact analysis remain the operational governance mechanisms.
 
