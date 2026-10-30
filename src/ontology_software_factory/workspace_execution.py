@@ -517,7 +517,41 @@ class WorkspaceExecution:
                   "reportPath": report_path.relative_to(self.root).as_posix() if report_path.is_file() else None,
                   "sandbox": sandbox}
         evidence = self._write_evidence("security", scanner_id, report, output)
-        result = {**report, "evidence": evidence, "findings": parsed if status == "findings" else None}
+        finding_summary: list[dict[str, Any]] = []
+        if status == "findings" and scanner_id == "semgrep" and isinstance(parsed, dict):
+            for item in (parsed.get("results") or [])[:20]:
+                extra = item.get("extra") or {}
+                finding_summary.append({
+                    "ruleId": item.get("check_id"), "path": item.get("path"),
+                    "line": (item.get("start") or {}).get("line"),
+                    "severity": extra.get("severity"), "message": str(extra.get("message", ""))[:500],
+                })
+        elif status == "findings" and scanner_id == "gitleaks" and isinstance(parsed, list):
+            for item in parsed[:20]:
+                finding_summary.append({
+                    "ruleId": item.get("RuleID"), "path": item.get("File"),
+                    "line": item.get("StartLine"), "description": str(item.get("Description", ""))[:300],
+                })
+        elif status == "findings" and scanner_id == "trivy" and isinstance(parsed, dict):
+            for item in parsed.get("Results") or []:
+                for field, id_field in (("Vulnerabilities", "VulnerabilityID"),
+                                         ("Misconfigurations", "ID"), ("Secrets", "RuleID")):
+                    for finding in (item.get(field) or []):
+                        if str(finding.get("Severity", "")).upper() in {"HIGH", "CRITICAL"}:
+                            finding_summary.append({
+                                "id": finding.get(id_field), "target": item.get("Target"),
+                                "severity": finding.get("Severity"),
+                                "title": str(finding.get("Title") or finding.get("Title", ""))[:300],
+                            })
+                        if len(finding_summary) >= 20:
+                            break
+                    if len(finding_summary) >= 20:
+                        break
+                if len(finding_summary) >= 20:
+                    break
+        result = {**report, "evidence": evidence,
+                  "findingCount": len(finding_summary) if status == "findings" else 0,
+                  "findings": finding_summary if status == "findings" else None}
         self.tool_evidence.append(result)
         self.operations.append({"operation": "security.scan", "scannerId": scanner_id,
                                 "status": status, "reportSha256": evidence["reportSha256"]})
