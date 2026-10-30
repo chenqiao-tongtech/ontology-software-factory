@@ -220,6 +220,52 @@
         ],
         "additionalProperties": false
       }
+    },
+    {
+      "toolId": "ontology.definition.read",
+      "description": "读取已批准的本体类与关系元数据",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "conceptName": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "source.catalog.read",
+      "description": "读取已登记连接器的能力和实现状态，不发起外部连接",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "ontology-source",
+              "agent-action"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "dependencies.inspect",
+      "description": "读取项目声明的 Python 依赖与可选依赖",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
     }
   ]
 }
