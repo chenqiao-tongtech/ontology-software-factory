@@ -95,7 +95,8 @@
               "AgentResult",
               "ContextReference",
               "CoordinationDecision",
-              "ReviewDecision"
+              "ReviewDecision",
+              "AgentPlan"
             ]
           },
           "schemaVersion": {
@@ -140,7 +141,8 @@
           "AgentResult",
           "ContextReference",
           "CoordinationDecision",
-          "ReviewDecision"
+          "ReviewDecision",
+          "AgentPlan"
         ]
       },
       "minItems": 1,
