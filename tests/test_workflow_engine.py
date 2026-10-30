@@ -160,7 +160,7 @@ class WorkflowEngineTests(unittest.TestCase):
 
     def test_factory_orchestrator_plan_rejects_run_or_ontology_binding_mismatch(self):
         plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
-        binding = load_active_ontology_binding(ROOT)
+        binding = self.ontology_binding()
         run = self.engine.create_run("主控计划绑定测试", "tester", "test", ontology_binding=binding)
         plan["workflowRunId"] = "RUN-WRONG"
         plan["ontologyBinding"] = {key: binding[key] for key in (
@@ -173,7 +173,7 @@ class WorkflowEngineTests(unittest.TestCase):
 
     def test_factory_orchestrator_plan_id_cannot_be_reused_with_changed_payload(self):
         plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
-        binding = load_active_ontology_binding(ROOT)
+        binding = self.ontology_binding()
         run = self.engine.create_run("主控计划幂等测试", "tester", "test", ontology_binding=binding)
         plan["workflowRunId"] = run["id"]
         plan["ontologyBinding"] = {key: binding[key] for key in (
