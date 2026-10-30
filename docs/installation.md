@@ -200,7 +200,9 @@ make test
 
 需要安装并启动 Docker Engine / Docker Desktop。构建本项目测试镜像：
 
-    docker build -f runners/container/Dockerfile.test-runner -t ontology-software-factory-test-runner:py311-v1 .
+    make docker-test-image
+
+# 等价命令：docker build -f runners/container/Dockerfile.test-runner -t ontology-software-factory-test-runner:py311-v1 .
 
 在 Agent Workflow Console 启动前设置：
 
