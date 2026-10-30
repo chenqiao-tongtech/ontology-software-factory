@@ -74,6 +74,14 @@ class FactoryPortalServiceTests(unittest.TestCase):
         with sqlite3.connect(self.db_path) as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
 
+    def test_graph_workbench_has_focus_filters_and_source_consumer_inspection(self):
+        html = portal.APP.read_text(encoding="utf-8")
+        self.assertIn('id="graphFocusToggle"', html)
+        self.assertIn('id="graphCoreToggle"', html)
+        self.assertIn('id="graphReset"', html)
+        self.assertIn("SOURCE PROVENANCE", html)
+        self.assertIn("REGISTERED CONSUMERS", html)
+
     def test_formal_ontology_graph_has_resolvable_endpoints(self):
         graph = portal.load_ontology()
         names = {node["name"] for node in graph["classes"]}
