@@ -182,6 +182,27 @@ class WorkflowEngineTests(unittest.TestCase):
         self.assertEqual(approved["actor"], "independent-reviewer")
         self.assertEqual(self.engine.get_run_detail(run["id"])["events"][-1]["action"], "factory.plan.approved")
 
+    def test_plan_submitter_cannot_approve_own_plan(self):
+        plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
+        binding = self.ontology_binding()
+        run = self.engine.create_run("Plan separation-of-duties test", "tester", "test", ontology_binding=binding)
+        plan["workflowRunId"] = run["id"]
+        plan["ontologyBinding"] = {key: binding[key] for key in (
+            "snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion"
+        )}
+        self.engine.submit_factory_orchestrator_plan(run["id"], plan, actor="product-owner")
+        with self.assertRaises(WorkflowError):
+            self.engine.decide_factory_orchestrator_plan(
+                run["id"], plan["planId"], "approved",
+                actor="product-owner", reason="Submitter cannot approve own plan",
+            )
+        approved = self.engine.decide_factory_orchestrator_plan(
+            run["id"], plan["planId"], "approved",
+            actor="independent-reviewer", reason="Independent review completed",
+        )
+        self.assertEqual(approved["status"], "approved")
+        self.assertEqual(approved["requestedBy"], "product-owner")
+
     def test_factory_orchestrator_plan_rejects_run_or_ontology_binding_mismatch(self):
         plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
         binding = self.ontology_binding()
