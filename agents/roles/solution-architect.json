@@ -16,11 +16,13 @@
     "architecture-plan"
   ],
   "toolIds": [
-    "catalog.read",
-    "documents.read",
-    "workspace.read",
     "architecture.plan.write",
-    "contract.validate"
+    "catalog.read",
+    "contract.validate",
+    "dependencies.inspect",
+    "documents.read",
+    "ontology.definition.read",
+    "workspace.read"
   ],
   "allowedActions": [
     "requirement.read",
