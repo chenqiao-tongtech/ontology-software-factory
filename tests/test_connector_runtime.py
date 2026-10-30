@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from ontology_software_factory.connector_catalog import ConnectorCatalog, ConnectorPolicyError
+from ontology_software_factory.api_contract_connectors import OpenAPIJsonConnector
 from ontology_software_factory.connector_runtime import (
     ConnectorPrincipal, ConnectorRuntime, ConnectorRuntimeDenied,
     ConnectorRuntimeUnavailable, SourceBinding
@@ -65,6 +66,26 @@ class ConnectorRuntimeTests(unittest.TestCase):
         binding = SourceBinding("source-2", "source.confluence", "tenant-a", "space", approved=True)
         with self.assertRaises(ConnectorPolicyError):
             self.runtime.scan_source(self.principal, binding)
+
+
+    def test_openapi_contract_adapter_runs_through_connector_runtime(self):
+        with tempfile.TemporaryDirectory() as source_dir:
+            path = Path(source_dir) / "openapi.json"
+            path.write_text(json.dumps({
+                "openapi": "3.0.3", "info": {"title": "Orders", "version": "1"},
+                "paths": {"/orders": {"get": {"operationId": "listOrders", "responses": {"200": {}}}}}
+            }), encoding="utf-8")
+            runtime = ConnectorRuntime(
+                catalog=self.catalog,
+                source_adapters={"source.openapi": OpenAPIJsonConnector([source_dir])},
+                audit_path=self.audit,
+            )
+            binding = SourceBinding(
+                "api-source", "source.openapi", "tenant-a", str(path),
+                operation="parse.openapi",
+            )
+            result = runtime.scan_source(self.principal, binding)
+            self.assertTrue(any(item["kind"] == "api-operation" for item in result["assets"]))
 
     def test_declared_connector_without_adapter_is_unavailable(self):
         runtime = ConnectorRuntime(catalog=self.catalog, source_adapters={}, audit_path=self.audit)
