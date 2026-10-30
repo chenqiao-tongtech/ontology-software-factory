@@ -132,6 +132,94 @@
         ],
         "additionalProperties": false
       }
+    },
+    {
+      "toolId": "workspace.read",
+      "description": "Read a bounded file from the run-scoped isolated workspace",
+      "riskClass": "low",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "relativePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "relativePath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "repository.branch.write",
+      "description": "Write a candidate file into an isolated run workspace; no Git push or merge",
+      "riskClass": "bounded-write",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "relativePath": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "relativePath",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "architecture.plan.write",
+      "description": "Write an architecture or ADR draft into the isolated workspace",
+      "riskClass": "bounded-write",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "relativePath": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "relativePath",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "toolId": "security.scan",
+      "description": "Run one fixed allowlisted scanner and return report evidence",
+      "riskClass": "bounded-execution",
+      "approvalRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scannerId": {
+            "type": "string",
+            "enum": [
+              "semgrep",
+              "gitleaks",
+              "trivy"
+            ]
+          }
+        },
+        "required": [
+          "scannerId"
+        ],
+        "additionalProperties": false
+      }
     }
   ]
 }
