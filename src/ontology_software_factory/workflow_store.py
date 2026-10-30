@@ -74,6 +74,7 @@ class SQLiteWorkflowStore:
                 error_json TEXT NOT NULL,
                 event_id TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                phase_attempt INTEGER NOT NULL DEFAULT 1,
                 PRIMARY KEY(plan_id, assignment_id)
             );
             CREATE INDEX IF NOT EXISTS idx_factory_assignment_results_run
@@ -89,6 +90,7 @@ class SQLiteWorkflowStore:
                 plan_id TEXT NOT NULL, phase_id TEXT NOT NULL, run_id TEXT NOT NULL,
                 status TEXT NOT NULL, started_at TEXT, finished_at TEXT,
                 error_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL,
+                attempt INTEGER NOT NULL DEFAULT 1,
                 PRIMARY KEY(plan_id, phase_id)
             );
             CREATE INDEX IF NOT EXISTS idx_factory_plan_phases_run
@@ -109,6 +111,20 @@ class SQLiteWorkflowStore:
             CREATE INDEX IF NOT EXISTS idx_harness_usage_events_run
               ON harness_usage_events(run_id, occurred_at);
         """)
+        phase_columns = {
+            row["name"] for row in self._conn.execute("PRAGMA table_info(factory_plan_phases)").fetchall()
+        }
+        if "attempt" not in phase_columns:
+            self._conn.execute(
+                "ALTER TABLE factory_plan_phases ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1"
+            )
+        assignment_result_columns = {
+            row["name"] for row in self._conn.execute("PRAGMA table_info(factory_assignment_results)").fetchall()
+        }
+        if "phase_attempt" not in assignment_result_columns:
+            self._conn.execute(
+                "ALTER TABLE factory_assignment_results ADD COLUMN phase_attempt INTEGER NOT NULL DEFAULT 1"
+            )
         approval_columns = {
             row["name"] for row in self._conn.execute("PRAGMA table_info(factory_plan_approvals)").fetchall()
         }
@@ -375,7 +391,7 @@ class SQLiteWorkflowStore:
 
     def list_factory_plan_phases(self, run_id: str, plan_id: str | None = None) -> list[dict[str, Any]]:
         query = (
-            "SELECT plan_id,phase_id,run_id,status,started_at,finished_at,error_json,updated_at "
+            "SELECT plan_id,phase_id,run_id,status,started_at,finished_at,error_json,updated_at,attempt "
             "FROM factory_plan_phases WHERE run_id=?"
         )
         params: tuple[Any, ...] = (run_id,)
@@ -390,6 +406,7 @@ class SQLiteWorkflowStore:
             "workflowRunId": row["run_id"], "status": row["status"],
             "startedAt": row["started_at"], "finishedAt": row["finished_at"],
             "error": json.loads(row["error_json"]), "updatedAt": row["updated_at"],
+            "attempt": int(row["attempt"]),
         } for row in rows]
 
     def mark_factory_phase_running(self, *, run_id: str, plan_id: str, phase_id: str,
