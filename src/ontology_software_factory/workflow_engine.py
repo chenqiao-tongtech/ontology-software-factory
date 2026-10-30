@@ -79,7 +79,8 @@ class WorkflowEngine:
         run = self.get_run(run_id)
         return {"run": run, "events": self.store.get_events(run_id)}
 
-    def create_run(self, title: str, requested_by: str = "local-operator", environment: str = "staging",\n                   ontology_binding: dict[str, Any] | None = None) -> dict[str, Any]:
+    def create_run(self, title: str, requested_by: str = "local-operator", environment: str = "staging",
+                   ontology_binding: dict[str, Any] | None = None) -> dict[str, Any]:
         if ontology_binding is not None:
             from .ontology_runtime import validate_ontology_binding
             ontology_binding = validate_ontology_binding(ontology_binding)
