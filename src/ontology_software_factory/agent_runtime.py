@@ -15,7 +15,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .ontology_runtime import (
-    validate_agent_output, validate_agent_task_contract, validate_ontology_binding,\n    validate_role_ontology_contract,
+    validate_agent_output, validate_agent_task_contract, validate_ontology_binding,
+    validate_role_ontology_contract,
 )
 
 LOGGER = logging.getLogger(__name__)
