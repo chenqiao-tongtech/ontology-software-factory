@@ -227,3 +227,20 @@ Semgrep、Gitleaks、Trivy 目前仍通过本机 CLI 显式调用：
     export FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1
 
 它们尚未迁入 Docker 扫描容器；生产环境应由部署方通过独立隔离扫描服务执行。不要把 Docker 测试执行器误认为扫描器也已容器化。
+
+
+## 11. 容器安全扫描与 Agent 放行门禁
+
+容器扫描模式需要 Docker Engine 和三个预先拉取的 scanner 镜像。生产环境必须使用不可变 digest，不得配置 latest：
+
+    export FACTORY_ENABLE_CONTAINER_SECURITY_SCANS=1
+    export FACTORY_SEMGREP_IMAGE='registry.example/semgrep@sha256:<64位digest>'
+    export FACTORY_GITLEAKS_IMAGE='registry.example/gitleaks@sha256:<64位digest>'
+    export FACTORY_TRIVY_IMAGE='registry.example/trivy@sha256:<64位digest>'
+    export FACTORY_TRIVY_CACHE_DIR='/var/lib/factory/trivy-cache'
+
+镜像需由运维方提前拉取到本机 Docker Engine；运行时不自动 pull。Trivy cache 必须提前填充。Semgrep 使用仓库内 runners/container/semgrep-rules.yml 的离线基础规则。容器扫描对工作区只读、证据目录可写、无网络，并使用资源与权限限制。
+
+如果设置 FACTORY_ENABLE_CONTAINER_SECURITY_SCANS，容器扫描优先于本机 CLI。FACTORY_ENABLE_LOCAL_SECURITY_SCANS 是宿主机扫描回退，不建议用于不可信候选代码。
+
+真实 Agent Workflow 的 security-review 阶段会执行放行门禁：必须同时具备 Docker python-unit-tests、Semgrep、Gitleaks、Trivy 的成功报告和 SHA-256。任一扫描发现会阻断；缺少工具、镜像、Trivy cache 或报告会标记 incomplete，并且不会进入可放行状态。该门禁目前只对 Agent Workflow 的 workspace 证据生效，不替代既有 Kafka 配置包质量门禁。
