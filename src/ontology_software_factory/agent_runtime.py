@@ -46,6 +46,7 @@ class OpenAIAgentsRuntime:
     def __init__(self, *, project_root: str | Path, model: str | None = None,
                  max_turns: int = 8, tracing_enabled: bool | None = None):
         self.project_root = Path(project_root).resolve()
+        self._active_harness_context = ContextVar(f"agent_harness_context_{id(self)}", default=None)
         self.skill_registry = SkillRegistry(self.project_root)
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-6.1-sol")
         self.max_turns = max(1, min(int(max_turns), 20))
@@ -329,6 +330,38 @@ class OpenAIAgentsRuntime:
                 run_id=str(task_input.get("run_id", "")),
             )
         tools_by_id = self._build_tools(self._function_tool, workspace)
+        from .harness import HarnessBudget, HarnessPrincipal, HarnessRuntime
+        from .tool_registry import ToolRegistry
+        task_id = str(task_contract["taskId"])
+        run_id = str(task_input.get("run_id", ""))
+        registry = ToolRegistry(self.project_root, self._tool_handlers)
+        harness = HarnessRuntime(
+            project_root=self.project_root, tool_registry=registry,
+            audit_path=os.getenv("FACTORY_HARNESS_AUDIT", str(self.project_root / ".local-runs/harness-audit.jsonl")),
+            budget=HarnessBudget(
+                max_tool_calls=int(task_contract.get("resourceLimits", {}).get("maxToolCalls", 50)),
+            ),
+            kill_switch_path=os.getenv("FACTORY_HARNESS_KILL_SWITCH") or None,
+        )
+        principal = HarnessPrincipal(
+            principal_id=task_id, role_id=role_id,
+            tenant_id=str(task_contract["tenantId"]),
+            project_id=str(task_contract["projectId"]),
+        )
+        harness_context = harness.assemble_context(
+            principal, run_id=run_id, task_id=task_id,
+            shared={
+                "tenant_id": principal.tenant_id, "project_id": principal.project_id,
+                "task_id": task_id, "ontology_version": binding["ontologyVersion"],
+                "acceptance_criteria": task_input.get("acceptance_criteria", []),
+            },
+            task_local={
+                "source_request_excerpt": str(task_input.get("source_requirement") or task_input.get("objective") or "")[:4000],
+                "candidate_acceptance_criteria": task_input.get("acceptance_criteria", []),
+            },
+            evidence_refs=[str(item) for item in task_input.get("evidence_refs", [])],
+        )
+        harness_token = self._active_harness_context.set((harness, principal, run_id, task_id))
         allowed = self.effective_tool_ids(role_id, set(tools_by_id))
         tools = [tools_by_id[item] for item in allowed]
         unavailable_skill_tools = sorted({
@@ -360,6 +393,8 @@ class OpenAIAgentsRuntime:
             "skills": [{key: skill.get(key) for key in ("skillId", "version", "title", "inputEntityTypes", "outputEntityTypes", "requiredToolIds", "compatibleRoleIds")} for skill in execution_skills],
             "availableToolIds": allowed,
             "unavailableSkillTools": unavailable_skill_tools,
+            "harnessContext": harness_context.fields,
+            "harnessEvidenceRefs": list(harness_context.evidence_refs),
         }
         instructions = (
             f"Role: {role.get('displayName', role_id)}\n"
@@ -399,6 +434,8 @@ class OpenAIAgentsRuntime:
         except Exception as exc:
             LOGGER.error("agent.run.failed role_id=%s error_type=%s", role_id, type(exc).__name__)
             raise
+        finally:
+            self._active_harness_context.reset(harness_token)
         latency_ms = int((time.perf_counter() - started) * 1000)
         LOGGER.info("agent.run.completed role_id=%s latency_ms=%d item_count=%d",
                     role_id, latency_ms, len(getattr(result, "new_items", []) or []))
