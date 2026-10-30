@@ -63,11 +63,12 @@ class OpenAIAgentsRuntime:
         self._function_tool = function_tool
         self._tools_by_id = self._build_tools(function_tool)
 
-    def effective_tool_ids(self, role_id: str) -> list[str]:
+    def effective_tool_ids(self, role_id: str, available_tool_ids: set[str] | None = None) -> list[str]:
         role = self._load_role(role_id)
         declared = role.get("toolIds", [])
+        available = available_tool_ids if available_tool_ids is not None else set(self._tools_by_id)
         return [tool_id for tool_id in declared
-                if tool_id not in ALWAYS_DENIED and tool_id in self._tools_by_id]
+                if tool_id not in ALWAYS_DENIED and tool_id in available]
 
     def _load_role(self, role_id: str) -> dict[str, Any]:
         role_path = self.project_root / "agents" / "roles" / f"{role_id}.json"
@@ -75,7 +76,7 @@ class OpenAIAgentsRuntime:
             raise AgentContractError(f"Unknown role definition: {role_id}")
         return json.loads(role_path.read_text(encoding="utf-8"))
 
-    def _build_tools(self, function_tool: Any) -> dict[str, Any]:
+    def _build_tools(self, function_tool: Any, workspace: WorkspaceExecution | None = None) -> dict[str, Any]:
         @function_tool(name_override="documents_read", description_override=
                        "Read an allowlisted project document under docs/, skills/, workflows/, agents/roles/, contracts/schemas/, or policies/.")
         def documents_read(relative_path: str) -> str:
@@ -114,11 +115,40 @@ class OpenAIAgentsRuntime:
             LOGGER.info("agent.tool.completed tool_id=contract.validate")
             return json.dumps({"valid": True})
 
-        return {
+        tools = {
             "documents.read": documents_read,
             "catalog.read": catalog_read,
             "contract.validate": contract_validate,
         }
+        if workspace is not None:
+            @function_tool(name_override="workspace_read", description_override="Read a bounded file from this workflow run's isolated candidate workspace.")
+            def workspace_read(relative_path: str) -> str:
+                return json.dumps(workspace.read(relative_path), ensure_ascii=False)
+
+            @function_tool(name_override="repository_branch_write", description_override="Write a candidate file only into the isolated run workspace. This does not create or push a Git branch.")
+            def repository_branch_write(relative_path: str, content: str, purpose: str = "candidate code change") -> str:
+                return json.dumps(workspace.write_candidate(relative_path, content, purpose=purpose), ensure_ascii=False)
+
+            @function_tool(name_override="architecture_plan_write", description_override="Write an architecture plan or ADR draft under docs/agent-proposals/ or docs/adr-drafts/ in the isolated workspace.")
+            def architecture_plan_write(relative_path: str, content: str) -> str:
+                return json.dumps(workspace.architecture_plan_write(relative_path, content), ensure_ascii=False)
+
+            @function_tool(name_override="tests_run", description_override="Run one fixed allowlisted test suite in the isolated workspace. Host execution is blocked unless the operator explicitly opts in.")
+            def tests_run(suite_id: str) -> str:
+                return json.dumps(workspace.run_tests(suite_id), ensure_ascii=False)
+
+            @function_tool(name_override="security_scan", description_override="Run one fixed allowlisted security scanner in the isolated workspace. Scanner execution requires operator opt-in.")
+            def security_scan(scanner_id: str) -> str:
+                return json.dumps(workspace.run_security_scan(scanner_id), ensure_ascii=False)
+
+            tools.update({
+                "workspace.read": workspace_read,
+                "repository.branch.write": repository_branch_write,
+                "architecture.plan.write": architecture_plan_write,
+                "tests.run": tests_run,
+                "security.scan": security_scan,
+            })
+        return tools
 
     def _safe_read_path(self, relative_path: str) -> Path:
         posix = PurePosixPath(relative_path)
