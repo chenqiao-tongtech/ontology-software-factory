@@ -1,0 +1,159 @@
+{
+  "manifestVersion": "1.0.0",
+  "ontologyId": "software-factory-core",
+  "ontologyVersion": "1.1.0",
+  "canonicalSource": "ontology/software-factory-ontology.json",
+  "authority": "canonical-source",
+  "modules": [
+    {
+      "moduleId": "foundation-governance",
+      "version": "1.0.0",
+      "description": "Stable identity, workflow planning and ontology governance.",
+      "classes": [
+        "AgentTeam",
+        "AgentRole",
+        "ContextReference",
+        "CoordinationDecision",
+        "ReviewDecision",
+        "FactoryOrchestrator",
+        "AgentPlan",
+        "PlanPhase",
+        "AgentAssignment",
+        "PlanValidationDecision",
+        "OntologyModule",
+        "OntologySnapshot",
+        "OntologyReleaseManifest",
+        "OntologyChangeRequest",
+        "OntologySourceSnapshot",
+        "OntologyExtractionRun"
+      ],
+      "relations": [
+        "containsRole",
+        "dispatchesTask",
+        "handsOffTask",
+        "reviewsCandidate",
+        "proposesPlan",
+        "containsPhase",
+        "assignsRole",
+        "assignmentUsesRole",
+        "assignmentUsesSkill",
+        "validatesPlan",
+        "pinsOntologySnapshot",
+        "containsOntologyModule",
+        "referencesOntologySnapshot",
+        "proposesOntologyChange",
+        "scansSourceSnapshot"
+      ]
+    },
+    {
+      "moduleId": "product-delivery",
+      "version": "1.0.0",
+      "description": "Requirements, products, components, versions and delivery artifacts.",
+      "classes": [
+        "Requirement",
+        "Product",
+        "Component",
+        "Version",
+        "Artifact",
+        "Release"
+      ],
+      "relations": [
+        "targetsProduct",
+        "containsComponent",
+        "currentVersion",
+        "belongsToComponent",
+        "packagesProduct",
+        "releaseEvidence"
+      ]
+    },
+    {
+      "moduleId": "agent-workflow",
+      "version": "1.0.0",
+      "description": "Agent capabilities, tasks, handoffs and persisted workflow runs.",
+      "classes": [
+        "Skill",
+        "AgentTask",
+        "AgentHandoff",
+        "AgentResult",
+        "WorkflowRun"
+      ],
+      "relations": [
+        "usesSkill",
+        "producesCandidate",
+        "instantiatesWorkflow"
+      ]
+    },
+    {
+      "moduleId": "tool-integration",
+      "version": "1.0.0",
+      "description": "Tools, connector operations and external source contracts.",
+      "classes": [
+        "Tool",
+        "ToolInvocation",
+        "Connector",
+        "ConnectorOperation",
+        "SourceSystem",
+        "SourceAsset",
+        "APIContract",
+        "EventSchema"
+      ],
+      "relations": [
+        "invokesTool",
+        "usesToolDefinition",
+        "executesConnectorOperation",
+        "exposesOperation",
+        "connectsSourceSystem",
+        "containsSourceAsset",
+        "describesAPI",
+        "definesEventSchema"
+      ]
+    },
+    {
+      "moduleId": "quality-security",
+      "version": "1.0.0",
+      "description": "Build/test assurance, vulnerabilities and deployment/runtime risk.",
+      "classes": [
+        "Build",
+        "TestRun",
+        "Vulnerability",
+        "Deployment",
+        "Incident"
+      ],
+      "relations": [
+        "buildsComponentVersion",
+        "producesArtifact",
+        "validatesBuild",
+        "testReport",
+        "affectsComponentVersion",
+        "deploysRelease",
+        "incidentContext"
+      ]
+    },
+    {
+      "moduleId": "evidence-provenance",
+      "version": "1.0.0",
+      "description": "Ontology candidates, source evidence, evaluation, review and revision history.",
+      "classes": [
+        "OntologyCandidate",
+        "OntologyTermCandidate",
+        "OntologyRelationCandidate",
+        "OntologyConstraintCandidate",
+        "CompetencyQuestion",
+        "OntologySourceEvidence",
+        "OntologyEvaluation",
+        "OntologyApproval",
+        "OntologyRevision"
+      ],
+      "relations": [
+        "hasTermCandidate",
+        "hasRelationCandidate",
+        "hasConstraintCandidate",
+        "groundedBy",
+        "evaluatedBy",
+        "approvedBy",
+        "promotedAs",
+        "definesCompetencyQuestion"
+      ]
+    }
+  ]
+}
