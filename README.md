@@ -92,7 +92,7 @@ Worker 执行后调用现有 `POST /api/worker/run-once` 和 `POST /api/relay/dr
 
 ### 持久化 Phase 状态
 
-Phase 状态保存在 Workflow SQLite 数据库中，状态包括 `pending`、`running`、`succeeded` 和 `failed`，并记录独立的 Phase attempt。Worker 结果通过事务 Outbox/Workflow Inbox 回写后更新 Phase 状态并追加事件；下游 Phase 只有在所有前置 Phase 成功后才能派发。Worker 自身的瞬时失败由 Task Runtime 自动重试；超过 Worker 重试次数后，独立操作人可通过控制台对失败 Phase 发起最多 3 次 Phase 级重试。每次重试使用新的幂等键和制品目录，旧 attempt 的迟到结果会被忽略。
+Phase 状态保存在 Workflow SQLite 数据库中，状态包括 `pending`、`running`、`succeeded` 和 `failed`，并记录独立的 Phase attempt。Worker 结果通过事务 Outbox/Workflow Inbox 回写后更新 Phase 状态并追加事件；下游 Phase 只有在所有前置 Phase 成功后才能派发。Worker 自身的瞬时失败由 Task Runtime 自动重试；超过 Worker 重试次数后，独立操作人可通过控制台对失败 Phase 发起 Phase 级重试，Phase attempt 总数最多 3 次（初始执行加最多 2 次人工重试）。每次重试使用新的幂等键和制品目录，旧 attempt 的迟到结果会被忽略。
 
 ### Harness Run 级预算与策略版本锁
 
