@@ -66,13 +66,13 @@ class WorkspaceExecutionTests(unittest.TestCase):
         self.assertNotIn("OPENAI_API_KEY", run.call_args.kwargs["env"])
 
     def test_workspace_diff_is_reviewable_and_source_checkout_stays_unchanged(self):
-        self.service.write_candidate("src/module.py", "value = 2\\n")
+        self.service.write_candidate("src/module.py", "value = 2\n")
         result = self.service.diff_patch()
         self.assertEqual(result["status"], "ready")
         self.assertEqual(result["fileCount"], 1)
         self.assertIn("-value = 1", result["patch"])
         self.assertIn("+value = 2", result["patch"])
-        self.assertEqual((self.project / "src" / "module.py").read_text(encoding="utf-8"), "value = 1\\n")
+        self.assertEqual((self.project / "src" / "module.py").read_text(encoding="utf-8"), "value = 1\n")
 
     def test_unknown_test_suite_rejected(self):
         with self.assertRaises(WorkspacePolicyError):
