@@ -36,7 +36,7 @@ make orchestrator-plan
 make ontology-modules
 ```
 
-**实现边界：** Assignment 已进入真实 Worker 队列并可由 Agent Runtime 执行；Phase 依赖与并发上限由调度器控制。Worker 结果通过事务 Outbox/Workflow Inbox 去重回写 Workflow 事件账本，并持久化 Assignment 结果与证据索引。高风险或要求人工审批的计划会被阻止派发。当前 Phase 进度仍由 Worker 任务记录派生，尚未成为独立的 Workflow 状态机；自动触发主控生成计划、跨进程调度协调、独立审批服务及 Harness Tool Gateway 全量接管仍待完成。现有 Agent Proposal Workflow 保持独立。本体模块清单仍是单一权威本体 JSON 的逻辑分组。详细范围见 [实现说明](docs/factory-orchestrator-implementation.md)。
+**实现边界：** Assignment 已进入真实 Worker 队列并可由 Agent Runtime 执行；Phase 依赖与并发上限由调度器控制。Worker 结果通过事务 Outbox/Workflow Inbox 去重回写 Workflow 事件账本，并持久化 Assignment 结果与证据索引。高风险或要求人工审批的计划会被阻止派发。当前 Phase 进度仍由 Worker 任务记录派生，尚未成为独立的 Workflow 状态机；OpenAI Agents Runtime 的注册工具已通过 Harness Tool Gateway 执行权限、工具 Schema、单次 Agent 调用预算、Kill Switch 和元数据审计。跨 Agent Run 的持久化预算、模型实际 Token 用量采集、其他 Agent Provider/框架的统一接入、自动生成计划、跨进程调度协调和独立审批服务仍待完成。现有 Agent Proposal Workflow 保持独立。本体模块清单仍是单一权威本体 JSON 的逻辑分组。详细范围见 [实现说明](docs/factory-orchestrator-implementation.md)。
 
 ## 主控智能体与软件工厂本体体系设计
 
