@@ -45,16 +45,18 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "schemaPath": {
-            "type": "string"
+          "payloadJson": {
+            "type": "string",
+            "maxLength": 100000
           },
-          "instancePath": {
-            "type": "string"
+          "schemaJson": {
+            "type": "string",
+            "maxLength": 100000
           }
         },
         "required": [
-          "schemaPath",
-          "instancePath"
+          "payloadJson",
+          "schemaJson"
         ],
         "additionalProperties": false
       }
