@@ -393,6 +393,7 @@ def validate_agent_result_contract(
     )
     expected = {
         "roleId": role["roleId"],
+        "roleDigest": hashlib.sha256(canonical_json(role).encode("utf-8")).hexdigest(),
         "skillRefs": skill_refs,
         "ontologyVersion": verified["ontologyVersion"],
         "ontologySnapshotId": verified["snapshotId"],
