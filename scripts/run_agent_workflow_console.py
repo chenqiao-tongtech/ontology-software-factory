@@ -20,7 +20,9 @@ from ontology_software_factory.integration import WorkflowOutboxRelay, enqueue_w
 from ontology_software_factory.task_runtime import IdempotencyConflict, SQLiteTaskStore, TaskWorker  # noqa: E402
 from ontology_software_factory.workflow_engine import WorkflowEngine, WorkflowError  # noqa: E402
 from ontology_software_factory.workflow_store import SQLiteWorkflowStore  # noqa: E402
-from ontology_software_factory.ontology_runtime import load_active_ontology_binding, OntologyBindingError  # noqa: E402
+from ontology_software_factory.ontology_runtime import (  # noqa: E402
+    load_active_ontology_binding, OntologyBindingError, build_runtime_contract_lock,
+)
 
 
 def load_definition() -> dict:
@@ -127,10 +129,11 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                 # Resolve the approved active ontology once, then persist the full immutable
                 # snapshot with the workflow run so later promotions cannot change in-flight work.
                 binding = load_active_ontology_binding(ROOT)
+                runtime_contract_lock = build_runtime_contract_lock(ROOT, load_definition(), binding)
                 run = self.engine.create_run(
                     str(body.get("title", "真实多 Agent 软件提案")),
                     str(body.get("requestedBy", "local-operator")), "review",
-                    ontology_binding=binding,
+                    ontology_binding=binding, runtime_contract_lock=runtime_contract_lock,
                 )
                 self.input_root.mkdir(parents=True, exist_ok=True)
                 target = self.input_root / f"{run['id']}.json"
