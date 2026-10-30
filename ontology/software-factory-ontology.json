@@ -412,6 +412,42 @@
       {
         "name": "OntologyExtractionRun",
         "description": "A parser or model execution that extracts ontology candidates from authorized source snapshots."
+      },
+      {
+        "name": "WorkflowRun",
+        "description": "A persisted execution instance of a versioned workflow, pinned to immutable ontology and runtime contract snapshots."
+      },
+      {
+        "name": "Tool",
+        "description": "A versioned callable capability with typed input/output contracts and declared risk and side-effect classes."
+      },
+      {
+        "name": "ToolInvocation",
+        "description": "A single authorized or denied attempt to invoke a registered Tool within a workflow task."
+      },
+      {
+        "name": "Connector",
+        "description": "A registered adapter to an external source or action system with explicit operations and data boundaries."
+      },
+      {
+        "name": "ConnectorOperation",
+        "description": "A declared read or write operation exposed by a Connector."
+      },
+      {
+        "name": "SourceSystem",
+        "description": "An external repository, document store, database, API, event platform or runtime system used as a knowledge source."
+      },
+      {
+        "name": "SourceAsset",
+        "description": "A versioned file, schema, API operation, event definition or metadata object observed in a SourceSystem."
+      },
+      {
+        "name": "APIContract",
+        "description": "A versioned API contract describing operations, request/response shapes and compatibility."
+      },
+      {
+        "name": "EventSchema",
+        "description": "A versioned event/message schema with producer and consumer compatibility metadata."
       }
     ],
     "relations": [
@@ -542,6 +578,51 @@
         "name": "scansSourceSnapshot",
         "source": "OntologyExtractionRun",
         "target": "OntologySourceSnapshot"
+      },
+      {
+        "name": "instantiatesWorkflow",
+        "source": "WorkflowRun",
+        "target": "AgentPlan"
+      },
+      {
+        "name": "invokesTool",
+        "source": "AgentTask",
+        "target": "ToolInvocation"
+      },
+      {
+        "name": "usesToolDefinition",
+        "source": "ToolInvocation",
+        "target": "Tool"
+      },
+      {
+        "name": "executesConnectorOperation",
+        "source": "ToolInvocation",
+        "target": "ConnectorOperation"
+      },
+      {
+        "name": "exposesOperation",
+        "source": "Connector",
+        "target": "ConnectorOperation"
+      },
+      {
+        "name": "connectsSourceSystem",
+        "source": "Connector",
+        "target": "SourceSystem"
+      },
+      {
+        "name": "containsSourceAsset",
+        "source": "SourceSystem",
+        "target": "SourceAsset"
+      },
+      {
+        "name": "describesAPI",
+        "source": "APIContract",
+        "target": "SourceAsset"
+      },
+      {
+        "name": "definesEventSchema",
+        "source": "EventSchema",
+        "target": "SourceAsset"
       }
     ],
     "invariants": [
