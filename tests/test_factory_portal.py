@@ -93,6 +93,10 @@ class FactoryPortalServiceTests(unittest.TestCase):
         self.assertTrue(evidence.get("assetId"))
         self.assertTrue(evidence.get("contentSha256"))
         self.assertTrue(evidence.get("scannedAt"))
+        db_term = next(term for term in candidate["terms"] if term["label"] == "customer_id")
+        db_evidence = next(item for item in db_term["evidence"] if item.get("sourceType") == "sqlite")
+        self.assertTrue(db_evidence.get("assetId"))
+        self.assertEqual(db_evidence["path"], "table:orders")
         self.assertIn(candidate["candidateId"], {x["candidateId"] for x in portal.state_read()["ontologyCandidates"]})
         self.assertIn("不会自动", candidate["notice"])
 
@@ -159,12 +163,14 @@ class FactoryPortalServiceTests(unittest.TestCase):
 
     def test_background_source_refresh_does_not_call_remote_provider(self):
         remote_sources = [
-            {"id": "source-github", "name": "Remote", "type": "github", "url": "https://github.com/acme/example", "enabled": True}
+            {"id": "source-github", "name": "Remote", "type": "github", "url": "https://github.com/acme/example", "enabled": True},
+            {"id": "source-pg", "name": "Database", "type": "postgresql", "connectionEnv": "FACTORY_PG_URL", "allowedHosts": ["db.internal"], "enabled": True}
         ]
         portal.dump(portal.SOURCES_PATH, {"schemaVersion": "1.0.0", "sources": remote_sources})
         with patch.object(portal, "_remote_json", side_effect=AssertionError("background refresh must not make network calls")):
             results = portal.source_scan_results(force=True, allow_remote=False)
         self.assertEqual(results[0]["status"], "not-synced")
+        self.assertEqual(results[1]["status"], "not-synced")
 
 
 if __name__ == "__main__":
