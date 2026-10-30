@@ -58,6 +58,7 @@ Agent Result contract + SHA-256 Evidence
 - `ontologySnapshotId`
 - `ontologyDigest`
 - `ontologySchemaVersion`
+- `skillRefs[]`：每个 Skill 的 ID、语义版本和基于 `skill.json + SKILL.md` 计算的 SHA-256。
 
 Task 仍然包含 task / tenant / project / role、输入实体类型、期望输出实体类型、验收标准、上下文引用、敏感级别、资源限制和幂等键。运行时会将 JSON Schema 中的实体类型 enum 与所绑定快照的类集合对齐，并进一步验证输入实体类型属于 Role 的 `inputEntityTypes`。每个 Role 引用的 Skill 也会逐个读取 `skill.json`，验证 Skill 输入/输出类存在于同一快照、Skill 声明兼容当前 Role，且 Skill 所需工具全部位于 Role 的工具授权列表内。Workflow 派发的 Role / Skill ID 必须与注册的阶段处理器和 Role 声明一致。
 
@@ -71,6 +72,8 @@ Task 仍然包含 task / tenant / project / role、输入实体类型、期望�
 - `evidence-index.json`：输出摘要、Agent Result 摘要和本体版本绑定。
 
 Evidence metadata 包含 `ontologySnapshotId`、`ontologyDigest` 和 `ontologyVersion`。Agent Result 的输出实体类型必须与 Role 的输出类型集合完全一致。Runtime 会把本体类、关系、受控词汇、不变量以及已验证的 Skill 契约作为结构化上下文提供给 Agent，而不是只在 Prompt 中传递一个版本字符串。
+
+Skill 摘要目前按每个 Agent Task / Result 记录；Workflow Run 固定完整 Ontology 快照，但尚未在创建运行时固定整条 Workflow 的全部 Skill 文件内容。如果 Skill 在两阶段之间被修改，后续阶段会记录新的 Skill 摘要；严格的全流程 Skill 版本锁定仍是后续工作。
 
 注意：Agent Result 封套证明执行器按 Role 声明登记了哪些输出类型，不等于模型生成内容已经通过业务数据库写入或领域专家验收。当前结构化 Pydantic 输出模型与领域实体之间仍是参考映射，复杂实体还需要后续专门的领域对象映射器和业务校验器。
 
