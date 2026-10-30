@@ -1,20 +1,326 @@
 {
-  "schemaVersion":"1.0.0",
-  "connectors":[
-    {"connectorId":"source.local-directory","name":"Local repository and documents","category":"ontology-source","direction":"read","implementationStatus":"implemented","operations":["scan.assets","read.text"],"dataClasses":["source-metadata","source-text"],"authMode":"local-process","credentialRef":null,"networkEgress":"none","approvalRequired":false,"notes":"Allowed-root constrained; skips hidden, secret-like, symlink and oversized files."},
-    {"connectorId":"source.sqlite","name":"SQLite schema","category":"ontology-source","direction":"read","implementationStatus":"implemented","operations":["scan.schema"],"dataClasses":["schema-metadata"],"authMode":"local-file","credentialRef":null,"networkEgress":"none","approvalRequired":false,"notes":"Read-only connection; schema metadata only."},
-    {"connectorId":"source.postgresql","name":"PostgreSQL schema","category":"ontology-source","direction":"read","implementationStatus":"implemented","operations":["scan.schema"],"dataClasses":["schema-metadata"],"authMode":"secret-reference","credentialRef":"env:POSTGRES_DSN","networkEgress":"allowlisted-host","approvalRequired":false,"notes":"Requires psycopg extra, read-only DB role and host allow-list."},
-    {"connectorId":"source.mysql","name":"MySQL schema","category":"ontology-source","direction":"read","implementationStatus":"implemented","operations":["scan.schema"],"dataClasses":["schema-metadata"],"authMode":"secret-reference","credentialRef":"env:MYSQL_DSN","networkEgress":"allowlisted-host","approvalRequired":false,"notes":"Requires mysql extra, read-only DB role and TLS hostname verification."},
-    {"connectorId":"source.github","name":"GitHub repository metadata","category":"ontology-source","direction":"read","implementationStatus":"implemented","operations":["scan.repository-tree","read.file-metadata"],"dataClasses":["repository-metadata"],"authMode":"secret-reference","credentialRef":"env:GITHUB_TOKEN","networkEgress":"fixed-provider","approvalRequired":false,"notes":"Provider metadata adapter; inspect private-repository scope before use."},
-    {"connectorId":"source.gitlab","name":"GitLab repository metadata","category":"ontology-source","direction":"read","implementationStatus":"implemented","operations":["scan.repository-tree","read.file-metadata"],"dataClasses":["repository-metadata"],"authMode":"secret-reference","credentialRef":"env:GITLAB_TOKEN","networkEgress":"fixed-provider","approvalRequired":false,"notes":"Hosted GitLab metadata path; self-managed instances need a reviewed adapter."},
-    {"connectorId":"source.openapi","name":"OpenAPI specifications","category":"ontology-source","direction":"read","implementationStatus":"adapter-required","operations":["parse.openapi"],"dataClasses":["api-contract"],"authMode":"none","credentialRef":null,"networkEgress":"none","approvalRequired":false,"notes":"Parse explicitly supplied OpenAPI documents; no live endpoint crawling."},
-    {"connectorId":"source.graphql","name":"GraphQL SDL and introspection snapshot","category":"ontology-source","direction":"read","implementationStatus":"adapter-required","operations":["parse.graphql-sdl","import.introspection-snapshot"],"dataClasses":["api-contract"],"authMode":"secret-reference","credentialRef":"env:GRAPHQL_INTROSPECTION_TOKEN","networkEgress":"allowlisted-host","approvalRequired":true,"notes":"Prefer reviewed SDL snapshots; live introspection is opt-in."},
-    {"connectorId":"source.confluence","name":"Confluence pages","category":"ontology-source","direction":"read","implementationStatus":"planned","operations":["search.pages","read.page"],"dataClasses":["enterprise-documents"],"authMode":"oauth2","credentialRef":"secret-ref:confluence-oauth","networkEgress":"fixed-provider","approvalRequired":false,"notes":"Requires tenant-scoped OAuth and page ACL preservation."},
-    {"connectorId":"source.sharepoint","name":"SharePoint and OneDrive","category":"ontology-source","direction":"read","implementationStatus":"planned","operations":["search.files","read.file"],"dataClasses":["enterprise-documents"],"authMode":"oauth2","credentialRef":"secret-ref:microsoft-graph-oauth","networkEgress":"fixed-provider","approvalRequired":false,"notes":"Requires Graph scopes, ACL trimming and tenant isolation."},
-    {"connectorId":"source.kafka-schema-registry","name":"Kafka Schema Registry","category":"ontology-source","direction":"read","implementationStatus":"planned","operations":["list.subjects","read.schema"],"dataClasses":["event-schema"],"authMode":"secret-reference","credentialRef":"env:SCHEMA_REGISTRY_TOKEN","networkEgress":"allowlisted-host","approvalRequired":false,"notes":"Schema-only ingestion; no topic message consumption."},
-    {"connectorId":"source.dbt","name":"dbt manifest and catalog","category":"ontology-source","direction":"read","implementationStatus":"planned","operations":["read.manifest","read.catalog"],"dataClasses":["data-lineage","schema-metadata"],"authMode":"none","credentialRef":null,"networkEgress":"none","approvalRequired":false,"notes":"Ingest generated artifacts rather than executing dbt projects."},
-    {"connectorId":"action.github-pull-request","name":"GitHub pull request","category":"agent-action","direction":"write","implementationStatus":"planned","operations":["create.pull-request","comment.pull-request"],"dataClasses":["source-code","review-comments"],"authMode":"oauth2","credentialRef":"secret-ref:github-app-installation","networkEgress":"fixed-provider","approvalRequired":true,"notes":"Requires least-privilege GitHub App and human approval."},
-    {"connectorId":"action.jira","name":"Jira issue workflow","category":"agent-action","direction":"write","implementationStatus":"planned","operations":["create.issue","update.issue"],"dataClasses":["work-items"],"authMode":"oauth2","credentialRef":"secret-ref:jira-oauth","networkEgress":"fixed-provider","approvalRequired":true,"notes":"Write-capable action connector, not an ontology source of record."},
-    {"connectorId":"action.ci","name":"CI pipeline trigger","category":"agent-action","direction":"write","implementationStatus":"planned","operations":["trigger.pipeline","read.pipeline-result"],"dataClasses":["build-evidence"],"authMode":"secret-reference","credentialRef":"secret-ref:ci-token","networkEgress":"allowlisted-host","approvalRequired":true,"notes":"Must bind pipeline run and evidence to candidate digest."}
+  "schemaVersion": "1.0.0",
+  "connectors": [
+    {
+      "connectorId": "source.local-directory",
+      "name": "Local repository and documents",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "scan.assets",
+        "read.text"
+      ],
+      "dataClasses": [
+        "source-metadata",
+        "source-text"
+      ],
+      "authMode": "local-process",
+      "credentialRef": null,
+      "networkEgress": "none",
+      "approvalRequired": false,
+      "notes": "Allowed-root constrained; skips hidden, secret-like, symlink and oversized files."
+    },
+    {
+      "connectorId": "source.sqlite",
+      "name": "SQLite schema",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "scan.schema"
+      ],
+      "dataClasses": [
+        "schema-metadata"
+      ],
+      "authMode": "local-file",
+      "credentialRef": null,
+      "networkEgress": "none",
+      "approvalRequired": false,
+      "notes": "Read-only connection; schema metadata only."
+    },
+    {
+      "connectorId": "source.postgresql",
+      "name": "PostgreSQL schema",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "scan.schema"
+      ],
+      "dataClasses": [
+        "schema-metadata"
+      ],
+      "authMode": "secret-reference",
+      "credentialRef": "env:POSTGRES_DSN",
+      "networkEgress": "allowlisted-host",
+      "approvalRequired": false,
+      "notes": "Requires psycopg extra, read-only DB role and host allow-list."
+    },
+    {
+      "connectorId": "source.mysql",
+      "name": "MySQL schema",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "scan.schema"
+      ],
+      "dataClasses": [
+        "schema-metadata"
+      ],
+      "authMode": "secret-reference",
+      "credentialRef": "env:MYSQL_DSN",
+      "networkEgress": "allowlisted-host",
+      "approvalRequired": false,
+      "notes": "Requires mysql extra, read-only DB role and TLS hostname verification."
+    },
+    {
+      "connectorId": "source.github",
+      "name": "GitHub repository metadata",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "scan.repository-tree",
+        "read.file-metadata"
+      ],
+      "dataClasses": [
+        "repository-metadata"
+      ],
+      "authMode": "secret-reference",
+      "credentialRef": "env:GITHUB_TOKEN",
+      "networkEgress": "fixed-provider",
+      "approvalRequired": false,
+      "notes": "Provider metadata adapter; inspect private-repository scope before use."
+    },
+    {
+      "connectorId": "source.gitlab",
+      "name": "GitLab repository metadata",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "scan.repository-tree",
+        "read.file-metadata"
+      ],
+      "dataClasses": [
+        "repository-metadata"
+      ],
+      "authMode": "secret-reference",
+      "credentialRef": "env:GITLAB_TOKEN",
+      "networkEgress": "fixed-provider",
+      "approvalRequired": false,
+      "notes": "Hosted GitLab metadata path; self-managed instances need a reviewed adapter."
+    },
+    {
+      "connectorId": "source.openapi",
+      "name": "OpenAPI specifications",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "parse.openapi"
+      ],
+      "dataClasses": [
+        "api-contract"
+      ],
+      "authMode": "none",
+      "credentialRef": null,
+      "networkEgress": "none",
+      "approvalRequired": false,
+      "notes": "Parse explicitly supplied OpenAPI documents; no live endpoint crawling."
+    },
+    {
+      "connectorId": "source.graphql",
+      "name": "GraphQL SDL and introspection snapshot",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "parse.graphql-sdl",
+        "import.introspection-snapshot"
+      ],
+      "dataClasses": [
+        "api-contract"
+      ],
+      "authMode": "secret-reference",
+      "credentialRef": "env:GRAPHQL_INTROSPECTION_TOKEN",
+      "networkEgress": "allowlisted-host",
+      "approvalRequired": true,
+      "notes": "Prefer reviewed SDL snapshots; live introspection is opt-in."
+    },
+    {
+      "connectorId": "source.confluence",
+      "name": "Confluence pages",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "planned",
+      "operations": [
+        "search.pages",
+        "read.page"
+      ],
+      "dataClasses": [
+        "enterprise-documents"
+      ],
+      "authMode": "oauth2",
+      "credentialRef": "secret-ref:confluence-oauth",
+      "networkEgress": "fixed-provider",
+      "approvalRequired": false,
+      "notes": "Requires tenant-scoped OAuth and page ACL preservation."
+    },
+    {
+      "connectorId": "source.sharepoint",
+      "name": "SharePoint and OneDrive",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "planned",
+      "operations": [
+        "search.files",
+        "read.file"
+      ],
+      "dataClasses": [
+        "enterprise-documents"
+      ],
+      "authMode": "oauth2",
+      "credentialRef": "secret-ref:microsoft-graph-oauth",
+      "networkEgress": "fixed-provider",
+      "approvalRequired": false,
+      "notes": "Requires Graph scopes, ACL trimming and tenant isolation."
+    },
+    {
+      "connectorId": "source.kafka-schema-registry",
+      "name": "Kafka Schema Registry",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "planned",
+      "operations": [
+        "list.subjects",
+        "read.schema"
+      ],
+      "dataClasses": [
+        "event-schema"
+      ],
+      "authMode": "secret-reference",
+      "credentialRef": "env:SCHEMA_REGISTRY_TOKEN",
+      "networkEgress": "allowlisted-host",
+      "approvalRequired": false,
+      "notes": "Schema-only ingestion; no topic message consumption."
+    },
+    {
+      "connectorId": "source.dbt",
+      "name": "dbt manifest and catalog",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "planned",
+      "operations": [
+        "read.manifest",
+        "read.catalog"
+      ],
+      "dataClasses": [
+        "data-lineage",
+        "schema-metadata"
+      ],
+      "authMode": "none",
+      "credentialRef": null,
+      "networkEgress": "none",
+      "approvalRequired": false,
+      "notes": "Ingest generated artifacts rather than executing dbt projects."
+    },
+    {
+      "connectorId": "action.github-pull-request",
+      "name": "GitHub pull request",
+      "category": "agent-action",
+      "direction": "write",
+      "implementationStatus": "planned",
+      "operations": [
+        "create.pull-request",
+        "comment.pull-request"
+      ],
+      "dataClasses": [
+        "source-code",
+        "review-comments"
+      ],
+      "authMode": "oauth2",
+      "credentialRef": "secret-ref:github-app-installation",
+      "networkEgress": "fixed-provider",
+      "approvalRequired": true,
+      "notes": "Requires least-privilege GitHub App and human approval."
+    },
+    {
+      "connectorId": "action.jira",
+      "name": "Jira issue workflow",
+      "category": "agent-action",
+      "direction": "write",
+      "implementationStatus": "planned",
+      "operations": [
+        "create.issue",
+        "update.issue"
+      ],
+      "dataClasses": [
+        "work-items"
+      ],
+      "authMode": "oauth2",
+      "credentialRef": "secret-ref:jira-oauth",
+      "networkEgress": "fixed-provider",
+      "approvalRequired": true,
+      "notes": "Write-capable action connector, not an ontology source of record."
+    },
+    {
+      "connectorId": "action.ci",
+      "name": "CI pipeline trigger",
+      "category": "agent-action",
+      "direction": "write",
+      "implementationStatus": "planned",
+      "operations": [
+        "trigger.pipeline",
+        "read.pipeline-result"
+      ],
+      "dataClasses": [
+        "build-evidence"
+      ],
+      "authMode": "secret-reference",
+      "credentialRef": "secret-ref:ci-token",
+      "networkEgress": "allowlisted-host",
+      "approvalRequired": true,
+      "notes": "Must bind pipeline run and evidence to candidate digest."
+    },
+    {
+      "connectorId": "source.asyncapi",
+      "name": "AsyncAPI JSON contract",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "parse.asyncapi"
+      ],
+      "dataClasses": [
+        "event-contract"
+      ],
+      "authMode": "none",
+      "credentialRef": null,
+      "networkEgress": "none",
+      "approvalRequired": false,
+      "notes": "Offline parser for explicitly supplied AsyncAPI JSON files; YAML and live endpoint crawling are excluded."
+    },
+    {
+      "connectorId": "source.protobuf",
+      "name": "Protocol Buffers contract",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "parse.protobuf"
+      ],
+      "dataClasses": [
+        "api-contract",
+        "event-contract"
+      ],
+      "authMode": "none",
+      "credentialRef": null,
+      "networkEgress": "none",
+      "approvalRequired": false,
+      "notes": "Offline parser for explicitly supplied .proto files; does not invoke protoc or resolve imports."
+    }
   ]
 }
