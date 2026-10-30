@@ -856,11 +856,21 @@ class PortalHandler(BaseHTTPRequestHandler):
             body = self._body()
             if path == "/api/sources":
                 source_type = body.get("type")
-                if source_type not in {"repository", "documents", "sqlite", "github", "gitlab"}: raise ValueError("type must be repository, documents, sqlite, github or gitlab")
+                if source_type not in {"repository", "documents", "sqlite", "github", "gitlab", "postgresql", "mysql"}: raise ValueError("unsupported source type")
                 name = str(body.get("name", "")).strip(); raw_path = str(body.get("path", "")).strip()
-                if not name or not raw_path: raise ValueError("name and path are required")
+                if not name: raise ValueError("name is required")
                 if len(name) > 100 or len(raw_path) > 1000: raise ValueError("name or path too long")
-                if source_type in {"github", "gitlab"}:
+                if source_type in {"postgresql", "mysql"}:
+                    connection_env = str(body.get("connectionEnv", raw_path)).strip()
+                    if not re.fullmatch(r"[A-Z_][A-Z0-9_]{0,127}", connection_env):
+                        raise ValueError("connectionEnv must be an environment variable name, never a DSN value")
+                    raw_hosts = body.get("allowedHosts", "")
+                    allowed_hosts = [x.strip().lower().rstrip(".") for x in (raw_hosts if isinstance(raw_hosts, list) else str(raw_hosts).split(",")) if str(x).strip()]
+                    if not allowed_hosts or any(not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", host) for host in allowed_hosts):
+                        raise ValueError("allowedHosts must contain one or more DNS hostnames")
+                    source_path_label = "$" + "{" + connection_env + "} · " + ", ".join(allowed_hosts)
+                    resolved = None
+                elif source_type in {"github", "gitlab"}:
                     parsed = urlparse(raw_path)
                     valid_host = parsed.hostname in ({"github.com", "www.github.com"} if source_type == "github" else {"gitlab.com"})
                     if parsed.scheme != "https" or not valid_host or parsed.username or parsed.password or parsed.query or parsed.fragment:
@@ -880,7 +890,12 @@ class PortalHandler(BaseHTTPRequestHandler):
                 elif source_type in {"repository", "documents"}:
                     if not resolved.is_dir(): raise ValueError("Source path must be an existing directory")
                 sources = source_configs(); source_id = "source-" + uuid.uuid4().hex[:10]
-                source = {"id": source_id, "name": name, "type": source_type, ("url" if source_type in {"github", "gitlab"} else "path"): source_path_label, "description": str(body.get("description", "由本地门户添加的只读数据源"))[:300], "enabled": True, "fixture": False}
+                source = {"id": source_id, "name": name, "type": source_type, "description": str(body.get("description", "由本地门户添加的只读数据源"))[:300], "enabled": True, "fixture": False}
+                if source_type in {"github", "gitlab"}: source["url"] = source_path_label
+                elif source_type in {"postgresql", "mysql"}:
+                    source["connectionEnv"] = connection_env
+                    source["allowedHosts"] = allowed_hosts
+                else: source["path"] = source_path_label
                 source["tokenEnv"] = "GITHUB_TOKEN" if source_type == "github" else "GITLAB_TOKEN" if source_type == "gitlab" else None
                 if source.get("tokenEnv") is None: source.pop("tokenEnv", None)
                 sources.append(source); save_sources(sources)
