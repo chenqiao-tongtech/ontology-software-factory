@@ -294,14 +294,26 @@ def compatibility_report(before: dict, after: dict) -> dict:
 
     old_version = before.get("ontologyVersion") or before.get("ontology", {}).get("ontologyVersion")
     new_version = after.get("ontologyVersion") or after.get("ontology", {}).get("ontologyVersion")
+    old_schema = before.get("schemaVersion") or before.get("ontology", {}).get("schemaVersion")
+    new_schema = after.get("schemaVersion") or after.get("ontology", {}).get("schemaVersion")
     old_semver, new_semver = _semver(old_version), _semver(new_version)
-    major_bump = bool(old_semver and new_semver and new_semver[0] > old_semver[0])
-    version_valid = bool(old_semver and new_semver and new_semver >= old_semver)
+    old_schema_semver, new_schema_semver = _semver(old_schema), _semver(new_schema)
+    ontology_major_bump = bool(old_semver and new_semver and new_semver[0] > old_semver[0])
+    schema_major_bump = bool(old_schema_semver and new_schema_semver and new_schema_semver[0] > old_schema_semver[0])
+    major_bump = ontology_major_bump or schema_major_bump
+    ontology_version_valid = bool(old_semver and new_semver and new_semver >= old_semver)
+    schema_version_valid = bool(old_schema_semver and new_schema_semver and new_schema_semver >= old_schema_semver)
+    if old_schema != new_schema:
+        review.append({"kind": "schema-version-changed", "from": old_schema, "to": new_schema})
+    if schema_major_bump:
+        breaking.append({"kind": "schema-major-version-changed", "from": old_schema, "to": new_schema})
     if breaking and not major_bump:
         review.append({"kind": "major-version-bump-required", "from": old_version, "to": new_version})
-    if not version_valid:
-        review.append({"kind": "invalid-or-decreasing-semver", "from": old_version, "to": new_version})
+    if not ontology_version_valid or not schema_version_valid:
+        review.append({"kind": "invalid-or-decreasing-semver", "from": old_version, "to": new_version,
+                       "schemaFrom": old_schema, "schemaTo": new_schema})
 
+    version_valid = ontology_version_valid and schema_version_valid
     compatible = not breaking or major_bump
     return {
         "fromVersion": old_version,
@@ -310,6 +322,10 @@ def compatibility_report(before: dict, after: dict) -> dict:
         "breakingChanges": breaking,
         "reviewItems": review,
         "majorVersionBump": major_bump,
+        "ontologyMajorVersionBump": ontology_major_bump,
+        "schemaMajorVersionBump": schema_major_bump,
+        "schemaFromVersion": old_schema,
+        "schemaToVersion": new_schema,
         "versionOrderValid": version_valid,
         "reviewRequired": bool(breaking or review),
         "summary": {
