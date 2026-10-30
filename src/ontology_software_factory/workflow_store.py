@@ -578,9 +578,11 @@ class SQLiteWorkflowStore:
                             (plan_id, assignment["assignmentId"]),
                         ).fetchone()
                         statuses.append(status_row["status"] if status_row else "pending")
+                    terminal_statuses = {"succeeded", "failed", "dead_letter"}
                     phase_status = (
                         "succeeded" if statuses and all(value == "succeeded" for value in statuses)
-                        else "failed" if any(value in {"failed", "dead_letter"} for value in statuses)
+                        else "failed" if statuses and all(value in terminal_statuses for value in statuses)
+                             and any(value in {"failed", "dead_letter"} for value in statuses)
                         else "running"
                     )
                     old_phase = self._conn.execute(
