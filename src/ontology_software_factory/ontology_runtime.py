@@ -236,12 +236,14 @@ def build_agent_task_contract(
         input_types.append("Artifact")
     if not input_types:
         input_types.append(role_inputs[0])
+    role_digest = hashlib.sha256(canonical_json(role).encode("utf-8")).hexdigest()
     task_key = idempotency_key or f"ontology-task:{run_id}:{step_id}:{attempt}"
     contract = {
         "taskId": f"sf:task:{run_id}.{step_id}.{attempt}",
         "tenantId": "local-reference",
         "projectId": "ontology-software-factory",
         "roleId": role["roleId"],
+        "roleDigest": role_digest,
         "skillRefs": skill_refs,
         "ontologyVersion": verified["ontologyVersion"],
         "ontologySnapshotId": verified["snapshotId"],
@@ -293,6 +295,7 @@ def validate_agent_task_contract(
     _validate_schema(contract, Path(project_root) / "contracts/schemas/agent-task.schema.json", "Agent Task", _class_names(verified["ontology"]))
     expected = {
         "roleId": role["roleId"],
+        "roleDigest": hashlib.sha256(canonical_json(role).encode("utf-8")).hexdigest(),
         "skillRefs": skill_refs,
         "ontologyVersion": verified["ontologyVersion"],
         "ontologySnapshotId": verified["snapshotId"],
@@ -344,6 +347,7 @@ def build_agent_result_contract(
     result = {
         "taskId": task_contract["taskId"],
         "roleId": role["roleId"],
+        "roleDigest": hashlib.sha256(canonical_json(role).encode("utf-8")).hexdigest(),
         "skillRefs": skill_refs,
         "ontologyVersion": verified["ontologyVersion"],
         "ontologySnapshotId": verified["snapshotId"],
