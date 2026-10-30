@@ -137,3 +137,33 @@
 ## 5. 本轮变更说明
 
 本分支首先记录审查基线和实施顺序。由于当前 `main` 缺少 Portal API 主入口及多项 Makefile 引用的 CLI/Validator，必须先恢复这些缺失的工程入口并重新跑测试；在此之前，不应把五个 UI 工作区标记为端到端可用。
+
+
+## 6. 已提交的第一批代码（Source Connector Foundation）
+
+本工作分支已新增：
+
+- `src/ontology_software_factory/source_connectors.py`
+  - `SourceConnector` 协议与显式注册表；
+  - 本地代码/文档目录只读清点；
+  - SQLite 只读 Schema 清点（表、视图、列、DDL 元数据，不读取业务行）；
+  - 文件类型白名单、隐藏/秘密文件过滤、依赖目录排除；
+  - 符号链接拒绝、允许根目录限制、单文件大小与最大文件数限制；
+  - 文件内容只在内存中计算 SHA-256，不将文件正文写入扫描结果；
+  - 超出文件数时返回 `partial`，不伪装成完整扫描。
+- `tests/test_source_connectors.py`
+  - 覆盖目录过滤、允许根目录、符号链接、扫描上限、SQLite 只读 Schema、文档/代码源类型注册和未知连接器拒绝。
+
+### 当前边界
+
+这是 Part 1 的连接器基础层，不是完整企业接入。它尚未接入当前 Portal API，也没有实现 GitHub/GitLab 远程适配器、企业文档平台、PostgreSQL/MySQL、OIDC、凭据保险库、增量游标或租户级授权。文件正文不会被交给 LLM；如需用于本体发现，应增加单独的内容读取接口、脱敏策略和明确的外发授权，而不是扩大清点接口的权限。
+
+### 验收状态
+
+代码和测试已提交到 `work/five-parts-implementation` 分支，但本次会话没有可执行该 GitHub 工作区代码的 Python Runner，因此**尚未声称这些新增测试已运行通过**。合并前应在项目 Python 3.11+ 环境运行：
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -p 'test_source_connectors.py' -v
+```
+
+随后再恢复当前 `main` 缺失的 Portal API / CLI 入口，运行全量 `make validate` 和 `make test`，重新记录真实基线。
