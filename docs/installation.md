@@ -192,3 +192,38 @@ make test
     export FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1
 
 这两个开关都不是生产沙箱的替代品。固定命令和超时不能阻止不可信代码访问宿主机文件或资源；生产使用前必须接入容器/微虚机、网络隔离、资源配额和短期凭据。未设置开关时，工具应返回 blocked，而不是伪造通过状态。
+
+
+## 10. 受控 Agent 执行后端（新增）
+
+### Docker 测试执行器
+
+需要安装并启动 Docker Engine / Docker Desktop。构建本项目测试镜像：
+
+    docker build -f runners/container/Dockerfile.test-runner -t ontology-software-factory-test-runner:py311-v1 .
+
+在 Agent Workflow Console 启动前设置：
+
+    export FACTORY_ENABLE_CONTAINER_EXECUTION=1
+
+执行器只使用本地镜像（不自动 pull），无网络、只读 rootfs、丢弃 Linux capabilities、非 root 数字 UID/GID，并限制 PID、内存和 CPU。若镜像不存在，测试结果为 incomplete，不会回退到宿主机。
+
+### Git Worktree
+
+若希望每个 Run 使用真实本地 Git 分支，而非仓库副本：
+
+    export FACTORY_WORKSPACE_BACKEND=git-worktree
+
+要求项目根目录本身是 Git 仓库且安装 Git CLI。创建分支形如 agent/run-run-xxxxxx。该功能不会 commit、push、创建 PR 或 merge。
+
+### Run 级 Skill 锁
+
+Agent Workflow Console 在创建 Run 时自动锁定该 Workflow 中所有 Agent Role 和 Skill 的版本/内容摘要。运行期间修改对应 JSON 或 SKILL.md 会导致该 Run fail closed；请发布新的 Role/Skill 版本并创建新 Run，而不要修改正在执行的 Run。
+
+### 安全扫描边界
+
+Semgrep、Gitleaks、Trivy 目前仍通过本机 CLI 显式调用：
+
+    export FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1
+
+它们尚未迁入 Docker 扫描容器；生产环境应由部署方通过独立隔离扫描服务执行。不要把 Docker 测试执行器误认为扫描器也已容器化。
