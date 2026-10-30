@@ -65,6 +65,7 @@ class OntologyRuntimeBindingTests(unittest.TestCase):
         self.assertEqual(task["ontologyDigest"], self.snapshot["digest"])
         self.assertEqual(task["ontologyVersion"], self.snapshot["ontologyVersion"])
         self.assertEqual(task["roleId"], self.role["roleId"])
+        self.assertEqual(len(task["roleDigest"]), 64)
         validate_agent_task_contract(ROOT, task, role=self.role, binding=self.snapshot)
 
     def test_skill_instruction_digest_is_pinned_in_task_contract(self):
@@ -105,6 +106,7 @@ class OntologyRuntimeBindingTests(unittest.TestCase):
             completed_at="2026-10-30T12:00:00+00:00",
         )
         validate_agent_result_contract(ROOT, result, role=self.role, binding=self.snapshot)
+        self.assertEqual(result["roleDigest"], task["roleDigest"])
         self.assertEqual(result["skillRefs"], task["skillRefs"])
         self.assertEqual(result["ontologyDigest"], task["ontologyDigest"])
 
