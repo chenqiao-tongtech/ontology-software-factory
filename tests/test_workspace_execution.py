@@ -123,8 +123,9 @@ class WorkspaceExecutionTests(unittest.TestCase):
         self.assertEqual(result["sandbox"], "image_not_pinned")
 
     def test_container_scanner_is_networkless_and_mounts_workspace_read_only(self):
-        inspect = Mock(returncode=0, stdout="[]")
-        def docker_run(command, **kwargs):
+        def docker_call(command, **kwargs):
+            if "image" in command:
+                return Mock(returncode=0, stdout="[]")
             evidence_mount = next(item for item in command if item.endswith(":/evidence:rw"))
             host_evidence = Path(evidence_mount.split(":/evidence:rw")[0])
             (host_evidence / "semgrep-report.json").write_text('{"results":[]}', encoding="utf-8")
@@ -137,7 +138,7 @@ class WorkspaceExecutionTests(unittest.TestCase):
                                      "FACTORY_SEMGREP_IMAGE": image}, clear=True):
             with patch("ontology_software_factory.workspace_execution.shutil.which", return_value="/usr/bin/docker"):
                 with patch("ontology_software_factory.workspace_execution.subprocess.run",
-                           side_effect=[inspect, docker_run]) as run:
+                           side_effect=docker_call) as run:
                     result = self.service.run_security_scan("semgrep")
         self.assertEqual(result["status"], "passed")
         command = run.call_args_list[1].args[0]
