@@ -115,6 +115,36 @@ class WorkspaceExecutionTests(unittest.TestCase):
         subprocess.run([git, "-C", str(self.project), "worktree", "remove", "--force", str(worktree)], check=True)
         subprocess.run([git, "-C", str(self.project), "branch", "-D", "agent/run-run-git-001"], check=True, stdout=subprocess.DEVNULL)
 
+    def test_container_scanner_requires_digest_pinned_image(self):
+        with patch.dict(os.environ, {"FACTORY_ENABLE_CONTAINER_SECURITY_SCANS": "1",
+                                     "FACTORY_SEMGREP_IMAGE": "semgrep/semgrep:latest"}, clear=True):
+            result = self.service.run_security_scan("semgrep")
+        self.assertEqual(result["status"], "incomplete")
+        self.assertEqual(result["sandbox"], "image_not_pinned")
+
+    def test_container_scanner_is_networkless_and_mounts_workspace_read_only(self):
+        inspect = Mock(returncode=0, stdout="[]")
+        def docker_run(command, **kwargs):
+            evidence_mount = next(item for item in command if item.endswith(":/evidence:rw"))
+            host_evidence = Path(evidence_mount.split(":/evidence:rw")[0])
+            (host_evidence / "semgrep-report.json").write_text('{"results":[]}', encoding="utf-8")
+            return Mock(returncode=0, stdout="scan complete")
+        image = "registry.example/semgrep@sha256:" + "a" * 64
+        with patch.dict(os.environ, {"FACTORY_ENABLE_CONTAINER_SECURITY_SCANS": "1",
+                                     "FACTORY_SEMGREP_IMAGE": image}, clear=True):
+            with patch("ontology_software_factory.workspace_execution.shutil.which", return_value="/usr/bin/docker"):
+                with patch("ontology_software_factory.workspace_execution.subprocess.run",
+                           side_effect=[inspect, docker_run]) as run:
+                    result = self.service.run_security_scan("semgrep")
+        self.assertEqual(result["status"], "passed")
+        command = run.call_args_list[1].args[0]
+        self.assertIn("--network=none", command)
+        self.assertIn("--read-only", command)
+        self.assertIn("--cap-drop=ALL", command)
+        self.assertTrue(any(item.endswith(":/workspace:ro") for item in command if isinstance(item, str)))
+        self.assertEqual(result["sandbox"], "docker")
+        self.assertTrue(self.service.tool_evidence)
+
     def test_workspace_diff_is_reviewable_and_source_checkout_stays_unchanged(self):
         self.service.write_candidate("src/module.py", "value = 2\n")
         result = self.service.diff_patch()
