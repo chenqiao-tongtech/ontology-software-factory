@@ -132,6 +132,7 @@ class AgentWorkflowStepHandler:
                 "latency_ms": int(execution.get("latency_ms", 0)), "tool_ids": execution.get("tool_ids", []),
                 "ontologyBinding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")},
                 "taskContract": task_contract,
+                "unavailableSkillTools": execution.get("unavailable_skill_tools", []),
                 "output": output,
             }
             self._write_json(stage_dir / "output.json", artifact)
