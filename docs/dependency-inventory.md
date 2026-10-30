@@ -114,3 +114,18 @@ python scripts/check_llm_connection.py
 - 第三项需要真实 Key、网络和可用模型，仅验证 Responses API 连接。
 - 真实 PostgreSQL / MySQL 测试仅在设置专用测试 DSN 后执行。
 - MCP、Cognee、NVIDIA 和 GitHub/GitLab 连接仍需针对实际服务单独联调；fixture 测试不代表外部服务已经连接。
+
+
+## 8. Agent Workspace 执行开关与外部依赖
+
+工作区副本、路径控制、固定 argv、证据摘要和日志由 Python 标准库实现，不新增 pip extras。真实测试执行与安全扫描的外部程序如下：
+
+| 功能 | 外部依赖 | 默认状态 | 显式启用变量 |
+|---|---|---|---|
+| Agent 候选文件读写 | 无额外依赖 | 可用（只在临时工作区） | 无 |
+| 固定测试套件 | Python 3.11+ | blocked，不执行宿主机代码 | FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION=1 |
+| SAST | Semgrep CLI | blocked，不启动 | FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1 |
+| 秘密扫描 | Gitleaks CLI | blocked，不启动 | FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1 |
+| 文件系统漏洞/配置扫描 | Trivy CLI 与本地数据库 | blocked，不启动 | FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1 |
+
+注意：当前开关允许本地宿主机进程执行，并不构成容器或 OS 沙箱。请勿对不可信代码开启；生产环境必须先部署隔离执行后端。缺少工具、超时或缺失报告都不能标记为 PASS。
