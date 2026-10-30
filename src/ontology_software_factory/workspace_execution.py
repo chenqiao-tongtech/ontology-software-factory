@@ -341,7 +341,9 @@ class WorkspaceExecution:
                 output += "\\nRUNNER_TIMEOUT: test suite exceeded the configured timeout"
         duration = round((time.monotonic() - started) * 1000)
         output = output[:self.max_output_chars]
-        status = "timed_out" if timed_out else ("passed" if exit_code == 0 else "failed")
+        status = ("timed_out" if timed_out else
+                  "incomplete" if sandbox in {"unavailable", "image_missing"} else
+                  "passed" if exit_code == 0 else "failed")
         report = {"schemaVersion": "1.0.0", "runId": self.run_id, "suiteId": suite_id,
                   "status": status, "exitCode": exit_code, "durationMs": duration,
                   "commandId": suite_id, "argv": argv, "executedAt": datetime.now(timezone.utc).isoformat(),
