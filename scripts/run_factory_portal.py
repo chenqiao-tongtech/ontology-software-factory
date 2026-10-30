@@ -35,7 +35,7 @@ from ontology_software_factory.source_connectors import (
 )
 from ontology_software_factory.remote_connectors import RemoteRepositoryConnector
 from ontology_software_factory.database_connectors import PostgreSQLSchemaConnector, MySQLSchemaConnector
-from ontology_software_factory.ontology_versioning import create_snapshot, diff_snapshots, find_snapshot
+from ontology_software_factory.ontology_versioning import create_snapshot, diff_snapshots, find_snapshot, ontology_digest
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps" / "factory-portal" / "index.html"
@@ -919,7 +919,7 @@ class PortalHandler(BaseHTTPRequestHandler):
         if path == "/api/ontology/versions":
             snapshots = state_read().get("ontologySnapshots", [])
             public = [{key: value for key, value in item.items() if key != "ontology"} for item in snapshots]
-            return self._send_json(200, {"snapshots": public, "currentDigest": __import__("ontology_software_factory.ontology_versioning", fromlist=["ontology_digest"]).ontology_digest(load_json(FORMAL_ONTOLOGY, {}))})
+            return self._send_json(200, {"snapshots": public, "currentDigest": ontology_digest(load_json(FORMAL_ONTOLOGY, {}))})
         if path == "/api/ontology/diff":
             params = parse_qs(urlparse(self.path).query)
             from_id = (params.get("from") or [""])[0]
