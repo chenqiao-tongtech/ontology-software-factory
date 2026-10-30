@@ -155,6 +155,8 @@ class OpenAIAgentsRuntime:
             "schemaVersion": binding["schemaVersion"],
             "classes": ontology.get("classes", []) + extensions.get("classes", []),
             "relations": ontology.get("relations", []) + extensions.get("relations", []),
+            "controlledVocabularies": ontology.get("controlledVocabularies", {}),
+            "mvpInvariants": ontology.get("mvpInvariants", []),
         }
         instructions = (
             f"Role: {role.get('displayName', role_id)}\n"
