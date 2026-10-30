@@ -87,6 +87,12 @@ class FactoryPortalServiceTests(unittest.TestCase):
         self.assertIn("ExampleEntity", {term["label"] for term in candidate["terms"]})
         self.assertIn("customer_id", {term["label"] for term in candidate["terms"]})
         self.assertTrue(all(term["evidence"] for term in candidate["terms"]))
+        evidence = next(item for term in candidate["terms"] for item in term["evidence"] if item.get("sourceType") == "repository")
+        self.assertEqual(evidence["sourceId"], "test-repo")
+        self.assertEqual(evidence["sourceName"], "Test repository")
+        self.assertTrue(evidence.get("assetId"))
+        self.assertTrue(evidence.get("contentSha256"))
+        self.assertTrue(evidence.get("scannedAt"))
         self.assertIn(candidate["candidateId"], {x["candidateId"] for x in portal.state_read()["ontologyCandidates"]})
         self.assertIn("不会自动", candidate["notice"])
 
@@ -115,7 +121,7 @@ class FactoryPortalServiceTests(unittest.TestCase):
         with patch.dict("os.environ", {"TEST_GITHUB_TOKEN": "never-echo-this"}), patch.object(portal, "_remote_json") as mocked:
             mocked.side_effect = [
                 (200, {"default_branch": "main", "private": True, "visibility": "private", "pushed_at": "2026-10-01T00:00:00Z"}),
-                (200, {"truncated": False, "tree": [
+                (200, {"sha": "tree-sha", "truncated": False, "tree": [
                     {"path": "src/domain.py", "type": "blob", "size": 120},
                     {"path": "docs/contract.md", "type": "blob", "size": 80},
                     {"path": ".github/workflows/ci.yml", "type": "blob", "size": 40},
@@ -125,6 +131,8 @@ class FactoryPortalServiceTests(unittest.TestCase):
             result = portal.scan_source(source, allow_remote=True)
         self.assertEqual(result["status"], "connected")
         self.assertEqual(result["assetCount"], 2)
+        self.assertEqual(result["details"]["connector"], "RemoteRepositoryConnector")
+        self.assertEqual(result["details"]["sourceRevision"], "tree-sha")
         self.assertTrue(result["details"]["tokenConfigured"])
         self.assertNotIn("never-echo-this", json.dumps(result))
         self.assertEqual(mocked.call_count, 2)
@@ -139,6 +147,7 @@ class FactoryPortalServiceTests(unittest.TestCase):
             result = portal.scan_source(source, allow_remote=True)
         self.assertEqual(result["status"], "connected")
         self.assertEqual(result["assetCount"], 2)
+        self.assertEqual(result["details"]["connector"], "RemoteRepositoryConnector")
         self.assertNotIn("never-echo-this", json.dumps(result))
         self.assertIn("/api/v4/projects/group%2Fsubgroup%2Fproject", mocked.call_args_list[0].args[0])
 
