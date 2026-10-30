@@ -142,3 +142,12 @@ python scripts/check_llm_connection.py
 | Trivy | digest 固定的 Trivy 镜像 | FACTORY_TRIVY_IMAGE、FACTORY_TRIVY_CACHE_DIR | 需预先填充漏洞数据库缓存，运行时禁网且跳过 DB 更新 |
 
 启用容器扫描需 Docker Engine、FACTORY_ENABLE_CONTAINER_SECURITY_SCANS=1 和三个不可变 image digest。镜像必须预先拉取，运行时不 pull。容器扫描不共享 Docker socket，不挂载宿主机根目录；源工作区只读，证据目录单独可写。Semgrep 使用项目本地规则文件，不依赖运行时访问在线规则仓库。
+
+
+## 10. Connector catalog and future provider adapters
+
+The connector descriptor catalog, schema validation and default-deny authorization are implemented using the existing Python runtime and `jsonschema`; this increment adds no new Python package dependency.
+
+Provider adapters are separate optional integrations. Before adding a dependency, pin its supported version and document authentication scopes, data classes, network destinations, pagination/completeness behavior, retry/rate-limit policy and test strategy. OAuth providers should use an approved secret broker or deployment identity; never place access tokens in connector descriptors or Agent context.
+
+See [Connector Platform and Ontology Ingestion](connector-platform-and-ontology-ingestion.md) for the connector families and their current implementation status. Entries marked `planned` or `adapter-required` are not runnable integrations.
