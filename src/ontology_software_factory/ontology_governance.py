@@ -122,6 +122,8 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
                 add_edge("class:" + name, node_id, "consumes-ontology-class")
         for role_id in data.get("compatibleRoleIds", []):
             add_edge(node_id, "role:" + str(role_id), "compatible-with-role")
+            if role_id not in roles:
+                issues.append({"code": "unknown-compatible-role", "consumer": node_id, "target": role_id})
         for tool_id in data.get("requiredToolIds", []):
             add_edge(node_id, "tool:" + str(tool_id), "requires-tool")
 
