@@ -61,8 +61,12 @@ class AgentWorkflowStepHandler:
             raise PermanentTaskError("workflow input is missing a non-empty requirement")
         try:
             binding = validate_ontology_binding(payload.get("ontologyBinding", {}))
+            runtime_lock = payload.get("runtimeContractLock", {})
+            if (runtime_lock.get("workflowId") != payload.get("workflowId")
+                    or runtime_lock.get("workflowVersion") != payload.get("workflowVersion")):
+                raise ValueError("Workflow definition version does not match the Run-level Role/Skill lock")
             locked = validate_runtime_contract_lock(
-                self.project_root, payload.get("runtimeContractLock", {}), role_id, binding
+                self.project_root, runtime_lock, role_id, binding
             )
             role = locked["role"]
             validate_role_ontology_contract(role, binding, self.project_root)
