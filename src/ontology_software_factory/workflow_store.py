@@ -237,6 +237,15 @@ class SQLiteWorkflowStore:
                         "INSERT INTO factory_plan_phases(plan_id,phase_id,run_id,status,updated_at) VALUES(?,?,?,'pending',?)",
                         (plan_id, phase["phaseId"], run_id, event["at"]),
                     )
+                self._conn.execute(
+                    "INSERT INTO factory_plan_approvals(plan_id,run_id,plan_digest,status,requested_at) VALUES(?,?,?,'pending',?)",
+                    (plan_id, run_id, digest, event["at"]),
+                )
+                for phase in plan.get("phases", []):
+                    self._conn.execute(
+                        "INSERT INTO factory_plan_phases(plan_id,phase_id,run_id,status,updated_at) VALUES(?,?,?,'pending',?)",
+                        (plan_id, phase["phaseId"], run_id, event["at"]),
+                    )
                 persisted_event = dict(event)
                 persisted_event["payload"] = {**event.get("payload", {}), "planDigest": digest}
                 self._insert_event(run_id, persisted_event)
@@ -522,6 +531,44 @@ class SQLiteWorkflowStore:
                     "INSERT INTO workflow_inbox(integration_event_id,run_id,action,processed_at) VALUES(?,?,?,?)",
                     (event_id, run_id, event["action"], event["at"]),
                 )
+                plan_row = self._conn.execute(
+                    "SELECT payload_json FROM factory_orchestrator_plans WHERE plan_id=?", (plan_id,)
+                ).fetchone()
+                plan_payload = json.loads(plan_row["payload_json"]) if plan_row else {}
+                phase_id = str(event.get("payload", {}).get("phaseId", ""))
+                phase_payload = next((item for item in plan_payload.get("phases", [])
+                                      if item.get("phaseId") == phase_id), None)
+                if phase_payload:
+                    statuses = []
+                    for assignment in phase_payload.get("assignments", []):
+                        status_row = self._conn.execute(
+                            "SELECT status FROM factory_assignment_results WHERE plan_id=? AND assignment_id=?",
+                            (plan_id, assignment["assignmentId"]),
+                        ).fetchone()
+                        statuses.append(status_row["status"] if status_row else "pending")
+                    phase_status = (
+                        "succeeded" if statuses and all(value == "succeeded" for value in statuses)
+                        else "failed" if any(value in {"failed", "dead_letter"} for value in statuses)
+                        else "running"
+                    )
+                    old_phase = self._conn.execute(
+                        "SELECT status FROM factory_plan_phases WHERE plan_id=? AND phase_id=?",
+                        (plan_id, phase_id),
+                    ).fetchone()
+                    if old_phase and old_phase["status"] != phase_status:
+                        self._conn.execute(
+                            "UPDATE factory_plan_phases SET status=?,finished_at=?,error_json=?,updated_at=? "
+                            "WHERE plan_id=? AND phase_id=?",
+                            (phase_status, event["at"],
+                             json.dumps(error, ensure_ascii=False) if phase_status == "failed" else "{}",
+                             event["at"], plan_id, phase_id),
+                        )
+                        self._insert_event(run_id, {
+                            **event, "action": f"factory.phase.{phase_status}",
+                            "summary": f"Factory Phase {phase_id} is {phase_status}",
+                            "payload": {"planId": plan_id, "phaseId": phase_id,
+                                        "assignmentStatuses": statuses},
+                        })
                 self._conn.commit()
                 return True
             except Exception:
