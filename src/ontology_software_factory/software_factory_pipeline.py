@@ -14,7 +14,7 @@ from .ontology_runtime import build_agent_task_contract, load_active_ontology_bi
 
 
 class AgentRunner(Protocol):
-    def run_agent(self, role_id: str, task_input: dict[str, Any]) -> dict[str, Any]: ...
+    def run_agent(self, role_id: str, task_input: dict[str, Any], *,\n                  ontology_binding: dict[str, Any], task_contract: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class PipelineValidationError(RuntimeError):
@@ -96,7 +96,7 @@ class SoftwareFactoryPipeline:
         try:
             for role_id in self.STAGES:
                 payload = self._stage_input(role_id, common, outputs, proposed_files)
-                if hasattr(self.agent_runner, "project_root"):
+                if getattr(self.agent_runner, "requires_ontology_binding", False):
                     binding = self.ontology_binding or load_active_ontology_binding(self.project_root)
                     role_path = self.project_root / "agents" / "roles" / f"{role_id}.json"
                     role = json.loads(role_path.read_text(encoding="utf-8"))
