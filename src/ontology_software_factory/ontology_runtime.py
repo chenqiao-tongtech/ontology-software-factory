@@ -311,7 +311,7 @@ def build_agent_result_contract(
         "status": status,
         "summary": summary[:2000],
         "outputs": [{
-            "entityId": f"sf:artifact:{task_contract['taskId'].removeprefix('sf:task:')}.{entity_type.lower()}",
+            "entityId": f"sf:{re.sub(r'(?<!^)(?=[A-Z])', '-', entity_type).lower()}:{task_contract['taskId'].removeprefix('sf:task:')}",
             "entityType": entity_type,
             "schemaVersion": verified["schemaVersion"],
             "uri": artifact_uri,
