@@ -26,6 +26,12 @@ from urllib.parse import quote, unquote, urlparse
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
+from ontology_software_factory.source_connectors import (
+    LocalDirectoryConnector,
+    SQLiteSchemaConnector,
+    SourceConnectorError,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps" / "factory-portal" / "index.html"
 if str(ROOT / "src") not in sys.path:
@@ -249,36 +255,77 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
         result.update(status="disabled", message="Source disabled")
         return result
     if source["type"] == "sqlite":
-        if not base.is_file():
-            result["message"] = "SQLite file does not exist"
-            return result
         try:
-            uri = base.as_uri() + "?mode=ro"
-            with sqlite3.connect(uri, uri=True, timeout=3) as db:
-                db.execute("PRAGMA query_only=ON")
-                tables = db.execute("SELECT name, type FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
-                out_tables = []
-                for name, typ in tables[:100]:
-                    cols = db.execute(f'PRAGMA table_info("{name.replace(chr(34), chr(34)*2)}")').fetchall()
-                    out_tables.append({"name": name, "kind": typ, "columns": [{"name": c[1], "type": c[2], "nullable": not bool(c[3]), "primaryKey": bool(c[5])} for c in cols]})
-            result.update(status="connected", assetCount=len(out_tables), assets=out_tables[:20], details={"tables": out_tables, "mode": "read-only metadata"}, message="Schema metadata read in read-only mode")
+            scanned = SQLiteSchemaConnector([base.parent]).scan(source["id"], base)
+            tables = [
+                {
+                    "name": asset.name,
+                    "kind": asset.kind,
+                    "columns": [
+                        {
+                            "name": column["name"],
+                            "type": column.get("type", ""),
+                            "nullable": not column.get("notNull", False),
+                            "primaryKey": bool(column.get("primaryKeyPosition", 0)),
+                        }
+                        for column in (asset.metadata or {}).get("columns", [])
+                    ],
+                    "definition": (asset.metadata or {}).get("definition"),
+                }
+                for asset in scanned.assets
+            ]
+            result.update(
+                status="connected",
+                assetCount=len(tables),
+                assets=tables[:20],
+                details={
+                    "tables": tables,
+                    "mode": "read-only schema metadata",
+                    "connector": "SQLiteSchemaConnector",
+                },
+                message="SQLite schema metadata read in read-only mode; table rows were not queried",
+            )
             return result
-        except (sqlite3.Error, ValueError) as exc:
+        except (SourceConnectorError, OSError, ValueError) as exc:
             result["message"] = f"SQLite metadata read failed: {type(exc).__name__}"
             return result
-    if not path_is_safe_for_walk(base):
-        result["message"] = "Configured directory does not exist or is not a directory"
+    if source["type"] not in {"repository", "documents"}:
+        result["message"] = f"Unsupported local source type: {source['type']}"
         return result
-    files = list(iter_safe_files(base))
-    assets = []
-    for p in files[:30]:
-        try:
-            rel = p.relative_to(base).as_posix()
-        except ValueError:
-            continue
-        assets.append({"path": rel, "kind": p.suffix.lower().lstrip("."), "bytes": p.stat().st_size})
-    result.update(status="connected", assetCount=len(files), assets=assets, details={"git": git_metadata(base) if source["type"] == "repository" else None, "scannedExtensions": sorted(ALLOWED_SUFFIXES), "truncatedAt": 600}, message="Read-only local metadata scan completed")
-    return result
+    try:
+        scanned = LocalDirectoryConnector(
+            [base.parent],
+            source_type=source["type"],
+            max_files=600,
+            max_file_bytes=1_500_000,
+        ).scan(source["id"], base)
+        assets = [
+            {
+                "path": asset.locator,
+                "kind": (asset.metadata or {}).get("suffix", "").lstrip("."),
+                "bytes": asset.size_bytes,
+                "sha256": asset.content_sha256,
+            }
+            for asset in scanned.assets[:30]
+        ]
+        result.update(
+            status="connected",
+            assetCount=len(scanned.assets),
+            assets=assets,
+            details={
+                "git": git_metadata(base) if source["type"] == "repository" else None,
+                "scannedExtensions": sorted({(asset.metadata or {}).get("suffix", "") for asset in scanned.assets}),
+                "connector": "LocalDirectoryConnector",
+                "scanStatus": scanned.status,
+                "warnings": list(scanned.warnings),
+                "truncatedAt": 600 if scanned.status == "partial" else None,
+            },
+            message="Read-only local metadata scan completed through SourceConnector",
+        )
+        return result
+    except (SourceConnectorError, OSError, ValueError) as exc:
+        result["message"] = f"Local source scan failed: {type(exc).__name__}"
+        return result
 
 
 def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> list[dict]:
