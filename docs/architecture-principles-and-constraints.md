@@ -36,3 +36,12 @@
 - 失败如何重试、对账、回滚或交由人工处理？
 - 用哪条自动化正向/负向测试证明正确？
 - 当前实现状态是否准确标记为 planned/partial/implemented？
+
+
+## AP-14 主控规划受控
+
+Factory Orchestrator 只负责生成有界、结构化的 AgentPlan。Workflow Engine 对计划进行 Schema、依赖、角色、Skill、预算和策略校验，并拥有任务创建、状态转换、重试和暂停恢复的权威性。Agent 不得自行修改权威状态或授予权限。
+
+## C-10 主控权限边界
+
+Factory Orchestrator 不直接派发任务、不修改 Workflow 状态、不授予工具权限、不批准自身计划、不发布正式本体。高风险操作由独立策略和人工审批流程决定。
