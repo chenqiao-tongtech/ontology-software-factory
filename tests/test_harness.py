@@ -121,7 +121,7 @@ class HarnessRuntimeTests(unittest.TestCase):
         second = HarnessRuntime(
             project_root=ROOT, tool_registry=self.registry,
             audit_path=self.root / "second-audit.jsonl",
-            budget=shared_budget, usage_store=store, policy_version="test-policy-v1",
+            budget=shared_budget, usage_store=store, policy_version="test-policy-v1", policy_digest="sha256:test-policy",
         )
         first.invoke_tool(
             self.principal, run_id="shared-run", task_id="task-a",
