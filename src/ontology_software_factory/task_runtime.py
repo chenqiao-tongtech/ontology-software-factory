@@ -421,6 +421,7 @@ class SQLiteTaskStore:
             "businessOperationId": business.get("businessOperationId"),
             "factoryPlanId": business.get("factoryPlanId"),
             "factoryPhaseId": business.get("factoryPhaseId"),
+            "factoryPhaseAttempt": business.get("factoryPhaseAttempt", 1),
             "factoryAssignmentId": factory_assignment_id,
             "roleId": business.get("roleId"), "skillId": business.get("skillId"),
             **result_payload,
