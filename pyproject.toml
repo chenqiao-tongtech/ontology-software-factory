@@ -7,7 +7,7 @@ name = "ontology-software-factory"
 version = "0.3.0"
 description = "A governed, ontology-driven multi-agent software factory reference implementation"
 requires-python = ">=3.11"
-dependencies = ["jsonschema>=4.21,<5"]
+dependencies = ["jsonschema[format]>=4.21,<5"]
 
 [project.optional-dependencies]
 llm = ["openai>=1.99,<4"]
