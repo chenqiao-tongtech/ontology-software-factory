@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import hashlib
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 from jsonschema import Draft202012Validator
@@ -13,6 +14,10 @@ class ToolRegistry:
         self.root = Path(root).resolve()
         self.tools = json.loads((self.root/'tools/registry.json').read_text(encoding='utf-8'))['tools']
         policy = json.loads((self.root/'policies/tool-permissions.json').read_text(encoding='utf-8'))
+        self.policy_version = str(policy.get("policyVersion", "unknown"))
+        self.policy_digest = hashlib.sha256(
+            json.dumps(policy, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
         self.role_policy = policy['roles']
         self.approval_required = set(policy.get('productionToolsRequireApproval', []))
         self.roles = {}
