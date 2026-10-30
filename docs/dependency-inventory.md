@@ -84,7 +84,9 @@ command -v trivy
 | Make | `make portal`、`make validate` 等快捷命令 | 推荐；可直接调用 Python 脚本替代 |
 | 浏览器 | 静态 Portal / Console | 使用 UI 时需要 |
 | Node.js / npm | 本项目当前静态 HTML UI | **不需要** |
-| Docker / Kubernetes | 生产隔离与部署环境 | 当前本地 MVP 不依赖；生产化时另行建设 |
+| Docker Engine / Docker Desktop | 固定测试套件的隔离执行（可选） | 构建 `ontology-software-factory-test-runner:py311-v1` 镜像并设置 `FACTORY_ENABLE_CONTAINER_EXECUTION=1`；运行时不自动 pull |
+| Git CLI | 本地仓库元数据与可选 per-Run Git Worktree | 设置 `FACTORY_WORKSPACE_BACKEND=git-worktree` 时必需；需项目根目录为 Git 仓库 |
+| Kubernetes / 微虚机运行时 | 多租户生产隔离执行与部署 | 当前没有生产级执行编排；需后续建设 |
 
 ## 6. 可选依赖安装组合
 
@@ -123,9 +125,9 @@ python scripts/check_llm_connection.py
 | 功能 | 外部依赖 | 默认状态 | 显式启用变量 |
 |---|---|---|---|
 | Agent 候选文件读写 | 无额外依赖 | 可用（只在临时工作区） | 无 |
-| 固定测试套件 | Python 3.11+ | blocked，不执行宿主机代码 | FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION=1 |
+| 固定测试套件（推荐） | Docker Engine + 本地测试镜像 | blocked | FACTORY_ENABLE_CONTAINER_EXECUTION=1 |
 | SAST | Semgrep CLI | blocked，不启动 | FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1 |
 | 秘密扫描 | Gitleaks CLI | blocked，不启动 | FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1 |
 | 文件系统漏洞/配置扫描 | Trivy CLI 与本地数据库 | blocked，不启动 | FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1 |
 
-注意：当前开关允许本地宿主机进程执行，并不构成容器或 OS 沙箱。请勿对不可信代码开启；生产环境必须先部署隔离执行后端。缺少工具、超时或缺失报告都不能标记为 PASS。
+注意：Docker 测试镜像由 `runners/container/Dockerfile.test-runner` 构建，执行使用无网络、只读 rootfs、capability drop、no-new-privileges、PID/内存/CPU 限制。`FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION=1` 仍是危险的宿主机演示回退开关。Semgrep/Gitleaks/Trivy 当前仍使用本机 CLI，尚未容器化。缺少工具、超时或缺失报告都不能标记为 PASS。
