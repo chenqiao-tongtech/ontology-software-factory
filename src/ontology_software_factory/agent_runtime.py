@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .ontology_runtime import (
-    validate_agent_output, validate_agent_task_contract, validate_ontology_binding,
+    validate_agent_output, validate_agent_task_contract, validate_ontology_binding,\n    validate_role_ontology_contract,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -133,6 +133,7 @@ class OpenAIAgentsRuntime:
                   ontology_binding: dict[str, Any], task_contract: dict[str, Any]) -> dict[str, Any]:
         role = self._load_role(role_id)
         binding = validate_ontology_binding(ontology_binding)
+        skill_contracts = validate_role_ontology_contract(role, binding, self.project_root)
         validate_agent_task_contract(self.project_root, task_contract, role=role, binding=binding)
         if role_id not in self._models:
             raise AgentContractError(f"Role has no registered typed output model: {role_id}")
@@ -157,6 +158,7 @@ class OpenAIAgentsRuntime:
             "relations": ontology.get("relations", []) + extensions.get("relations", []),
             "controlledVocabularies": ontology.get("controlledVocabularies", {}),
             "mvpInvariants": ontology.get("mvpInvariants", []),
+            "skills": [{key: skill.get(key) for key in ("skillId", "version", "title", "inputEntityTypes", "outputEntityTypes", "requiredToolIds", "compatibleRoleIds")} for skill in skill_contracts],
         }
         instructions = (
             f"Role: {role.get('displayName', role_id)}\n"
