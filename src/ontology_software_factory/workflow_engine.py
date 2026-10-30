@@ -156,6 +156,36 @@ class WorkflowEngine:
         except ValueError as exc:
             raise WorkflowError(str(exc), 409) from exc
 
+    def retry_factory_orchestrator_phase(
+        self, run_id: str, plan_id: str, phase_id: str, *,
+        actor: str, reason: str,
+    ) -> dict[str, Any]:
+        """Reset a failed Phase for a bounded, explicitly authorized retry."""
+        run = self.get_run(run_id)
+        if run.get("status") != "running":
+            raise WorkflowError("Phase retry requires a running Workflow Run", 409)
+        plan = self.store.get_factory_orchestrator_plan(plan_id)
+        if plan is None or plan.get("workflowRunId") != run_id:
+            raise WorkflowError("Factory Plan not found for this Workflow Run", 404)
+        approval = self.store.get_factory_plan_approval(plan_id)
+        if approval is None or approval.get("status") != "approved" or approval.get("planDigest") != plan.get("digest"):
+            raise WorkflowError("an approved, digest-matched Factory Plan is required for Phase retry", 409)
+        if not any(item.get("phaseId") == phase_id for item in plan["plan"].get("phases", [])):
+            raise WorkflowError("Phase is not part of the persisted Factory Plan", 404)
+        event = self._event(
+            "factory.phase.retry_requested",
+            f"Factory Phase {phase_id} retry requested",
+            actor=str(actor).strip(),
+            payload={"planId": plan_id, "planDigest": plan["digest"], "phaseId": phase_id},
+        )
+        try:
+            return self.store.retry_factory_plan_phase(
+                run_id=run_id, plan_id=plan_id, phase_id=phase_id,
+                actor=actor, reason=reason, event=event, max_attempts=3,
+            )
+        except ValueError as exc:
+            raise WorkflowError(str(exc), 409) from exc
+
     def apply_factory_assignment_event(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Project a terminal Assignment Worker result into the Workflow event ledger."""
         from .integration import IntegrationEventDeferred
