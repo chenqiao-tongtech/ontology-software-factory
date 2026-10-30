@@ -20,11 +20,12 @@
     "release-readiness-check"
   ],
   "toolIds": [
-    "catalog.read",
-    "artifacts.read",
-    "release.manifest.write",
     "approval.request",
+    "artifacts.read",
+    "catalog.read",
     "contract.validate",
+    "dependencies.inspect",
+    "release.manifest.write",
     "release.simulation.promote"
   ],
   "allowedActions": [
