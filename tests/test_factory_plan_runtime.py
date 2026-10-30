@@ -8,6 +8,7 @@ from pathlib import Path
 from ontology_software_factory.factory_plan_runtime import (
     FactoryAssignmentHandler, FactoryPlanDispatcher, get_factory_plan_execution,
 )
+from ontology_software_factory.integration import WorkflowOutboxRelay
 from ontology_software_factory.ontology_runtime import build_runtime_contract_lock
 from ontology_software_factory.ontology_versioning import create_snapshot
 from ontology_software_factory.task_runtime import SQLiteTaskStore, TaskWorker
@@ -121,6 +122,12 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         self.assertEqual(fake.calls[0][0], "requirement-analyst")
         self.assertEqual(fake.calls[0][2]["assigned_skill_id"], "requirement-normalization")
         self.assertEqual(result["task"]["evidence"][0]["type"], "agent-result-contract")
+        relay = WorkflowOutboxRelay(self.task_store, self.engine, relay_id="factory-plan-test-relay")
+        relayed = relay.drain()
+        self.assertEqual(relayed["delivered"], 1)
+        detail = self.engine.get_run_detail(self.run["id"])
+        self.assertEqual(detail["factoryAssignmentResults"][0]["assignmentId"], "analyze-requirement")
+        self.assertIn("factory.assignment.succeeded", [item["action"] for item in detail["events"]])
         execution = get_factory_plan_execution(self.task_store, self.plan_record)
         self.assertEqual(execution["completedAssignments"], 1)
         self.assertEqual(execution["phases"][0]["status"], "succeeded")
