@@ -1,0 +1,19 @@
+{
+  "eventId": "EVT-EXAMPLE-SUCCESS-0001",
+  "eventType": "workflow.step.execution_succeeded",
+  "taskId": "TASK-EXAMPLE-001",
+  "idempotencyKey": "workflow:RUN-EXAMPLE:requirement-analysis:attempt:1",
+  "taskType": "demo.workflow-step",
+  "workflowRunId": "RUN-EXAMPLE",
+  "workflowStepId": "requirement-analysis",
+  "workflowId": "software-delivery",
+  "workflowVersion": "1.0.0",
+  "workflowAttempt": 1,
+  "businessOperationId": "RUN-EXAMPLE:requirement-analysis",
+  "taskStatus": "succeeded",
+  "attempt": 1,
+  "output": {"summary": "演示结果，不是生产执行证据"},
+  "evidence": [
+    {"type": "normalized-requirement", "uri": "demo://artifacts/RUN-EXAMPLE/requirement-analysis/1/normalized-requirement", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+  ]
+}

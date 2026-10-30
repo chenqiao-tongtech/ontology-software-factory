@@ -1,0 +1,12 @@
+{
+  "benchmarkId": "software-factory-ontology-smoke-v1",
+  "expectedTerms": ["Requirement", "Product", "Component", "Version", "Build", "TestRun", "Artifact", "Release"],
+  "expectedRelations": [
+    {"subject": "Requirement", "predicate": "targetsProduct", "object": "Product"},
+    {"subject": "Build", "predicate": "usesVersion", "object": "Version"},
+    {"subject": "TestRun", "predicate": "validates", "object": "Build"},
+    {"subject": "Artifact", "predicate": "producedBy", "object": "Build"},
+    {"subject": "Release", "predicate": "contains", "object": "Artifact"}
+  ],
+  "notes": "Synthetic smoke benchmark only; replace with a domain-expert-reviewed gold set before interpreting scores as a quality claim."
+}

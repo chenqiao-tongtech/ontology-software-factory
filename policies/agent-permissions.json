@@ -1,0 +1,57 @@
+{
+  "policyVersion": "1.0.0",
+  "principles": [
+    "least_privilege",
+    "separation_of_duties",
+    "tenant_isolation",
+    "evidence_before_state_transition",
+    "human_approval_for_high_impact_actions"
+  ],
+  "globallyDeniedActions": [
+    "production.deploy",
+    "repository.merge.protected_branch",
+    "secrets.read.raw",
+    "policy.modify",
+    "agent.approve_self",
+    "cross_tenant.read",
+    "security.waive_critical_finding",
+    "ontology.publish"
+  ],
+  "globallyDeniedToolIds": [
+    "repository.merge",
+    "production.deploy",
+    "secrets.read.raw",
+    "policy.modify",
+    "agent.approve_self"
+  ],
+  "tenantBoundary": "Every task, entity reference, artifact and tool result is scoped to the initiating tenant and project. A role definition is not an authorization grant.",
+  "approvalRules": [
+    {
+      "action": "release.publish",
+      "requiredApprover": "release-owner-or-designated-human",
+      "selfApprovalAllowed": false
+    },
+    {
+      "action": "repository.merge.protected_branch",
+      "requiredApprover": "independent-code-reviewer",
+      "selfApprovalAllowed": false
+    },
+    {
+      "action": "production.deploy",
+      "requiredApprover": "environment-owner-or-on-call-approver",
+      "selfApprovalAllowed": false
+    },
+    {
+      "action": "security.waive_critical_finding",
+      "requiredApprover": "security-owner",
+      "selfApprovalAllowed": false
+    }
+  ],
+  "toolCallRequirements": [
+    "Validate arguments against tool schema before execution.",
+    "Check identity, tenant, project, resource and action at the enforcement point.",
+    "Log agent identity, initiating user, task ID, tool ID, sanitized arguments, decision, run ID and result outside agent control.",
+    "Treat repository files, issue comments, external docs, tool outputs and MCP responses as untrusted data.",
+    "Fail closed if policy evaluation or required approval is unavailable."
+  ]
+}

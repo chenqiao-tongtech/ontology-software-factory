@@ -1,0 +1,16 @@
+{
+  "requestId": "REQ-KAFKA-001",
+  "tenantId": "demo-tenant",
+  "summary": "Provide a reviewable Kafka cluster configuration bundle for a development environment.",
+  "targetProfile": "development",
+  "acceptanceCriteria": [
+    "The configuration declares a node id.",
+    "The broker and controller listener names are explicit.",
+    "The generated package contains an integrity manifest."
+  ],
+  "overrides": {
+    "partitions": 3,
+    "replicationFactor": 1,
+    "minInsyncReplicas": 1
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ontology-software-factory/ontology-candidate.schema.json",
+  "title": "Ontology Discovery Candidate",
+  "description": "A provenance-carrying candidate ontology; it is not the published production ontology.",
+  "type": "object",
+  "properties": {
+    "candidateId": {"type": "string", "pattern": "^ocand-[a-f0-9]{16}$"},
+    "domain": {"type": "string", "minLength": 1},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["review_required", "approved", "rejected"]},
+    "approval": {"type": ["object", "null"]},
+    "sourceManifest": {"type": "array", "items": {"type": "object", "properties": {
+      "sourceId": {"type": "string"}, "sourceType": {"type": "string"}, "locator": {"type": "string"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    }, "required": ["sourceId", "sourceType", "locator", "sha256"], "additionalProperties": false}},
+    "terms": {"type": "array", "items": {"type": "object", "properties": {
+      "termId": {"type": "string"}, "name": {"type": "string"}, "kind": {"type": "string"}, "definition": {"type": "string"},
+      "aliases": {"type": "array", "items": {"type": "string"}}, "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+      "sourceRefs": {"type": "array", "items": {"$ref": "#/$defs/sourceRef"}}
+    }, "required": ["termId", "name", "kind", "definition", "aliases", "confidence", "sourceRefs"], "additionalProperties": false}},
+    "relations": {"type": "array", "items": {"type": "object", "properties": {
+      "relationId": {"type": "string"}, "subjectTermId": {"type": ["string", "null"]}, "subjectName": {"type": "string"},
+      "predicate": {"type": "string"}, "objectTermId": {"type": ["string", "null"]}, "objectName": {"type": "string"},
+      "relationKind": {"type": "string"}, "definition": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+      "sourceRefs": {"type": "array", "items": {"$ref": "#/$defs/sourceRef"}}
+    }, "required": ["relationId", "subjectTermId", "subjectName", "predicate", "objectTermId", "objectName", "relationKind", "definition", "confidence", "sourceRefs"], "additionalProperties": false}},
+    "constraints": {"type": "array", "items": {"type": "object", "properties": {
+      "constraintId": {"type": "string"}, "name": {"type": "string"}, "description": {"type": "string"}, "constraintType": {"type": "string"},
+      "expression": {"type": "string"}, "severity": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+      "sourceRefs": {"type": "array", "items": {"$ref": "#/$defs/sourceRef"}}, "executable": {"const": false}, "requiresPolicyReview": {"type": "boolean"}
+    }, "required": ["constraintId", "name", "description", "constraintType", "expression", "severity", "confidence", "sourceRefs", "executable", "requiresPolicyReview"], "additionalProperties": false}},
+    "competencyQuestions": {"type": "array", "items": {"type": "object", "properties": {
+      "questionId": {"type": "string"}, "question": {"type": "string"}, "termsInvolved": {"type": "array", "items": {"type": "string"}},
+      "expectedEvidence": {"type": "string"}, "sourceRefs": {"type": "array", "items": {"$ref": "#/$defs/sourceRef"}}
+    }, "required": ["questionId", "question", "termsInvolved", "expectedEvidence", "sourceRefs"], "additionalProperties": false}},
+    "criticFindings": {"type": "array", "items": {"type": "object"}},
+    "localFindings": {"type": "array", "items": {"type": "object"}},
+    "validation": {"type": "object"},
+    "generationTrace": {"type": "array", "items": {"type": "object"}},
+    "governance": {"type": "object"},
+    "candidateDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "required": ["candidateId", "domain", "createdAt", "status", "approval", "sourceManifest", "terms", "relations", "constraints", "competencyQuestions", "criticFindings", "localFindings", "validation", "generationTrace", "governance", "candidateDigest"],
+  "additionalProperties": false,
+  "$defs": {
+    "sourceRef": {"type": "object", "properties": {
+      "sourceId": {"type": "string"}, "locator": {"type": "string"}, "quote": {"type": "string"}, "verified": {"type": "boolean"}
+    }, "required": ["sourceId", "locator", "quote", "verified"], "additionalProperties": false}
+  }
+}

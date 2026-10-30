@@ -1,0 +1,18 @@
+{
+  "eventId": "EVT-EXAMPLE-FAILURE-0001",
+  "eventType": "workflow.step.execution_failed",
+  "taskId": "TASK-EXAMPLE-002",
+  "idempotencyKey": "workflow:RUN-EXAMPLE:requirement-analysis:attempt:1",
+  "taskType": "demo.workflow-step",
+  "workflowRunId": "RUN-EXAMPLE",
+  "workflowStepId": "requirement-analysis",
+  "workflowId": "software-delivery",
+  "workflowVersion": "1.0.0",
+  "workflowAttempt": 1,
+  "businessOperationId": "RUN-EXAMPLE:requirement-analysis",
+  "taskStatus": "dead_letter",
+  "attempt": 3,
+  "maxAttempts": 3,
+  "errorClass": "transient_timeout",
+  "errorMessage": "演示错误：上游超时；不代表真实服务故障"
+}

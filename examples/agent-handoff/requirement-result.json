@@ -1,0 +1,28 @@
+{
+  "taskId": "sf:task:REQ-001-normalize",
+  "roleId": "requirement-analyst",
+  "status": "needs_human_review",
+  "summary": "已生成需求草案；“高可用”所需故障域和可接受恢复时间尚未明确，不能将候选假设当作已确认需求。",
+  "outputs": [
+    {
+      "entityId": "sf:requirement:REQ-001",
+      "entityType": "Requirement",
+      "schemaVersion": "1.0.0",
+      "uri": "artifact://demo/requirement-spec-REQ-001.json"
+    }
+  ],
+  "evidenceRefs": [
+    {
+      "evidenceType": "schema_validation",
+      "refId": "run:contract-check-001",
+      "summary": "需求对象通过结构校验。"
+    }
+  ],
+  "humanReviewRequired": true,
+  "blockedReasons": [
+    "需要产品负责人确认故障域与恢复目标。"
+  ],
+  "errors": [],
+  "proposedNextRoleId": "human-product-owner",
+  "completedAt": "2026-10-28T08:00:00Z"
+}

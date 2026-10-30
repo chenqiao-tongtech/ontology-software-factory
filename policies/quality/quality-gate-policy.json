@@ -1,0 +1,19 @@
+{
+  "policyVersion": "1.0.0",
+  "requiredChecks": [
+    "config-structure",
+    "catalogue-consistency",
+    "secret-pattern-scan",
+    "artifact-integrity",
+    "license-review-metadata"
+  ],
+  "productionRequiredExternalTools": [
+    "trivy",
+    "gitleaks"
+  ],
+  "externalToolApplicability": {
+    "semgrep": "not-applicable-for-configuration-only-bundle"
+  },
+  "failClosedOnMissingEvidence": true,
+  "notes": "开发配置包允许外部扫描器状态为 NOT_RUN，但生产候选必须提供已执行的 Trivy/Gitleaks 证据；此策略不把元数据许可复核当成法律意见。"
+}

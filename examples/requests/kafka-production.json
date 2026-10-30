@@ -1,0 +1,16 @@
+{
+  "requestId": "REQ-KAFKA-PROD-001",
+  "tenantId": "demo-tenant",
+  "summary": "Prepare a production candidate configuration with encrypted client listener and resilient replication settings.",
+  "targetProfile": "production",
+  "acceptanceCriteria": [
+    "The client listener is encrypted.",
+    "Replication factor is at least three.",
+    "Minimum in-sync replicas is at least two."
+  ],
+  "overrides": {
+    "partitions": 12,
+    "replicationFactor": 3,
+    "minInsyncReplicas": 2
+  }
+}

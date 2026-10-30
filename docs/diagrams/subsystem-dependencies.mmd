@@ -1,0 +1,30 @@
+flowchart LR
+  Governance[横切治理 / IAM / Policy]
+  Semantics[语义核心 / 本体 / 契约]
+  Intake[需求与交互]
+  Catalog[资产目录]
+  Team[多智能体协作：拓扑 / Roles / Skills / Handoff]
+  Workflow[确定性 Workflow / Task State]
+  Tools[工具适配器]
+  Runner[受控执行]
+  Gate[独立质量与安全门禁]
+  Release[候选交付 / 发布]
+  Observe[观测 / 成本 / 生命周期]
+  Intake --> Semantics
+  Catalog --> Semantics
+  Team --> Semantics
+  Team --> Catalog
+  Workflow --> Team
+  Tools --> Semantics
+  Runner --> Tools
+  Runner --> Workflow
+  Gate --> Runner
+  Release --> Gate
+  Release --> Catalog
+  Observe --> Workflow
+  Observe --> Release
+  Governance -.约束.-> Team
+  Governance -.约束.-> Workflow
+  Governance -.约束.-> Tools
+  Governance -.约束.-> Runner
+  Governance -.约束.-> Gate

@@ -1,0 +1,21 @@
+{
+  "taskType": "demo.generate-evidence",
+  "idempotencyKey": "sample:release:RUN-EXAMPLE:test-report:attempt:1",
+  "queue": "default",
+  "payload": {
+    "message": "验证测试报告生成",
+    "businessOperationId": "RUN-EXAMPLE:test-suite"
+  },
+  "maxAttempts": 4,
+  "timeoutSeconds": 30,
+  "retryableErrorClasses": [
+    "transient",
+    "timeout",
+    "worker_lost",
+    "rate_limited"
+  ],
+  "requiredEvidence": [
+    "test-report",
+    "coverage-summary"
+  ]
+}

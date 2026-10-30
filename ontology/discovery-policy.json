@@ -1,0 +1,30 @@
+{
+  "policyVersion": "1.0.0",
+  "candidateOnly": true,
+  "productionOntologyMutationByLLM": false,
+  "requiredStages": ["term-discovery", "relation-discovery", "constraint-and-competency-questions", "independent-critic"],
+  "sourceEvidence": {
+    "requiresSourceRefForTerms": true,
+    "requiresSourceRefForRelations": true,
+    "quotesMustMatchSourceText": true,
+    "storeSourceSha256": true,
+    "blockPotentialSecretsBeforeModelCall": true
+  },
+  "evaluationThresholds": {
+    "termF1": 0.75,
+    "relationF1": 0.65,
+    "provenanceCoverage": 0.95,
+    "humanGoldBenchmarkRequiredForRelease": true
+  },
+  "promotion": {
+    "requiresIndependentHumanApproval": true,
+    "approvalMustBindCandidateDigest": true,
+    "requiresSemanticRegression": true,
+    "requiresVersionedPullRequest": true
+  },
+  "sourceLimits": {"maxTotalCharacters": 48000, "maxPerSourceCharacters": 18000},
+  "externalConnectors": {
+    "nvidiaAutoOntology": {"mode": "read-only-metadata-import", "productionWrites": false},
+    "cognee": {"mode": "staging-graph-grounding", "productionWrites": false}
+  }
+}

@@ -1,0 +1,46 @@
+flowchart TB
+  subgraph L1[交互与需求层]
+    UI[Portal / API]
+    REQ[Requirement Intake / Scope Check]
+  end
+  subgraph L2[语义与规划层：多智能体是核心协作能力]
+    ONT[Ontology / Contracts]
+    CAT[Approved Asset Catalog]
+    subgraph TEAM[有界 Multi-Agent Team]
+      TOPO[Team Topology / Role + Skill]
+      COORD[确定性协调控制器引用工作流策略]
+      SPEC[专业 Agent：需求 / 架构 / 实现]
+      VERIFY[独立验证 Agent：测试 / 安全证据]
+      HANDOFF[Typed Handoff / Context Scope]
+      TOPO --> SPEC
+      TOPO --> VERIFY
+      SPEC --> HANDOFF
+      HANDOFF --> VERIFY
+      COORD --> TOPO
+    end
+  end
+  subgraph L3[编排与执行层]
+    WF[Workflow / State Machine]
+    TOOL[Tool Adapters：Git / CI / MCP / API]
+    RUN[Restricted Runner / Worker]
+  end
+  subgraph L4[验证与交付层]
+    TEST[独立工具：Build / Test / Scan]
+    GATE[Quality & Security Gate]
+    ART[Artifact / Evidence / Release Candidate]
+  end
+  OBS[Observability / Cost / Audit / Feedback]
+  GOV[横切治理：IAM / Policy / Human Approval / Secrets / Tenant Isolation]
+  UI --> REQ --> ONT
+  ONT --> TOPO
+  CAT --> TOPO
+  HANDOFF --> WF --> TOOL --> RUN --> TEST --> GATE --> ART
+  GATE -- fail / incomplete --> WF
+  ART --> OBS
+  WF --> OBS
+  COORD -.只提交受控任务，不授予权限.-> WF
+  GOV -.约束.-> COORD
+  GOV -.约束.-> WF
+  GOV -.约束.-> TOOL
+  GOV -.约束.-> RUN
+  GOV -.约束.-> GATE

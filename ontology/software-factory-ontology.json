@@ -1,0 +1,460 @@
+{
+  "ontologyId": "software-factory-core",
+  "ontologyVersion": "1.0.0",
+  "schemaVersion": "1.0.0",
+  "title": "Software Factory Core Ontology",
+  "description": "A lightweight, machine-readable vocabulary for the first software-factory MVP. It defines business objects, typed relations, and controlled vocabularies; it is not a replacement for IAM, workflow execution, or a formal OWL reasoner.",
+  "idConvention": {
+    "prefix": "sf:",
+    "pattern": "sf:<entity-kebab-case>:<stable-key>",
+    "rule": "IDs are stable identifiers; names and display labels may change."
+  },
+  "governanceMetadata": {
+    "schemaVersion": "Version of the JSON contract shape.",
+    "ontologyVersion": "Version of the business meaning / vocabulary.",
+    "tenantId": "Tenant boundary label; not an authorization check.",
+    "createdAt": "RFC 3339 / date-time timestamp.",
+    "source": "Origin metadata; provenance does not by itself prove truth."
+  },
+  "classes": [
+    {
+      "name": "Requirement",
+      "description": "A request or constraint to be satisfied, with explicit acceptance criteria."
+    },
+    {
+      "name": "Product",
+      "description": "A software product or deliverable product family composed of components."
+    },
+    {
+      "name": "Component",
+      "description": "A reusable software, middleware, library, service, template, or engineering tool component."
+    },
+    {
+      "name": "Version",
+      "description": "A stable version identity belonging to one component."
+    },
+    {
+      "name": "Artifact",
+      "description": "A produced or registered file/package/image/configuration/report/SBOM/document with provenance and digest."
+    },
+    {
+      "name": "Build",
+      "description": "An actual build execution tied to a source revision and component version."
+    },
+    {
+      "name": "TestRun",
+      "description": "An actual test execution tied to a build and a test result report."
+    },
+    {
+      "name": "Vulnerability",
+      "description": "A security finding linked to the affected component and versions."
+    },
+    {
+      "name": "Release",
+      "description": "A candidate or published bundle of a product version and its evidence."
+    },
+    {
+      "name": "Deployment",
+      "description": "An attempt or result of deploying a release to a named environment."
+    },
+    {
+      "name": "Incident",
+      "description": "A run-time issue with severity, status, affected components and evidence."
+    }
+  ],
+  "relations": [
+    {
+      "name": "targetsProduct",
+      "source": "Requirement",
+      "field": "targetProductId",
+      "target": "Product",
+      "cardinality": "0..1",
+      "validation": "referential-integrity"
+    },
+    {
+      "name": "containsComponent",
+      "source": "Product",
+      "field": "componentIds",
+      "target": "Component",
+      "cardinality": "1..*",
+      "validation": "referential-integrity"
+    },
+    {
+      "name": "currentVersion",
+      "source": "Component",
+      "field": "currentVersionId",
+      "target": "Version",
+      "cardinality": "1",
+      "validation": "referential-integrity-and-component-match"
+    },
+    {
+      "name": "belongsToComponent",
+      "source": "Version",
+      "field": "componentId",
+      "target": "Component",
+      "cardinality": "1",
+      "validation": "referential-integrity"
+    },
+    {
+      "name": "buildsComponentVersion",
+      "source": "Build",
+      "field": "componentId + versionId",
+      "target": [
+        "Component",
+        "Version"
+      ],
+      "cardinality": "1 + 1",
+      "validation": "version-must-belong-to-component"
+    },
+    {
+      "name": "producesArtifact",
+      "source": "Build",
+      "field": "artifactIds",
+      "target": "Artifact",
+      "cardinality": "0..*",
+      "validation": "referential-integrity; succeeded build needs artifact in this MVP"
+    },
+    {
+      "name": "validatesBuild",
+      "source": "TestRun",
+      "field": "buildId",
+      "target": "Build",
+      "cardinality": "1",
+      "validation": "referential-integrity"
+    },
+    {
+      "name": "testReport",
+      "source": "TestRun",
+      "field": "reportArtifactId",
+      "target": "Artifact",
+      "cardinality": "1",
+      "validation": "referential-integrity"
+    },
+    {
+      "name": "affectsComponentVersion",
+      "source": "Vulnerability",
+      "field": "componentId + affectedVersionIds",
+      "target": [
+        "Component",
+        "Version"
+      ],
+      "cardinality": "1 + 1..*",
+      "validation": "referential-integrity"
+    },
+    {
+      "name": "packagesProduct",
+      "source": "Release",
+      "field": "productId + versionIds",
+      "target": [
+        "Product",
+        "Version"
+      ],
+      "cardinality": "1 + 1..*",
+      "validation": "referential-integrity"
+    },
+    {
+      "name": "releaseEvidence",
+      "source": "Release",
+      "field": "buildIds + testRunIds + evidenceArtifactIds",
+      "target": [
+        "Build",
+        "TestRun",
+        "Artifact"
+      ],
+      "cardinality": "0..*",
+      "validation": "referential-integrity"
+    },
+    {
+      "name": "deploysRelease",
+      "source": "Deployment",
+      "field": "releaseId",
+      "target": "Release",
+      "cardinality": "1",
+      "validation": "referential-integrity"
+    },
+    {
+      "name": "incidentContext",
+      "source": "Incident",
+      "field": "deploymentId + affectedComponentIds + evidenceArtifactIds",
+      "target": [
+        "Deployment",
+        "Component",
+        "Artifact"
+      ],
+      "cardinality": "0..1 + 1..* + 0..*",
+      "validation": "referential-integrity"
+    }
+  ],
+  "controlledVocabularies": {
+    "requirementStatus": [
+      "draft",
+      "needs_clarification",
+      "approved",
+      "in_progress",
+      "accepted",
+      "rejected"
+    ],
+    "priority": [
+      "p0",
+      "p1",
+      "p2",
+      "p3"
+    ],
+    "componentKind": [
+      "middleware",
+      "library",
+      "service",
+      "template",
+      "tooling"
+    ],
+    "versionChannel": [
+      "stable",
+      "preview",
+      "deprecated"
+    ],
+    "buildStatus": [
+      "queued",
+      "running",
+      "succeeded",
+      "failed",
+      "cancelled"
+    ],
+    "testStatus": [
+      "queued",
+      "running",
+      "passed",
+      "failed",
+      "cancelled"
+    ],
+    "vulnerabilitySeverity": [
+      "critical",
+      "high",
+      "medium",
+      "low",
+      "unknown"
+    ],
+    "vulnerabilityStatus": [
+      "open",
+      "accepted",
+      "fixed",
+      "false_positive"
+    ],
+    "releaseStatus": [
+      "draft",
+      "candidate",
+      "approved",
+      "published",
+      "withdrawn"
+    ],
+    "deploymentStatus": [
+      "planned",
+      "pending_approval",
+      "running",
+      "succeeded",
+      "failed",
+      "rolled_back"
+    ],
+    "environment": [
+      "local",
+      "dev",
+      "staging",
+      "prod",
+      "customer"
+    ],
+    "incidentStatus": [
+      "open",
+      "investigating",
+      "mitigated",
+      "resolved",
+      "closed"
+    ],
+    "incidentSeverity": [
+      "low",
+      "medium",
+      "high",
+      "critical"
+    ]
+  },
+  "mvpInvariants": [
+    "Entity IDs must be unique within a submitted graph.",
+    "Every declared relation target must exist and match the target class.",
+    "References may not cross tenantId boundaries in the submitted graph; tenantId is not an authorization decision.",
+    "A Version must belong to the Component referenced by that Version.",
+    "A Component currentVersionId and a Vulnerability affectedVersionId must refer to versions of the same Component.",
+    "A Build versionId must refer to a Version belonging to the same componentId.",
+    "Every Version included in a Release must belong to a Component included in that Product.",
+    "A succeeded Build must reference at least one Artifact in this MVP.",
+    "A TestRun marked passed must report zero failed cases.",
+    "passed + failed + skipped must equal total for every TestRun."
+  ],
+  "nonGoals": [
+    "This vocabulary does not authorize actions.",
+    "This vocabulary does not prove evidence authenticity.",
+    "This JSON representation does not implement OWL reasoning or SHACL graph validation.",
+    "The sample dataset is illustrative, not a real Kafka build or deployment record."
+  ],
+  "operationalExtensions": {
+    "version": "1.1.0",
+    "purpose": "Operational concepts for governed multi-agent collaboration. These extend, but do not replace or collapse into, the eleven core software-delivery classes.",
+    "classes": [
+      {
+        "name": "AgentTeam",
+        "description": "A versioned, bounded topology of registered roles, coordination patterns, handoff rules and limits."
+      },
+      {
+        "name": "AgentRole",
+        "description": "A registered responsibility definition with declared inputs, outputs, tools and forbidden actions."
+      },
+      {
+        "name": "Skill",
+        "description": "A versioned task capability with input/output contract and acceptance checks."
+      },
+      {
+        "name": "AgentTask",
+        "description": "A bounded unit of work with run/task/attempt identifiers, budget, deadline and allowed tools."
+      },
+      {
+        "name": "AgentHandoff",
+        "description": "A typed transfer of task responsibility with input references, context scope and acceptance conditions."
+      },
+      {
+        "name": "AgentResult",
+        "description": "A candidate result linked to a task, role, schema validation and evidence references."
+      },
+      {
+        "name": "ContextReference",
+        "description": "A scoped reference to shared, task-local or restricted context; not a secret value."
+      },
+      {
+        "name": "CoordinationDecision",
+        "description": "A controller decision to dispatch, join, retry, pause, stop or escalate a bounded workflow step."
+      },
+      {
+        "name": "ReviewDecision",
+        "description": "An independent reviewer or authorized human/policy decision about a candidate result."
+      },
+      {
+        "name": "OntologyCandidate",
+        "description": "A draft ontology proposal produced by discovery agents; not the published source of truth."
+      },
+      {
+        "name": "OntologyTermCandidate",
+        "description": "A proposed domain concept with definition, aliases, confidence and verifiable source references."
+      },
+      {
+        "name": "OntologyRelationCandidate",
+        "description": "A proposed typed relation between term candidates with source evidence."
+      },
+      {
+        "name": "OntologyConstraintCandidate",
+        "description": "A proposed structural, referential, state, quality or compatibility constraint."
+      },
+      {
+        "name": "CompetencyQuestion",
+        "description": "A domain question used to test whether the ontology answers the intended engineering needs."
+      },
+      {
+        "name": "OntologySourceEvidence",
+        "description": "A source identifier, locator, content digest and quote used to ground a candidate claim."
+      },
+      {
+        "name": "OntologyEvaluation",
+        "description": "A benchmark result for term/relationship quality, provenance coverage and local validation."
+      },
+      {
+        "name": "OntologyApproval",
+        "description": "An independent human approval binding a reviewer identity and approval record to a candidate digest."
+      },
+      {
+        "name": "OntologyRevision",
+        "description": "A versioned change to the published ontology, schema mappings and regression suite."
+      }
+    ],
+    "relations": [
+      {
+        "name": "containsRole",
+        "source": "AgentTeam",
+        "target": "AgentRole"
+      },
+      {
+        "name": "usesSkill",
+        "source": "AgentRole",
+        "target": "Skill"
+      },
+      {
+        "name": "dispatchesTask",
+        "source": "CoordinationDecision",
+        "target": "AgentTask"
+      },
+      {
+        "name": "handsOffTask",
+        "source": "AgentHandoff",
+        "target": [
+          "AgentRole",
+          "AgentTask"
+        ]
+      },
+      {
+        "name": "producesCandidate",
+        "source": "AgentTask",
+        "target": "AgentResult"
+      },
+      {
+        "name": "reviewsCandidate",
+        "source": "ReviewDecision",
+        "target": "AgentResult"
+      },
+      {
+        "name": "hasTermCandidate",
+        "source": "OntologyCandidate",
+        "target": "OntologyTermCandidate"
+      },
+      {
+        "name": "hasRelationCandidate",
+        "source": "OntologyCandidate",
+        "target": "OntologyRelationCandidate"
+      },
+      {
+        "name": "hasConstraintCandidate",
+        "source": "OntologyCandidate",
+        "target": "OntologyConstraintCandidate"
+      },
+      {
+        "name": "groundedBy",
+        "source": "OntologyCandidate",
+        "target": "OntologySourceEvidence"
+      },
+      {
+        "name": "evaluatedBy",
+        "source": "OntologyCandidate",
+        "target": "OntologyEvaluation"
+      },
+      {
+        "name": "approvedBy",
+        "source": "OntologyCandidate",
+        "target": "OntologyApproval"
+      },
+      {
+        "name": "promotedAs",
+        "source": "OntologyCandidate",
+        "target": "OntologyRevision"
+      },
+      {
+        "name": "definesCompetencyQuestion",
+        "source": "OntologyCandidate",
+        "target": "CompetencyQuestion"
+      }
+    ],
+    "invariants": [
+      "Only registered roles may appear in a team topology.",
+      "A handoff carries references and scoped context, not unrestricted shared mutable memory.",
+      "A deterministic workflow controller owns state transitions and dispatch limits.",
+      "Agents cannot authorize themselves or approve their own high-risk candidate.",
+      "Parallel verification joins all required evidence before release readiness is evaluated.",
+      "LLM discovery results remain candidates until independent human approval and versioned promotion.",
+      "Candidate claims require source references; provenance coverage and benchmark scores are evaluation signals, not proof of truth.",
+      "A candidate digest binds the exact content reviewed; any material change invalidates approval.",
+      "External semantic catalogues and Cognee graph stores are adapters, not the production ontology authority."
+    ]
+  }
+}

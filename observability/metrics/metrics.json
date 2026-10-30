@@ -1,0 +1,13 @@
+{
+  "metricsVersion": "1.0.0",
+  "metrics": [
+    {"id":"pipeline.success_rate","type":"ratio","numerator":"successful_runs","denominator":"total_runs","source":"run-record.json"},
+    {"id":"pipeline.elapsed_ms","type":"histogram","source":"stage timing and run timestamps"},
+    {"id":"quality.block_rate","type":"ratio","source":"quality-gate-report.json"},
+    {"id":"human.review_rate","type":"ratio","source":"review state"},
+    {"id":"llm.input_tokens","type":"counter","source":"LLM usage events"},
+    {"id":"llm.output_tokens","type":"counter","source":"LLM usage events"},
+    {"id":"delivery.cost_usd","type":"money","source":"provider rates + token usage; unknown if prices not configured"},
+    {"id":"release.rollback_rate","type":"ratio","source":"release rehearsal records"}
+  ]
+}

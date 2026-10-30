@@ -1,0 +1,45 @@
+{
+  "policyVersion": "1.0.0",
+  "defaultDeny": true,
+  "roles": {
+    "requirement-analyst": [
+      "documents.read",
+      "catalog.read",
+      "contract.validate"
+    ],
+    "solution-architect": [
+      "documents.read",
+      "catalog.read",
+      "contract.validate"
+    ],
+    "implementation-agent": [
+      "workspace.write.candidate",
+      "tests.run",
+      "catalog.read"
+    ],
+    "test-agent": [
+      "tests.run",
+      "contract.validate",
+      "documents.read"
+    ],
+    "security-reviewer": [
+      "contract.validate",
+      "documents.read",
+      "catalog.read"
+    ],
+    "release-coordinator": [
+      "catalog.read",
+      "contract.validate",
+      "release.simulation.promote"
+    ],
+    "ops-support": [
+      "documents.read",
+      "catalog.read",
+      "tests.run"
+    ]
+  },
+  "productionToolsRequireApproval": [
+    "release.simulation.promote"
+  ],
+  "notes": "权限文件是策略输入，不是 OS 级沙箱或远程 IAM 的替代品。"
+}

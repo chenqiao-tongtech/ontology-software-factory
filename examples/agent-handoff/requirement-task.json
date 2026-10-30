@@ -1,0 +1,52 @@
+{
+  "taskId": "sf:task:REQ-001-normalize",
+  "tenantId": "demo-tenant",
+  "projectId": "software-factory-demo",
+  "roleId": "requirement-analyst",
+  "ontologyVersion": "1.0.0",
+  "objective": "将已有请求整理为可验证的 Requirement 契约，并显式标注未澄清项。",
+  "inputs": [
+    {
+      "entityId": "sf:requirement:REQ-001",
+      "entityType": "Requirement",
+      "schemaVersion": "1.0.0",
+      "evidenceRef": "ticket:REQ-001"
+    }
+  ],
+  "expectedOutputEntityTypes": [
+    "Requirement",
+    "Artifact"
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-REQ-001",
+      "description": "每项验收标准具有稳定 ID 和验证方法。",
+      "verificationMethod": "schema"
+    },
+    {
+      "id": "AC-REQ-002",
+      "description": "未确认事实必须标记为待澄清。",
+      "verificationMethod": "human_review"
+    }
+  ],
+  "contextRefs": [
+    {
+      "refType": "entity",
+      "refId": "sf:requirement:REQ-001",
+      "accessClass": "shared-task-context"
+    },
+    {
+      "refType": "document",
+      "refId": "docs/product-scope.md",
+      "accessClass": "role-local-context"
+    }
+  ],
+  "sensitivity": "internal",
+  "resourceLimits": {
+    "maxAttempts": 2,
+    "timeoutSeconds": 300,
+    "maxToolCalls": 10
+  },
+  "idempotencyKey": "REQ-001-normalize-v1",
+  "workflowState": "requirements.analysis"
+}

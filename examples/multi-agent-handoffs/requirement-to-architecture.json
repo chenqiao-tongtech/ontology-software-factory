@@ -1,0 +1,47 @@
+{
+  "handoffId": "handoff:req-001-to-arch-001",
+  "schemaVersion": "1.0.0",
+  "runId": "run-example-001",
+  "taskId": "task-architecture-001",
+  "attemptId": "attempt-1",
+  "fromRoleId": "requirement-analyst",
+  "toRoleId": "solution-architect",
+  "handoffType": "sequential",
+  "inputRefs": [
+    {
+      "refType": "requirement",
+      "refId": "sf:requirement:kafka-config-001"
+    },
+    {
+      "refType": "evidence",
+      "refId": "evidence:acceptance-criteria-001",
+      "digest": "sha256:example-digest-placeholder-not-production"
+    }
+  ],
+  "contextScope": "shared-approved",
+  "allowedToolIds": [
+    "catalog.read",
+    "contract.validate"
+  ],
+  "deadline": "2026-10-29T10:00:00Z",
+  "budget": {
+    "maxToolCalls": 5,
+    "maxModelCalls": 2,
+    "maxCost": 0.25
+  },
+  "acceptanceCriteria": [
+    "Requirement schema passes",
+    "Open ambiguities are explicitly listed",
+    "Architecture recommendation links each relevant requirement"
+  ],
+  "failurePolicy": {
+    "maxAttempts": 2,
+    "onExhausted": "human-review",
+    "retryableErrorCodes": [
+      "TRANSIENT_MODEL_ERROR",
+      "TOOL_TIMEOUT"
+    ]
+  },
+  "correlationId": "corr-example-001",
+  "previousResultRef": null
+}

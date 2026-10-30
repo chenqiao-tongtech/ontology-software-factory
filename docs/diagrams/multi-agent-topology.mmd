@@ -1,0 +1,22 @@
+flowchart LR
+  R[需求分析 Agent] --> A[架构设计 Agent]
+  A --> I[实现 Agent：生成候选]
+  I --> F[冻结候选快照]
+  F --> T[测试 Agent]
+  F --> S[安全审查 Agent]
+  T --> G[确定性 Quality Gate]
+  S --> G
+  G -->|通过| RC[发布协调 Agent：打包候选]
+  RC --> H[人工 / 策略审批]
+  H -->|批准| D[候选交付物]
+  G -->|失败 / 证据不全| B{修复次数 < 上限？}
+  B -->|是| I
+  B -->|否| M[人工复核 / 停止]
+  H -->|拒绝 / 过期| M
+  WF[Workflow State Machine：权威状态与派发] -.控制任务.-> R
+  WF -.控制任务.-> A
+  WF -.控制任务.-> I
+  WF -.控制任务.-> T
+  WF -.控制任务.-> S
+  GOV[Policy / IAM / 审批] -.约束.-> WF
+  GOV -.约束.-> H

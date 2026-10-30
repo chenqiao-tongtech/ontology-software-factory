@@ -1,0 +1,34 @@
+{
+  "term-discovery": {
+    "terms": [
+      {"name":"Requirement","kind":"class","definition":"A request with explicit acceptance criteria.","aliases":["需求"],"confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L3","quote":"An explicit Requirement has acceptance criteria and targets a Product."}]},
+      {"name":"Product","kind":"class","definition":"A product targeted by a requirement.","aliases":["产品"],"confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L3","quote":"An explicit Requirement has acceptance criteria and targets a Product."}]},
+      {"name":"Component","kind":"class","definition":"A reusable software component.","aliases":["组件"],"confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L4","quote":"A Component has a stable Version."}]},
+      {"name":"Version","kind":"class","definition":"A stable version identity for a component.","aliases":["版本"],"confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L4","quote":"A Component has a stable Version."}]},
+      {"name":"Build","kind":"class","definition":"A build record tied to source revision and component version.","aliases":["构建"],"confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L5","quote":"A Build is created from a source revision and a Component Version."}]},
+      {"name":"TestRun","kind":"class","definition":"An actual test execution associated with a build.","aliases":["测试运行"],"confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L6","quote":"A TestRun validates a Build."}]},
+      {"name":"Artifact","kind":"class","definition":"A produced file or package with a digest.","aliases":["制品"],"confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L8","quote":"An Artifact is produced by a Build and carries a SHA-256 digest."}]},
+      {"name":"Release","kind":"class","definition":"A candidate or published bundle that must carry test and security evidence.","aliases":["发布"],"confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L9","quote":"A Release contains Artifacts and must be linked to test and security evidence before it is eligible for publication."}]}
+    ]
+  },
+  "relation-discovery": {
+    "relations": [
+      {"subjectTerm":"Requirement","predicate":"targetsProduct","objectTerm":"Product","relationKind":"object","definition":"A requirement targets a product.","confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L3","quote":"An explicit Requirement has acceptance criteria and targets a Product."}]},
+      {"subjectTerm":"Build","predicate":"usesVersion","objectTerm":"Version","relationKind":"uses","definition":"A build is associated with a component version.","confidence":0.95,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L5","quote":"A Build is created from a source revision and a Component Version."}]},
+      {"subjectTerm":"TestRun","predicate":"validates","objectTerm":"Build","relationKind":"references","definition":"A test run validates a build.","confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L6","quote":"A TestRun validates a Build."}]},
+      {"subjectTerm":"Artifact","predicate":"producedBy","objectTerm":"Build","relationKind":"produces","definition":"An artifact is produced by a build.","confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L8","quote":"An Artifact is produced by a Build and carries a SHA-256 digest."}]},
+      {"subjectTerm":"Release","predicate":"contains","objectTerm":"Artifact","relationKind":"object","definition":"A release contains artifacts.","confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L9","quote":"A Release contains Artifacts and must be linked to test and security evidence before it is eligible for publication."}]}
+    ]
+  },
+  "constraint-and-competency-questions": {
+    "constraints": [
+      {"name":"passed-test-zero-failures","description":"A successful test run has no failed tests.","constraintType":"state_invariant","expression":"TestRun.status == 'passed' implies TestRun.failed == 0","severity":"error","confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L7","quote":"A successful TestRun has zero failed tests."}]},
+      {"name":"release-requires-evidence","description":"A release needs linked test and security evidence to be eligible for publication.","constraintType":"quality","expression":"Release.eligibleForPublication implies testEvidence exists and securityEvidence exists","severity":"blocker","confidence":0.99,"sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L9","quote":"A Release contains Artifacts and must be linked to test and security evidence before it is eligible for publication."}]}
+    ],
+    "competencyQuestions": [
+      {"question":"Which product does a requirement target?","termsInvolved":["Requirement","Product"],"expectedEvidence":"Requirement-to-Product relationship","sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L3","quote":"An explicit Requirement has acceptance criteria and targets a Product."}]},
+      {"question":"Which test and security evidence makes a release eligible?","termsInvolved":["Release","TestRun","Artifact"],"expectedEvidence":"Release-linked test and security evidence","sourceRefs":[{"sourceId":"fixture:software-factory-requirements","locator":"software-factory-requirements.md#L9","quote":"A Release contains Artifacts and must be linked to test and security evidence before it is eligible for publication."}]}
+    ]
+  },
+  "independent-critic": {"findings": []}
+}

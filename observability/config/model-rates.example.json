@@ -1,0 +1,12 @@
+{
+  "currency": "USD",
+  "effectiveDate": "set-by-operator",
+  "modelRates": {
+    "MODEL_ID": {
+      "inputUsdPerMillionTokens": null,
+      "outputUsdPerMillionTokens": null
+    }
+  },
+  "runnerUsdPerMinute": null,
+  "notes": "价格需由使用者按供应商合同或官方价格配置；null 表示未知，不会猜测价格。"
+}

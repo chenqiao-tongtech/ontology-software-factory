@@ -1,0 +1,12 @@
+# Template only. No secrets or real certificates are included.
+process.roles=broker,controller
+node.id={{node_id}}
+controller.listener.names=CONTROLLER
+controller.quorum.voters=1@localhost:9093
+listeners={{listeners}}
+listener.security.protocol.map={{listener_protocol_map}}
+inter.broker.listener.name={{inter_broker_listener}}
+num.partitions={{partitions}}
+default.replication.factor={{replication_factor}}
+min.insync.replicas={{min_insync_replicas}}
+log.retention.hours=168
