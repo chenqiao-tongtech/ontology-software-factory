@@ -51,6 +51,8 @@ def validate_factory_plan(
     if limits["maxRevisionLoops"] > topology_limits.get("maxRevisionLoops", 0):
         raise FactoryPlanError("plan revision loops exceed the team limit")
 
+    ontology = json.loads((root / "ontology/software-factory-ontology.json").read_text(encoding="utf-8"))
+    known_classes = {item["name"] for item in ontology.get("classes", []) + ontology.get("operationalExtensions", {}).get("classes", [])}
     phase_ids = [phase["phaseId"] for phase in plan["phases"]]
     if len(phase_ids) != len(set(phase_ids)):
         raise FactoryPlanError("phase IDs must be unique")
@@ -77,6 +79,8 @@ def validate_factory_plan(
     assignment_ids: set[str] = set()
     assignment_count = 0
     for phase in plan["phases"]:
+        if len(phase["assignments"]) > limits["maxParallelAssignments"]:
+            raise FactoryPlanError(f"phase {phase['phaseId']} has more assignments than maxParallelAssignments")
         for assignment in phase["assignments"]:
             assignment_count += 1
             assignment_id = assignment["assignmentId"]
@@ -97,6 +101,9 @@ def validate_factory_plan(
                 raise FactoryPlanError(f"missing or invalid Skill definition: {skill_id}") from exc
             if role_id not in skill.get("compatibleRoleIds", []):
                 raise FactoryPlanError(f"Skill {skill_id} is not compatible with Role {role_id}")
+            unknown_types = set(assignment["outputEntityTypes"]) - known_classes
+            if unknown_types:
+                raise FactoryPlanError(f"assignment references unknown ontology classes: {sorted(unknown_types)}")
             if not set(assignment["outputEntityTypes"]) <= set(role.get("outputEntityTypes", [])):
                 raise FactoryPlanError(f"assignment output types exceed Role {role_id} contract")
             if not set(assignment["outputEntityTypes"]) <= set(skill.get("outputEntityTypes", [])):
