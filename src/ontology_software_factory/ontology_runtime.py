@@ -84,8 +84,10 @@ def load_active_ontology_binding(project_root: str | Path, snapshot_id: str | No
     return validate_ontology_binding(snapshot)
 
 
-def validate_role_ontology_contract(role: dict[str, Any], binding: dict[str, Any]) -> None:
-    """Fail closed if a Role or Skill refers to a class absent from the pinned version."""
+def validate_role_ontology_contract(
+    role: dict[str, Any], binding: dict[str, Any], project_root: str | Path | None = None
+) -> list[dict[str, Any]]:
+    """Fail closed if a Role or its declared Skills refer outside the pinned ontology."""
     verified = validate_ontology_binding(binding)
     classes = _class_names(verified["ontology"])
     for field in ("inputEntityTypes", "outputEntityTypes"):
@@ -98,6 +100,35 @@ def validate_role_ontology_contract(role: dict[str, Any], binding: dict[str, Any
                 f"role {role.get('roleId', '<unknown>')} {field} are absent from ontology "
                 f"{verified['ontologyVersion']}: {', '.join(missing)}"
             )
+    skill_contracts = []
+    if project_root is not None:
+        root = Path(project_root)
+        for skill_id in role.get("skillIds", []):
+            skill_path = root / "skills" / str(skill_id) / "skill.json"
+            try:
+                skill = json.loads(skill_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise OntologyBindingError(f"Role references missing or invalid Skill: {skill_id}") from exc
+            if role.get("roleId") not in skill.get("compatibleRoleIds", []):
+                raise OntologyBindingError(f"Skill {skill_id} is not compatible with Role {role.get('roleId')}")
+            for field in ("inputEntityTypes", "outputEntityTypes"):
+                declared = skill.get(field, [])
+                if not isinstance(declared, list) or not declared:
+                    raise OntologyBindingError(f"Skill {skill_id} must declare a non-empty {field}")
+                missing = sorted({str(value) for value in declared} - classes)
+                if missing:
+                    raise OntologyBindingError(
+                        f"Skill {skill_id} {field} are absent from ontology {verified['ontologyVersion']}: "
+                        + ", ".join(missing)
+                    )
+            missing_tools = sorted(set(skill.get("requiredToolIds", [])) - set(role.get("toolIds", [])))
+            if missing_tools:
+                raise OntologyBindingError(
+                    f"Skill {skill_id} requires tools not granted to Role {role.get('roleId')}: "
+                    + ", ".join(missing_tools)
+                )
+            skill_contracts.append(skill)
+    return skill_contracts
 
 
 def _validate_schema(instance: dict, schema_path: Path, label: str, ontology_classes: set[str] | None = None) -> None:
@@ -160,7 +191,7 @@ def build_agent_task_contract(
 ) -> dict[str, Any]:
     """Create the formal task envelope used for a single pinned Agent execution."""
     verified = validate_ontology_binding(binding)
-    validate_role_ontology_contract(role, verified)
+    validate_role_ontology_contract(role, verified, project_root)
     role_inputs = [str(value) for value in role["inputEntityTypes"]]
     entity_type = "Requirement" if "Requirement" in role_inputs else role_inputs[0]
     entity_slug = re.sub(r"(?<!^)(?=[A-Z])", "-", entity_type).lower()
@@ -215,7 +246,7 @@ def validate_agent_task_contract(
     binding: dict[str, Any],
 ) -> None:
     verified = validate_ontology_binding(binding)
-    validate_role_ontology_contract(role, verified)
+    validate_role_ontology_contract(role, verified, project_root)
     _validate_schema(contract, Path(project_root) / "contracts/schemas/agent-task.schema.json", "Agent Task", _class_names(verified["ontology"]))
     expected = {
         "roleId": role["roleId"],
@@ -261,7 +292,7 @@ def build_agent_result_contract(
 ) -> dict[str, Any]:
     """Build and validate the semantic result envelope persisted with every Agent stage."""
     verified = validate_ontology_binding(binding)
-    validate_role_ontology_contract(role, verified)
+    validate_role_ontology_contract(role, verified, project_root)
     summary = output.get("summary")
     if not isinstance(summary, str) or not summary.strip():
         summary = f"{role.get('displayName', role['roleId'])} returned typed structured output"
@@ -304,7 +335,7 @@ def validate_agent_result_contract(
     binding: dict[str, Any],
 ) -> None:
     verified = validate_ontology_binding(binding)
-    validate_role_ontology_contract(role, verified)
+    validate_role_ontology_contract(role, verified, project_root)
     _validate_schema(
         contract, Path(project_root) / "contracts/schemas/agent-result.schema.json",
         "Agent Result", _class_names(verified["ontology"]),
