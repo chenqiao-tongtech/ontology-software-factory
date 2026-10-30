@@ -88,7 +88,7 @@ flowchart TB
 | 版本化交付与回滚演练 | `release_manager.py`、`scripts/create_release.py`、`scripts/rehearse_upgrade.py` | 质量门禁通过后生成配置候选包、manifest、SHA-256 和配置包范围的 CycloneDX SBOM；升级/回滚只模拟本地状态。 |
 | 观测与成本 | `observability.py`、`observability/` | 汇总本地运行/Gate 数据、LLM usage ledger；没有价格表时成本保留 `null`，不虚构费用。 |
 | LLM Provider | `llm_provider.py` | 统一封装 OpenAI Responses API、结构化输出、有限重试、延迟/Token 使用记录，并提供 Fake Provider 测试。 |
-| Agent Runtime | `agent_runtime.py`、`agent_workflow.py` | 可选接入 OpenAI Agents SDK；有效工具集合取角色白名单与运行时已注册工具的交集；真实调用需 SDK、API Key、网络和可用模型。 |
+| Agent Runtime | `agent_runtime.py`、`agent_workflow.py`、`ontology_runtime.py` | 可选接入 OpenAI Agents SDK；每次真实执行必须绑定已审批的完整本体快照与 SHA-256，校验 Agent Task / Agent Result、Role / Skill 输入输出类型和工具授权；Evidence 记录快照版本；有效工具集合取角色白名单与运行时已注册工具的交集。真实调用需 SDK、API Key、网络和可用模型。 |
 | LLM 本体发现 | `ontology_discovery.py`、`ontology_discovery_worker.py`、`adapters/nvidia_auto_ontology.py`、`adapters/cognee_ontology.py` | 四阶段候选生成、来源引用核验、独立 Critic、Benchmark、摘要绑定审批；NVIDIA 元数据适配器只读，Cognee 输出候选暂存，不直接发布正式本体。 |
 
 ## 多智能体与本体自动发现
