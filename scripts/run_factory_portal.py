@@ -1069,6 +1069,10 @@ class PortalHandler(BaseHTTPRequestHandler):
                     raise ValueError("snapshot is already active")
                 active = next((item for item in snapshots if item.get("snapshotId") == active_id), None)
                 if active_id and not active: raise ValueError("active ontology pointer references a missing snapshot")
+                if action == "rollback":
+                    target_index = next(i for i, item in enumerate(snapshots) if item.get("snapshotId") == snapshot_id)
+                    active_index = next(i for i, item in enumerate(snapshots) if item.get("snapshotId") == active_id)
+                    if target_index <= active_index: raise ValueError("rollback target must be an older saved snapshot")
                 compat = compatibility_report(active, target) if active else {
                     "compatible": True, "baselineMissing": True, "breakingChanges": [], "reviewItems": [{"kind": "initial-baseline-review"}],
                     "reviewRequired": True, "versionOrderValid": True, "majorVersionBump": False,
@@ -1096,7 +1100,8 @@ class PortalHandler(BaseHTTPRequestHandler):
                 actor = str(body.get("actor", "")).strip()
                 notes = str(body.get("notes", "")).strip()
                 decision = str(body.get("decision", "")).strip()
-                accept_breaking = bool(body.get("acceptBreakingChanges", False))
+                accept_breaking = body.get("acceptBreakingChanges", False)
+                if not isinstance(accept_breaking, bool): raise ValueError("acceptBreakingChanges must be a boolean")
                 if decision not in {"approve", "reject"}: raise ValueError("decision must be approve or reject")
                 if not actor or not notes: raise ValueError("actor and notes are required")
                 state = state_read()
