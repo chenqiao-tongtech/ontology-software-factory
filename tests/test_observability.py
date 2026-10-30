@@ -1,6 +1,6 @@
 import json,tempfile,unittest
 from pathlib import Path
-from ontology_software_factory.observability import JsonlUsageLedger,calculate_llm_cost,build_observability_report,create_change_proposal,write_change_proposal
+from ontology_software_factory.observability import JsonlUsageLedger,calculate_llm_cost,build_observability_report,build_platform_observability_report,create_change_proposal,write_change_proposal
 ROOT=Path(__file__).resolve().parents[1]
 class ObservabilityTests(unittest.TestCase):
  def test_cost_remains_unknown_when_rate_is_missing(self):
