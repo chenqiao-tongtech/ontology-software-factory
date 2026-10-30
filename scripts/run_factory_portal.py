@@ -26,6 +26,13 @@ from urllib.parse import quote, unquote, urlparse
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
+from ontology_software_factory.source_connectors import (
+    LocalDirectoryConnector,
+    SQLiteSchemaConnector,
+    SourceConnectorError,
+    SourceConnectorRegistry,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps" / "factory-portal" / "index.html"
 if str(ROOT / "src") not in sys.path:
@@ -233,6 +240,15 @@ def scan_remote_repository(source: dict, result: dict) -> dict:
     return result
 
 
+def build_source_connector_registry(allowed_root: Path) -> SourceConnectorRegistry:
+    """Build the explicit local connector registry used by Portal source scans."""
+    registry = SourceConnectorRegistry()
+    registry.register(LocalDirectoryConnector([allowed_root], source_type="repository", max_files=600, max_file_bytes=1_500_000))
+    registry.register(LocalDirectoryConnector([allowed_root], source_type="documents", max_files=600, max_file_bytes=1_500_000))
+    registry.register(SQLiteSchemaConnector([allowed_root]))
+    return registry
+
+
 def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
     path_label = source.get("url", source.get("path", ""))
     result = {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": str(path_label), "enabled": bool(source.get("enabled", True)), "fixture": bool(source.get("fixture")), "lastSyncAt": now_iso(), "status": "error", "assetCount": 0, "assets": [], "details": {}}
@@ -249,36 +265,72 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
         result.update(status="disabled", message="Source disabled")
         return result
     if source["type"] == "sqlite":
-        if not base.is_file():
-            result["message"] = "SQLite file does not exist"
-            return result
         try:
-            uri = base.as_uri() + "?mode=ro"
-            with sqlite3.connect(uri, uri=True, timeout=3) as db:
-                db.execute("PRAGMA query_only=ON")
-                tables = db.execute("SELECT name, type FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
-                out_tables = []
-                for name, typ in tables[:100]:
-                    cols = db.execute(f'PRAGMA table_info("{name.replace(chr(34), chr(34)*2)}")').fetchall()
-                    out_tables.append({"name": name, "kind": typ, "columns": [{"name": c[1], "type": c[2], "nullable": not bool(c[3]), "primaryKey": bool(c[5])} for c in cols]})
-            result.update(status="connected", assetCount=len(out_tables), assets=out_tables[:20], details={"tables": out_tables, "mode": "read-only metadata"}, message="Schema metadata read in read-only mode")
+            scanned = build_source_connector_registry(base.parent).scan("sqlite", source["id"], base)
+            tables = [
+                {
+                    "name": asset.name,
+                    "kind": asset.kind,
+                    "columns": [
+                        {
+                            "name": column["name"],
+                            "type": column.get("type", ""),
+                            "nullable": not column.get("notNull", False),
+                            "primaryKey": bool(column.get("primaryKeyPosition", 0)),
+                        }
+                        for column in (asset.metadata or {}).get("columns", [])
+                    ],
+                    "definition": (asset.metadata or {}).get("definition"),
+                }
+                for asset in scanned.assets
+            ]
+            result.update(
+                status="connected",
+                assetCount=len(tables),
+                assets=tables[:20],
+                details={
+                    "tables": tables,
+                    "mode": "read-only schema metadata",
+                    "connector": "SQLiteSchemaConnector",
+                },
+                message="SQLite schema metadata read in read-only mode; table rows were not queried",
+            )
             return result
-        except (sqlite3.Error, ValueError) as exc:
+        except (SourceConnectorError, OSError, ValueError) as exc:
             result["message"] = f"SQLite metadata read failed: {type(exc).__name__}"
             return result
-    if not path_is_safe_for_walk(base):
-        result["message"] = "Configured directory does not exist or is not a directory"
+    if source["type"] not in {"repository", "documents"}:
+        result["message"] = f"Unsupported local source type: {source['type']}"
         return result
-    files = list(iter_safe_files(base))
-    assets = []
-    for p in files[:30]:
-        try:
-            rel = p.relative_to(base).as_posix()
-        except ValueError:
-            continue
-        assets.append({"path": rel, "kind": p.suffix.lower().lstrip("."), "bytes": p.stat().st_size})
-    result.update(status="connected", assetCount=len(files), assets=assets, details={"git": git_metadata(base) if source["type"] == "repository" else None, "scannedExtensions": sorted(ALLOWED_SUFFIXES), "truncatedAt": 600}, message="Read-only local metadata scan completed")
-    return result
+    try:
+        scanned = build_source_connector_registry(base.parent).scan(source["type"], source["id"], base)
+        assets = [
+            {
+                "path": asset.locator,
+                "kind": (asset.metadata or {}).get("suffix", "").lstrip("."),
+                "bytes": asset.size_bytes,
+                "sha256": asset.content_sha256,
+            }
+            for asset in scanned.assets[:30]
+        ]
+        result.update(
+            status="connected",
+            assetCount=len(scanned.assets),
+            assets=assets,
+            details={
+                "git": git_metadata(base) if source["type"] == "repository" else None,
+                "scannedExtensions": sorted({(asset.metadata or {}).get("suffix", "") for asset in scanned.assets}),
+                "connector": "LocalDirectoryConnector",
+                "scanStatus": scanned.status,
+                "warnings": list(scanned.warnings),
+                "truncatedAt": 600 if scanned.status == "partial" else None,
+            },
+            message="Read-only local metadata scan completed through SourceConnector",
+        )
+        return result
+    except (SourceConnectorError, OSError, ValueError) as exc:
+        result["message"] = f"Local source scan failed: {type(exc).__name__}"
+        return result
 
 
 def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> list[dict]:
@@ -359,6 +411,34 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
     terms: dict[str, dict] = {}
     source_cfg = next((s for s in source_configs() if s["id"] == scan["id"]), {"path": "."})
     for asset in scan.get("assets", []):
+        if source_cfg.get("type") == "sqlite":
+            table_name = str(asset.get("name", "")).strip()
+            if table_name:
+                labels = [(table_name, "sql-table")]
+                labels.extend(
+                    (str(column.get("name", "")).strip(), "sql-column")
+                    for column in asset.get("columns", [])
+                    if isinstance(column, dict)
+                )
+                for label, kind in labels:
+                    if len(label) < 3 or len(label) > 90:
+                        continue
+                    key = label.lower()
+                    evidence = {"sourceId": scan["id"], "path": f"sqlite:{table_name}", "kind": kind}
+                    if key in terms:
+                        if evidence not in terms[key]["evidence"]:
+                            terms[key]["evidence"].append(evidence)
+                    else:
+                        terms[key] = {
+                            "termId": "term-" + re.sub(r"[^a-z0-9]+", "-", key).strip("-")[:50] + "-" + uuid.uuid5(uuid.NAMESPACE_URL, key).hex[:6],
+                            "label": label,
+                            "kind": kind,
+                            "evidence": [evidence],
+                            "proposedType": "CandidateConcept",
+                            "confidence": 0.5,
+                            "status": "candidate",
+                        }
+            continue
         rel = asset.get("path", "")
         if source_cfg.get("type") in {"github", "gitlab"}:
             stem = Path(rel).stem
@@ -594,7 +674,12 @@ def run_quality(checks: list[str]) -> dict:
                     scan_status = "completed"
                 else:
                     scan_status = "incomplete"
-                results.append({"id": name, "kind": "security-scan", "status": scan_status, "exitCode": proc.returncode, "durationSeconds": round(time.monotonic()-start, 3), "reportPath": str(report_path.relative_to(ROOT)) if report_path.exists() else None, "reportPresent": report_path.exists(), "reportParsed": report_state != "incomplete", "findingCount": finding_count, "summary": summary or "Scanner completed; machine-readable report was evaluated."})
+                try:
+                    report_path_label = str(report_path.relative_to(ROOT)) if report_path.exists() else None
+                except ValueError:
+                    # Tests and custom deployments may place the state directory outside the repo.
+                    report_path_label = None
+                results.append({"id": name, "kind": "security-scan", "status": scan_status, "exitCode": proc.returncode, "durationSeconds": round(time.monotonic()-start, 3), "reportPath": report_path_label, "reportPresent": report_path.exists(), "reportParsed": report_state != "incomplete", "findingCount": finding_count, "summary": summary or "Scanner completed; machine-readable report was evaluated."})
             except subprocess.TimeoutExpired:
                 results.append({"id": name, "kind": "security-scan", "status": "timeout", "exitCode": None, "durationSeconds": round(time.monotonic()-start, 3), "summary": "Scanner timed out"})
     passed = sum(1 for r in results if r["status"] == "passed")

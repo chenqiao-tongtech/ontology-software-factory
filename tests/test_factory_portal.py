@@ -28,6 +28,9 @@ class FactoryPortalServiceTests(unittest.TestCase):
         (self.repo / "example.py").write_text("class ExampleEntity:\n    pass\n\ndef create_example():\n    return 1\n", encoding="utf-8")
         (self.repo / "README.md").write_text("# Example Domain\n\n## Candidate Model\n", encoding="utf-8")
         (self.repo / ".env").write_text("SHOULD_NOT_BE_SCANNED=true\n", encoding="utf-8")
+        self.docs = self.base / "docs"
+        self.docs.mkdir()
+        (self.docs / "domain.md").write_text("# Customer Domain\n", encoding="utf-8")
         self.db_path = self.base / "sample.sqlite3"
         with sqlite3.connect(self.db_path) as db:
             db.execute("CREATE TABLE orders (order_id TEXT PRIMARY KEY, customer_id TEXT NOT NULL)")
@@ -35,6 +38,7 @@ class FactoryPortalServiceTests(unittest.TestCase):
         portal.dump(portal.SOURCES_PATH, {"schemaVersion": "1.0.0", "sources": [
             {"id": "test-repo", "name": "Test repository", "type": "repository", "path": str(self.repo), "enabled": True, "fixture": False},
             {"id": "test-db", "name": "Test database", "type": "sqlite", "path": str(self.db_path), "enabled": True, "fixture": True},
+            {"id": "test-docs", "name": "Test documents", "type": "documents", "path": str(self.docs), "enabled": True, "fixture": False},
         ]})
 
     def tearDown(self):
@@ -50,12 +54,23 @@ class FactoryPortalServiceTests(unittest.TestCase):
         paths = {item["path"] for item in result["assets"]}
         self.assertNotIn(".env", paths)
         self.assertTrue(all(not path.startswith(".") for path in paths))
+        self.assertTrue(all(item.get("sha256") for item in result["assets"]))
+        self.assertEqual(result["details"]["connector"], "LocalDirectoryConnector")
+
+    def test_document_directory_uses_the_same_connector_contract(self):
+        source = portal.source_configs()[2]
+        result = portal.scan_source(source)
+        self.assertEqual(result["status"], "connected")
+        self.assertEqual(result["details"]["connector"], "LocalDirectoryConnector")
+        self.assertEqual(result["assets"][0]["path"], "domain.md")
 
     def test_sqlite_connector_reads_schema_and_is_read_only(self):
         result = portal.scan_source(portal.source_configs()[1])
         self.assertEqual(result["status"], "connected")
         names = {item["name"] for item in result["details"]["tables"]}
         self.assertEqual(names, {"orders", "active_orders"})
+        self.assertEqual(result["details"]["connector"], "SQLiteSchemaConnector")
+        self.assertIn("customer_id", {column["name"] for table in result["details"]["tables"] for column in table["columns"]})
         with sqlite3.connect(self.db_path) as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
 
@@ -70,6 +85,7 @@ class FactoryPortalServiceTests(unittest.TestCase):
         candidate = portal.discover_candidates()
         self.assertEqual(candidate["engine"], "local-rule-based-extraction")
         self.assertIn("ExampleEntity", {term["label"] for term in candidate["terms"]})
+        self.assertIn("customer_id", {term["label"] for term in candidate["terms"]})
         self.assertTrue(all(term["evidence"] for term in candidate["terms"]))
         self.assertIn(candidate["candidateId"], {x["candidateId"] for x in portal.state_read()["ontologyCandidates"]})
         self.assertIn("不会自动", candidate["notice"])

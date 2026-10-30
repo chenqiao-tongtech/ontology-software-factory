@@ -18,6 +18,7 @@ TEXT_SUFFIXES = {
     ".md", ".mdx", ".rst", ".txt", ".py", ".pyi", ".js", ".jsx", ".ts", ".tsx",
     ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".sql", ".xml", ".xsd",
     ".ttl", ".owl", ".properties", ".conf", ".sh", ".go", ".java", ".kt", ".rs",
+    ".html", ".mmd", ".proto", ".graphql",
 }
 EXCLUDED_DIRS = {
     ".git", ".hg", ".svn", ".venv", "venv", "node_modules", "__pycache__",
