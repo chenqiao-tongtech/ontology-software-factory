@@ -22,6 +22,18 @@ class ObservabilityTests(unittest.TestCase):
    run=Path(d)/'r1';(run/'evidence').mkdir(parents=True);(run/'run-record.json').write_text(json.dumps({'runId':'r1','status':'candidate_built','request':{'requestId':'REQ-1'},'evidencePaths':['evidence/a.json'],'releaseEligible':False}));(run/'evidence/quality-gate-report.json').write_text(json.dumps({'status':'passed'}))
    report=build_observability_report(d)
    self.assertEqual(report['summary']['totalRuns'],1); self.assertEqual(report['summary']['successRate'],1.0); self.assertIsNone(report['llmUsage']['knownCostTotal'])
+
+ def test_platform_report_aggregates_sanitized_harness_and_connector_audits(self):
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d)
+   harness=root/'harness.jsonl'; connector=root/'connector.jsonl'
+   harness.write_text(json.dumps({'runId':'r1','taskId':'t1','toolId':'documents.read','status':'succeeded','durationMs':3,'prompt':'must-not-leak'})+'\\n')
+   connector.write_text(json.dumps({'sourceId':'s1','connectorId':'source.sqlite','status':'complete','assetCount':4,'location':'/private/path'})+'\\n')
+   report=build_platform_observability_report(root,{},harness_audit_path=harness,connector_audit_path=connector)
+   self.assertEqual(report['platform']['harnessAudit']['total'],1)
+   self.assertEqual(report['platform']['connectorAudit']['byOperation']['source.sqlite'],1)
+   self.assertNotIn('prompt',report['platform']['harnessAudit']['recent'][0])
+   self.assertNotIn('location',report['platform']['connectorAudit']['recent'][0])
  def test_proposal_refuses_overwrite(self):
   with tempfile.TemporaryDirectory() as d:
    path=Path(d)/'proposal.json';write_change_proposal(path,source_run_id='r1',observed_problem='p',proposed_change='c',affected_asset='a',owner='o')
