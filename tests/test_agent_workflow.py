@@ -136,8 +136,9 @@ class AgentWorkflowTests(unittest.TestCase):
 
     def test_security_block_stops_before_human_approval(self):
         class BlockingRuntime(FakeAgentRuntime):
-            def run_agent(self, role_id, task_input, *, ontology_binding, task_contract):
-                result = super().run_agent(role_id, task_input, ontology_binding=ontology_binding, task_contract=task_contract)
+            def run_agent(self, role_id, task_input, *, ontology_binding, task_contract, runtime_contract_lock):
+                result = super().run_agent(role_id, task_input, ontology_binding=ontology_binding,
+                                           task_contract=task_contract, runtime_contract_lock=runtime_contract_lock)
                 if role_id == "security-reviewer":
                     result["output"]["release_recommendation"] = "blocked"
                 return result
