@@ -89,7 +89,8 @@
               "AgentResult",
               "ContextReference",
               "CoordinationDecision",
-              "ReviewDecision"
+              "ReviewDecision",
+              "AgentPlan"
             ]
           },
           "schemaVersion": {
