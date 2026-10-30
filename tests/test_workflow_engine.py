@@ -158,6 +158,30 @@ class WorkflowEngineTests(unittest.TestCase):
         self.assertFalse(duplicate["created"])
         self.assertEqual(len(self.engine.get_run_detail(run["id"])["orchestratorPlans"]), 1)
 
+    def test_factory_plan_requires_independent_approval_and_persists_decision(self):
+        plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
+        binding = self.ontology_binding()
+        run = self.engine.create_run("计划审批测试", "tester", "test", ontology_binding=binding)
+        plan["workflowRunId"] = run["id"]
+        plan["ontologyBinding"] = {key: binding[key] for key in (
+            "snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion"
+        )}
+        self.engine.submit_factory_orchestrator_plan(run["id"], plan)
+        pending = self.store.get_factory_plan_approval(plan["planId"])
+        self.assertEqual(pending["status"], "pending")
+        with self.assertRaises(WorkflowError):
+            self.engine.decide_factory_orchestrator_plan(
+                run["id"], plan["planId"], "approved",
+                actor="factory-orchestrator", reason="self approval",
+            )
+        approved = self.engine.decide_factory_orchestrator_plan(
+            run["id"], plan["planId"], "approved",
+            actor="independent-reviewer", reason="Reviewed scope, risks and acceptance criteria",
+        )
+        self.assertEqual(approved["status"], "approved")
+        self.assertEqual(approved["actor"], "independent-reviewer")
+        self.assertEqual(self.engine.get_run_detail(run["id"])["events"][-1]["action"], "factory.plan.approved")
+
     def test_factory_orchestrator_plan_rejects_run_or_ontology_binding_mismatch(self):
         plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
         binding = self.ontology_binding()
