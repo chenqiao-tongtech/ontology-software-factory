@@ -93,6 +93,9 @@ class HarnessRuntimeTests(unittest.TestCase):
             approval_ref="approval-1"
         )
         self.assertEqual(result, {"promoted": True})
+        events = [json.loads(line) for line in (self.root / "audit.jsonl").read_text().splitlines()]
+        self.assertEqual([event["status"] for event in events], ["denied", "succeeded"])
+        self.assertNotIn("payload", events[0])
 
     def test_kill_switch_blocks_tool_invocation(self):
         (self.root / "KILL").write_text("stop")
