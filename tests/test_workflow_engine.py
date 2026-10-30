@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, str(ROOT / "src"))
 from ontology_software_factory.workflow_engine import WorkflowEngine, WorkflowError  # noqa: E402
 from ontology_software_factory.workflow_store import ConcurrentWorkflowUpdate, SQLiteWorkflowStore  # noqa: E402
+from ontology_software_factory.ontology_runtime import load_active_ontology_binding  # noqa: E402
 
 
 class WorkflowEngineTests(unittest.TestCase):
@@ -120,6 +121,58 @@ class WorkflowEngineTests(unittest.TestCase):
         restored = self.engine.get_run_detail(run_id)
         self.assertEqual(restored["run"]["status"], "running")
         self.assertEqual(restored["events"][0]["action"], "run.created")
+
+
+    def test_factory_orchestrator_plan_is_validated_persisted_and_exposed_in_run_detail(self):
+        plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
+        binding = load_active_ontology_binding(ROOT)
+        run = self.engine.create_run(
+            "主控计划持久化测试", "tester", "test", ontology_binding=binding
+        )
+        plan["workflowRunId"] = run["id"]
+        plan["ontologyBinding"] = {key: binding[key] for key in (
+            "snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion"
+        )}
+        result = self.engine.submit_factory_orchestrator_plan(run["id"], plan)
+        self.assertTrue(result["created"])
+        self.assertTrue(result["validation"]["valid"])
+        self.assertEqual(result["plan"]["status"], "submitted")
+        detail = self.engine.get_run_detail(run["id"])
+        self.assertEqual(detail["orchestratorPlans"][0]["planId"], plan["planId"])
+        self.assertEqual(detail["events"][-1]["action"], "factory.plan.submitted")
+
+        # Re-submitting the exact same immutable plan is idempotent.
+        duplicate = self.engine.submit_factory_orchestrator_plan(run["id"], plan)
+        self.assertFalse(duplicate["created"])
+        self.assertEqual(len(self.engine.get_run_detail(run["id"])["orchestratorPlans"]), 1)
+
+    def test_factory_orchestrator_plan_rejects_run_or_ontology_binding_mismatch(self):
+        plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
+        binding = load_active_ontology_binding(ROOT)
+        run = self.engine.create_run("主控计划绑定测试", "tester", "test", ontology_binding=binding)
+        plan["workflowRunId"] = "RUN-WRONG"
+        plan["ontologyBinding"] = {key: binding[key] for key in (
+            "snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion"
+        )}
+        with self.assertRaises(WorkflowError) as ctx:
+            self.engine.submit_factory_orchestrator_plan(run["id"], plan)
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(self.engine.get_run_detail(run["id"])["orchestratorPlans"], [])
+
+    def test_factory_orchestrator_plan_id_cannot_be_reused_with_changed_payload(self):
+        plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
+        binding = load_active_ontology_binding(ROOT)
+        run = self.engine.create_run("主控计划幂等测试", "tester", "test", ontology_binding=binding)
+        plan["workflowRunId"] = run["id"]
+        plan["ontologyBinding"] = {key: binding[key] for key in (
+            "snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion"
+        )}
+        self.engine.submit_factory_orchestrator_plan(run["id"], plan)
+        changed = json.loads(json.dumps(plan))
+        changed["objective"] = "changed objective"
+        with self.assertRaises(WorkflowError) as ctx:
+            self.engine.submit_factory_orchestrator_plan(run["id"], changed)
+        self.assertEqual(ctx.exception.status_code, 409)
 
     def test_stale_revision_update_fails_closed(self):
         run = self.create()
