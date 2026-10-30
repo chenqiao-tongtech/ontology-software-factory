@@ -10,6 +10,7 @@ from typing import Any
 
 from .task_runtime import PermanentTaskError, TransientTaskError, TaskContext
 from .software_factory_pipeline import SoftwareFactoryPipeline, PipelineValidationError
+from .workspace_execution import WorkspaceManager
 from .ontology_runtime import (
     build_agent_task_contract, build_agent_result_contract, validate_agent_output,
     validate_ontology_binding, validate_role_ontology_contract,
@@ -41,6 +42,7 @@ class AgentWorkflowStepHandler:
         self.project_root = Path(getattr(runtime, "project_root", Path(__file__).resolve().parents[2])).resolve()
         self.artifact_root = Path(artifact_root).resolve()
         self.artifact_root.mkdir(parents=True, exist_ok=True)
+        self.workspace_manager = WorkspaceManager(self.project_root)
 
     def __call__(self, payload: dict[str, Any], context: TaskContext) -> dict[str, Any]:
         context.check_deadline()
@@ -111,9 +113,11 @@ class AgentWorkflowStepHandler:
                                              "Review evidence gaps and require independent human approval"]
 
         try:
-            execution = self.runtime.run_agent(
-                role_id, task_input, ontology_binding=binding, task_contract=task_contract
-            )
+            runtime_kwargs = {"ontology_binding": binding, "task_contract": task_contract}
+            if getattr(self.runtime, "supports_workspace_tools", False):
+                # One repository copy per run, outside the source checkout. No branch is pushed.
+                runtime_kwargs["workspace_path"] = self.workspace_manager.open(run_id)
+            execution = self.runtime.run_agent(role_id, task_input, **runtime_kwargs)
             output = execution.get("output")
             if not isinstance(output, dict):
                 raise PipelineValidationError("Agent output must be a JSON object")
