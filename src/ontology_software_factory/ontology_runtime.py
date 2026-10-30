@@ -1,6 +1,7 @@
 """Pinned ontology context and semantic Agent task-contract validation."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from copy import deepcopy
@@ -9,7 +10,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from .ontology_versioning import ontology_digest
+from .ontology_versioning import canonical_json, ontology_digest
 
 
 class OntologyBindingError(ValueError):
@@ -109,6 +110,10 @@ def validate_role_ontology_contract(
                 skill = json.loads(skill_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
                 raise OntologyBindingError(f"Role references missing or invalid Skill: {skill_id}") from exc
+            if skill.get("skillId") != str(skill_id):
+                raise OntologyBindingError(f"Skill identifier mismatch: {skill_id}")
+            if not _semver(skill.get("version")):
+                raise OntologyBindingError(f"Skill {skill_id} must declare a semantic version")
             if role.get("roleId") not in skill.get("compatibleRoleIds", []):
                 raise OntologyBindingError(f"Skill {skill_id} is not compatible with Role {role.get('roleId')}")
             for field in ("inputEntityTypes", "outputEntityTypes"):
@@ -129,6 +134,21 @@ def validate_role_ontology_contract(
                 )
             skill_contracts.append(skill)
     return skill_contracts
+
+
+def _skill_reference_records(project_root: str | Path, skills: list[dict[str, Any]]) -> list[dict[str, str]]:
+    root = Path(project_root)
+    refs = []
+    for skill in skills:
+        skill_id = str(skill["skillId"])
+        instructions_path = root / "skills" / skill_id / "SKILL.md"
+        try:
+            instructions = instructions_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise OntologyBindingError(f"Skill instructions are missing: {skill_id}") from exc
+        digest = hashlib.sha256((canonical_json(skill) + "\\0" + instructions).encode("utf-8")).hexdigest()
+        refs.append({"skillId": skill_id, "version": str(skill["version"]), "digest": digest})
+    return refs
 
 
 def _validate_schema(instance: dict, schema_path: Path, label: str, ontology_classes: set[str] | None = None) -> None:
@@ -191,7 +211,8 @@ def build_agent_task_contract(
 ) -> dict[str, Any]:
     """Create the formal task envelope used for a single pinned Agent execution."""
     verified = validate_ontology_binding(binding)
-    validate_role_ontology_contract(role, verified, project_root)
+    skill_contracts = validate_role_ontology_contract(role, verified, project_root)
+    skill_refs = _skill_reference_records(project_root, skill_contracts)
     role_inputs = [str(value) for value in role["inputEntityTypes"]]
     input_types = []
     if "Requirement" in role_inputs:
@@ -206,6 +227,7 @@ def build_agent_task_contract(
         "tenantId": "local-reference",
         "projectId": "ontology-software-factory",
         "roleId": role["roleId"],
+        "skillRefs": skill_refs,
         "ontologyVersion": verified["ontologyVersion"],
         "ontologySnapshotId": verified["snapshotId"],
         "ontologyDigest": verified["digest"],
@@ -218,6 +240,7 @@ def build_agent_task_contract(
             "evidenceRef": f"{'workflow-input' if entity_type == 'Requirement' else 'upstream-agent-artifact'}:{run_id}",
         } for entity_type in input_types],
         "expectedOutputEntityTypes": list(role["outputEntityTypes"]),
+        "skillRefs": skill_refs,
         "acceptanceCriteria": [{
             "id": "AC-ONTOLOGY-BOUND-OUTPUT",
             "description": "Output must match the Role's typed output contract and the pinned ontology version. "
@@ -251,15 +274,18 @@ def validate_agent_task_contract(
     binding: dict[str, Any],
 ) -> None:
     verified = validate_ontology_binding(binding)
-    validate_role_ontology_contract(role, verified, project_root)
+    skill_contracts = validate_role_ontology_contract(role, verified, project_root)
+    skill_refs = _skill_reference_records(project_root, skill_contracts)
     _validate_schema(contract, Path(project_root) / "contracts/schemas/agent-task.schema.json", "Agent Task", _class_names(verified["ontology"]))
     expected = {
         "roleId": role["roleId"],
+        "skillRefs": skill_refs,
         "ontologyVersion": verified["ontologyVersion"],
         "ontologySnapshotId": verified["snapshotId"],
         "ontologyDigest": verified["digest"],
         "ontologySchemaVersion": verified["schemaVersion"],
         "expectedOutputEntityTypes": list(role["outputEntityTypes"]),
+        "skillRefs": skill_refs,
     }
     for key, value in expected.items():
         if contract.get(key) != value:
@@ -297,7 +323,8 @@ def build_agent_result_contract(
 ) -> dict[str, Any]:
     """Build and validate the semantic result envelope persisted with every Agent stage."""
     verified = validate_ontology_binding(binding)
-    validate_role_ontology_contract(role, verified, project_root)
+    skill_contracts = validate_role_ontology_contract(role, verified, project_root)
+    skill_refs = _skill_reference_records(project_root, skill_contracts)
     summary = output.get("summary")
     if not isinstance(summary, str) or not summary.strip():
         summary = f"{role.get('displayName', role['roleId'])} returned typed structured output"
@@ -340,7 +367,8 @@ def validate_agent_result_contract(
     binding: dict[str, Any],
 ) -> None:
     verified = validate_ontology_binding(binding)
-    validate_role_ontology_contract(role, verified, project_root)
+    skill_contracts = validate_role_ontology_contract(role, verified, project_root)
+    skill_refs = _skill_reference_records(project_root, skill_contracts)
     _validate_schema(
         contract, Path(project_root) / "contracts/schemas/agent-result.schema.json",
         "Agent Result", _class_names(verified["ontology"]),
