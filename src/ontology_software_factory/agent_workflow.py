@@ -11,6 +11,7 @@ from typing import Any
 from .task_runtime import PermanentTaskError, TransientTaskError, TaskContext
 from .software_factory_pipeline import SoftwareFactoryPipeline, PipelineValidationError
 from .workspace_execution import WorkspaceManager
+from .quality_gate import evaluate_agent_workspace_evidence
 from .ontology_runtime import (
     build_agent_task_contract, build_agent_result_contract, validate_agent_output,
     validate_ontology_binding, validate_role_ontology_contract, validate_runtime_contract_lock,
@@ -116,6 +117,7 @@ class AgentWorkflowStepHandler:
             ]
         if step_id == "security-review":
             task_input["proposed_files_with_content"] = self._read_proposal_contents(run_id, upstream_outputs.get("implementation-proposal", {}))
+            task_input["test_execution_evidence"] = upstream_outputs.get("test-strategy", {}).get("workspace_evidence", [])
             task_input["security_rules"] = ["No secret material", "No arbitrary execution", "No direct repo or production changes",
                                              "Review evidence gaps and require independent human approval"]
 
@@ -132,6 +134,14 @@ class AgentWorkflowStepHandler:
             if not isinstance(output, dict):
                 raise PipelineValidationError("Agent output must be a JSON object")
             validate_agent_output(output, role=role, binding=binding)
+            if step_id == "security-review":
+                gate = evaluate_agent_workspace_evidence(
+                    upstream_outputs.get("test-strategy", {}).get("workspace_evidence", []),
+                    execution.get("workspace_evidence", []),
+                )
+                output = {**output, "workspace_quality_gate": gate}
+                if not gate.get("releaseAllowed"):
+                    output["release_recommendation"] = "blocked"
             stored_proposed_files = []
             if step_id == "implementation-proposal":
                 proposal_dir = stage_dir / "proposed_changes"
@@ -257,7 +267,11 @@ class AgentWorkflowStepHandler:
                 data = json.loads(candidate.read_text(encoding="utf-8"))
                 output = data.get("output")
                 if isinstance(output, dict):
-                    return output
+                    return {
+                        **output,
+                        "workspace_evidence": data.get("workspaceEvidence", []),
+                        "workspace_metadata": data.get("workspaceMetadata"),
+                    }
             except (OSError, json.JSONDecodeError):
                 continue
         return None
