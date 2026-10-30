@@ -8,10 +8,9 @@ from pathlib import Path
 from ontology_software_factory.factory_plan_runtime import (
     FactoryAssignmentHandler, FactoryPlanDispatcher, get_factory_plan_execution,
 )
-from ontology_software_factory.integration import WorkflowOutboxRelay
 from ontology_software_factory.ontology_runtime import build_runtime_contract_lock
 from ontology_software_factory.ontology_versioning import create_snapshot
-from ontology_software_factory.task_runtime import SQLiteTaskStore, TaskContext, TaskWorker
+from ontology_software_factory.task_runtime import SQLiteTaskStore, TaskWorker
 from ontology_software_factory.workflow_engine import WorkflowEngine
 from ontology_software_factory.workflow_store import SQLiteWorkflowStore
 
@@ -103,6 +102,7 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         self.assertEqual(len(self.task_store.list_tasks()), 1)
 
     def test_high_risk_or_human_approval_plan_is_not_dispatched(self):
+        self.plan["planId"] = "sf:agent-plan:approval-required-002"
         self.plan["riskAssessment"]["requiresHumanApproval"] = True
         self.plan["riskAssessment"]["level"] = "high"
         self.plan_record = self.engine.submit_factory_orchestrator_plan(self.run["id"], self.plan)["plan"]
