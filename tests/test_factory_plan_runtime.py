@@ -97,6 +97,9 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
             "sha256": "a" * 64,
         }]
         self.task_store.complete(task["id"], "test-worker", output={"summary": "done"}, evidence=evidence)
+        WorkflowOutboxRelay(
+            self.task_store, self.engine, relay_id="factory-phase-test-relay"
+        ).drain()
 
         second = self.dispatcher.dispatch_ready(self.run, self.plan_record)
         self.assertEqual([item["assignmentId"] for item in second["enqueued"]], ["design-solution"])
