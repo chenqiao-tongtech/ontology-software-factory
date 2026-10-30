@@ -31,7 +31,8 @@ class RemoteRepositoryConnector:
         self.source_type = provider
         self.provider = provider
         self.fetch_json = fetch_json
-        self.max_assets = max_assets\n        self.token_env = token_env
+        self.max_assets = max_assets
+        self.token_env = token_env
 
     def scan(self, source_id: str, location: str | Path) -> SourceScanResult:
         parsed = urlparse(str(location))
