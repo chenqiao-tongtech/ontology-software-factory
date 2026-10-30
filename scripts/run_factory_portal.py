@@ -37,6 +37,7 @@ from ontology_software_factory.remote_connectors import RemoteRepositoryConnecto
 from ontology_software_factory.database_connectors import PostgreSQLSchemaConnector, MySQLSchemaConnector
 from ontology_software_factory.ontology_versioning import create_snapshot, diff_snapshots, find_snapshot, ontology_digest
 from ontology_software_factory.ontology_governance import build_consumer_graph, analyze_consumer_impact, compatibility_report
+from ontology_software_factory.observability import build_platform_observability_report
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps" / "factory-portal" / "index.html"
@@ -919,6 +920,8 @@ class PortalHandler(BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8"); self.send_header("Content-Length", str(len(data))); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(data); return
         if path == "/api/health": return self._send_json(200, {"status": "ok", "mode": "local-reference-portal", "timestamp": now_iso()})
         if path == "/api/overview": return self._send_json(200, get_overview())
+        if path == "/api/observability":
+            return self._send_json(200, build_platform_observability_report(ROOT / ".local-runs", state_read()))
         if path == "/api/sources": return self._send_json(200, {"sources": source_scan_results()})
         if path == "/api/ontology/versions":
             snapshots = state_read().get("ontologySnapshots", [])

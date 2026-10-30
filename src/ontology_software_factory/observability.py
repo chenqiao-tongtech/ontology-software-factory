@@ -62,3 +62,95 @@ def write_change_proposal(path:str|Path,**kwargs)->dict[str,Any]:
  proposal=create_change_proposal(**kwargs); target=Path(path).resolve()
  if target.exists(): raise FileExistsError('refusing to overwrite an existing change proposal')
  target.parent.mkdir(parents=True,exist_ok=True); target.write_text(json.dumps(proposal,ensure_ascii=False,indent=2)+'\n',encoding='utf-8'); return proposal
+
+
+
+def build_platform_observability_report(
+    runs_root: str | Path,
+    portal_state: dict[str, Any],
+    rates_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Combine pipeline run records with sanitized local Portal/Agent state.
+
+    This is a read-only aggregation. It deliberately excludes prompts, model responses,
+    credentials, raw tool arguments and event payloads from the returned report.
+    """
+    state = portal_state if isinstance(portal_state, dict) else {}
+    report = build_observability_report(runs_root, rates_path)
+    agent_runs = [item for item in state.get("agentRuns", []) if isinstance(item, dict)]
+    quality_runs = [item for item in state.get("qualityRuns", []) if isinstance(item, dict)]
+    sources = state.get("sourceSyncHistory", {})
+    source_status_counts: dict[str, int] = {}
+    sync_count = 0
+    if isinstance(sources, dict):
+        for history in sources.values():
+            if not isinstance(history, list):
+                continue
+            sync_count += len(history)
+            for item in history:
+                if isinstance(item, dict):
+                    status = str(item.get("status", "unknown"))
+                    source_status_counts[status] = source_status_counts.get(status, 0) + 1
+
+    run_status_counts: dict[str, int] = {}
+    runtime_mode_counts: dict[str, int] = {}
+    step_status_counts: dict[str, int] = {}
+    for run in agent_runs:
+        status = str(run.get("status", "unknown"))
+        mode = str(run.get("runtimeMode", "unspecified"))
+        run_status_counts[status] = run_status_counts.get(status, 0) + 1
+        runtime_mode_counts[mode] = runtime_mode_counts.get(mode, 0) + 1
+        for step in run.get("steps", []) if isinstance(run.get("steps", []), list) else []:
+            if isinstance(step, dict):
+                step_status = str(step.get("status", "unknown"))
+                step_status_counts[step_status] = step_status_counts.get(step_status, 0) + 1
+
+    quality_status_counts: dict[str, int] = {}
+    for item in quality_runs:
+        status = str(item.get("status", "unknown"))
+        quality_status_counts[status] = quality_status_counts.get(status, 0) + 1
+
+    events = []
+    for event in state.get("portalEvents", [])[-30:]:
+        if isinstance(event, dict):
+            events.append({
+                "eventId": event.get("eventId"),
+                "at": event.get("at"),
+                "type": event.get("type"),
+                "actor": event.get("actor"),
+                "summary": event.get("summary"),
+            })
+
+    report["platform"] = {
+        "mode": "local-reference-portal",
+        "agentRuns": {
+            "total": len(agent_runs),
+            "byStatus": run_status_counts,
+            "byRuntimeMode": runtime_mode_counts,
+            "stepStatuses": step_status_counts,
+            "recent": [{
+                "runId": run.get("runId"),
+                "status": run.get("status"),
+                "runtimeMode": run.get("runtimeMode"),
+                "updatedAt": run.get("updatedAt"),
+                "currentStep": run.get("currentStep"),
+                "stepCount": len(run.get("steps", [])) if isinstance(run.get("steps", []), list) else 0,
+            } for run in agent_runs[:20]],
+        },
+        "qualityRuns": {"total": len(quality_runs), "byStatus": quality_status_counts},
+        "sourceSync": {"historyEntries": sync_count, "byStatus": source_status_counts},
+        "ontology": {
+            "candidateCount": len(state.get("ontologyCandidates", [])),
+            "pendingChangeCount": sum(
+                1 for item in state.get("ontologyChanges", [])
+                if isinstance(item, dict) and item.get("status") == "pending"
+            ),
+        },
+        "recentEvents": events,
+    }
+    report["limitations"] = list(report.get("limitations", [])) + [
+        "Portal/Agent counters are local JSON state and are not a distributed, multi-tenant telemetry backend.",
+        "Fixture Agent runs are reported separately by runtimeMode and must not be interpreted as real LLM executions.",
+        "Event payloads, prompts, model responses, credentials and raw tool arguments are intentionally excluded.",
+    ]
+    return report
