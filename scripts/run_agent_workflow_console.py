@@ -20,6 +20,7 @@ from ontology_software_factory.integration import WorkflowOutboxRelay, enqueue_w
 from ontology_software_factory.task_runtime import IdempotencyConflict, SQLiteTaskStore, TaskWorker  # noqa: E402
 from ontology_software_factory.workflow_engine import WorkflowEngine, WorkflowError  # noqa: E402
 from ontology_software_factory.workflow_store import SQLiteWorkflowStore  # noqa: E402
+from ontology_software_factory.ontology_runtime import load_active_ontology_binding, OntologyBindingError  # noqa: E402
 
 
 def load_definition() -> dict:
@@ -68,10 +69,19 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         if path == "/api/status":
+            try:
+                active_binding = load_active_ontology_binding(ROOT)
+                ontology_status = {key: active_binding[key] for key in ("snapshotId", "digest", "ontologyVersion", "schemaVersion")}
+                ontology_error = None
+            except OntologyBindingError as exc:
+                ontology_status = None
+                ontology_error = str(exc)
             self._json(200, {
                 "mode": "real-agent-workflow",
                 "api_key_configured": bool(os.getenv("OPENAI_API_KEY")),
                 "model": os.getenv("OPENAI_MODEL", "gpt-6.1-sol"),
+                "ontology_binding": ontology_status,
+                "ontology_binding_error": ontology_error,
                 "runs": len(self.engine.list_runs()),
                 "tasks": len(self.task_store.list_tasks(1000)),
                 "outbox_pending": sum(1 for item in self.task_store.list_outbox(1000) if item.get("status") != "delivered"),
@@ -114,8 +124,14 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                 if not isinstance(requirement, str) or not requirement.strip() or len(requirement) > 30_000:
                     self._json(400, {"error": "requirement must be non-empty and <= 30000 characters"})
                     return
-                run = self.engine.create_run(str(body.get("title", "真实多 Agent 软件提案")),
-                                             str(body.get("requestedBy", "local-operator")), "review")
+                # Resolve the approved active ontology once, then persist the full immutable
+                # snapshot with the workflow run so later promotions cannot change in-flight work.
+                binding = load_active_ontology_binding(ROOT)
+                run = self.engine.create_run(
+                    str(body.get("title", "真实多 Agent 软件提案")),
+                    str(body.get("requestedBy", "local-operator")), "review",
+                    ontology_binding=binding,
+                )
                 self.input_root.mkdir(parents=True, exist_ok=True)
                 target = self.input_root / f"{run['id']}.json"
                 target.write_text(json.dumps({"requirement": requirement.strip()}, ensure_ascii=False, indent=2), encoding="utf-8")

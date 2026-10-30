@@ -15,6 +15,7 @@
 - [多智能体与本体自动发现](#多智能体与本体自动发现)
 - [项目结构](#项目结构)
 - [快速开始](#快速开始)
+- [安装、依赖与运行手册](#安装依赖与运行手册)
 - [主要演示与运行命令](#主要演示与运行命令)
 - [本地 Web 控制台](#本地-web-控制台)
 - [四阶段统一平台 Portal](#四阶段统一平台-portal)
@@ -87,7 +88,7 @@ flowchart TB
 | 版本化交付与回滚演练 | `release_manager.py`、`scripts/create_release.py`、`scripts/rehearse_upgrade.py` | 质量门禁通过后生成配置候选包、manifest、SHA-256 和配置包范围的 CycloneDX SBOM；升级/回滚只模拟本地状态。 |
 | 观测与成本 | `observability.py`、`observability/` | 汇总本地运行/Gate 数据、LLM usage ledger；没有价格表时成本保留 `null`，不虚构费用。 |
 | LLM Provider | `llm_provider.py` | 统一封装 OpenAI Responses API、结构化输出、有限重试、延迟/Token 使用记录，并提供 Fake Provider 测试。 |
-| Agent Runtime | `agent_runtime.py`、`agent_workflow.py` | 可选接入 OpenAI Agents SDK；有效工具集合取角色白名单与运行时已注册工具的交集；真实调用需 SDK、API Key、网络和可用模型。 |
+| Agent Runtime | `agent_runtime.py`、`agent_workflow.py`、`ontology_runtime.py` | 可选接入 OpenAI Agents SDK；每次真实执行必须绑定已审批的完整本体快照与 SHA-256，校验 Agent Task / Agent Result、Role / Skill 输入输出类型和工具授权；Evidence 记录快照版本；有效工具集合取角色白名单与运行时已注册工具的交集。真实调用需 SDK、API Key、网络和可用模型。 |
 | LLM 本体发现 | `ontology_discovery.py`、`ontology_discovery_worker.py`、`adapters/nvidia_auto_ontology.py`、`adapters/cognee_ontology.py` | 四阶段候选生成、来源引用核验、独立 Critic、Benchmark、摘要绑定审批；NVIDIA 元数据适配器只读，Cognee 输出候选暂存，不直接发布正式本体。 |
 
 ## 多智能体与本体自动发现
@@ -169,9 +170,9 @@ make validate
 make test
 ```
 
-`make validate` 会校验架构基线、MVP 范围、领域契约、资产目录、Agent/Skills、多智能体拓扑、Workflow 定义及本体发现配置。`make test` 运行完整 unittest 套件。测试中使用的 Fake Provider、fixture 和模拟服务用于验证本地逻辑，不代表外部 LLM/MCP/NVIDIA/Cognee 服务已经连通。
+`make validate` 会校验架构基线、MVP 范围、领域契约、资产目录、Agent/Skills、多智能体拓扑、Workflow 定义、本体发现配置，以及 Agent Role、Skill、Workflow、Tool 和 JSON Schema 契约对本体类的引用。`make test` 运行完整 unittest 套件。测试中使用的 Fake Provider、fixture 和模拟服务用于验证本地逻辑，不代表外部 LLM/MCP/NVIDIA/Cognee 服务已经连通。
 
-本次针对该累计源码包的本地检查记录：`make validate` 通过；`PYTHONPATH=src python -m unittest discover -s tests -v` **188 项测试通过**（约 26.5 秒）。这些测试覆盖本地逻辑、契约、fixture 和模拟集成，不等于真实外部服务或生产环境验收。
+测试数量和执行结果以当前提交对应的 GitHub Actions CI 为准。离线 Fixture、Fake Provider 和模拟集成测试不等于真实外部服务或生产环境验收。
 
 ### 3. 一键演示配置交付
 
@@ -248,9 +249,25 @@ make observability
 | `make demo-ontology-discovery-worker` | 通过 Worker 队列演示本体发现及证据回写。 |
 | `make observability` | 生成本地运行/成本观测报告。 |
 | `make portal` | 启动统一软件工厂 Portal（默认 `127.0.0.1:8770`）。 |
+| `make llm-check` | 使用当前 shell 的 API Key 检查 OpenAI Responses API 连通性。 |
+| `make ai-runtime-console` | 启动 LLM / Agent Runtime Console（默认 `127.0.0.1:8768`）。 |
+| `make agent-workflow-console` | 启动绑定活动本体快照的真实多 Agent Workflow Console（默认 `127.0.0.1:8769`）。 |
 | `make clean-local` | 删除 `.local-runs`、`.local-environments`、`.local-portal`、`deliverables` 和观测报告。请先备份需要保留的演示数据。 |
 
 常用脚本的具体参数可通过 `python scripts/<script>.py --help` 查看。
+
+## 安装、依赖与运行手册
+
+新增三份面向开发和部署交接的完整文档：
+
+- [安装指南](docs/installation.md)：Python 环境、虚拟环境、基础安装、可选 extras、外部工具安装和首次启动。
+- [依赖工具与组件清单](docs/dependency-inventory.md)：基础 Python 包、OpenAI Agents SDK、PostgreSQL/MySQL 驱动、Semgrep/Gitleaks/Trivy、Git、MCP、Cognee、NVIDIA 和所需外部服务。
+- [本体版本绑定与 Agent Runtime 运行手册](docs/ontology-runtime-version-binding.md)：活动版本初始化、审批发布、Runtime 启动、任务执行、证据核验和故障排查。
+- [本次发布说明](docs/releases/2026-10-30-ontology-bound-agent-runtime.md)：实现范围、安装升级、首次运行前置条件和验收边界。
+
+最小安装仍然是 `python -m pip install -e .`。真实多 Agent Runtime 额外安装 `python -m pip install -e '.[agent-runtime]'`；PostgreSQL / MySQL 连接器分别安装 `.[postgres]` / `.[mysql]`。本项目静态前端不需要 Node.js / npm。不要为了未启用的外部集成安装全部组件。
+
+真实 Agent Workflow 必须先在 Portal 中创建本体快照并完成独立 promote 审批。运行时会把活动快照 ID、摘要、Ontology Version 和 Schema Version 固定到 Workflow Run、Agent Task、Agent Result 与 Evidence；没有活动版本或摘要校验失败时会拒绝执行。
 
 ## 本地 Web 控制台
 
@@ -378,6 +395,8 @@ python scripts/run_ontology_discovery.py \
 本轮本体版本快照、结构差异与影响分析说明见 [Ontology Versioning and Impact Analysis](docs/2026-10-30-ontology-versioning-and-impact-analysis.md)。
 
 本轮消费者依赖图、兼容性门禁与受控版本治理说明见 [Ontology Dependency and Governance](docs/2026-10-30-ontology-dependency-and-governance.md)。
+
+本轮 Agent Runtime 本体版本绑定、安装和运行说明见 [Ontology Runtime Version Binding](docs/ontology-runtime-version-binding.md)，安装与可选组件清单见 [Installation](docs/installation.md) 和 [Dependency Inventory](docs/dependency-inventory.md)。
 
 `make validate` 现额外执行 `scripts/validate_ontology_consumers.py`，验证 Agent Role、Skill、Workflow、Tool 和契约中的本体引用。
 

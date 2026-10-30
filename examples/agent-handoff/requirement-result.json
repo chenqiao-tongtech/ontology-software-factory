@@ -24,5 +24,17 @@
   ],
   "errors": [],
   "proposedNextRoleId": "human-product-owner",
-  "completedAt": "2026-10-28T08:00:00Z"
+  "completedAt": "2026-10-28T08:00:00Z",
+  "ontologyVersion": "1.0.0",
+  "ontologySnapshotId": "ont-1111111111111111",
+  "ontologyDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+  "ontologySchemaVersion": "1.0.0",
+  "roleDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+  "skillRefs": [
+    {
+      "skillId": "requirement-normalization",
+      "version": "1.0.0",
+      "digest": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ]
 }

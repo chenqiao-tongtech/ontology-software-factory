@@ -79,7 +79,11 @@ class WorkflowEngine:
         run = self.get_run(run_id)
         return {"run": run, "events": self.store.get_events(run_id)}
 
-    def create_run(self, title: str, requested_by: str = "local-operator", environment: str = "staging") -> dict[str, Any]:
+    def create_run(self, title: str, requested_by: str = "local-operator", environment: str = "staging",
+                   ontology_binding: dict[str, Any] | None = None) -> dict[str, Any]:
+        if ontology_binding is not None:
+            from .ontology_runtime import validate_ontology_binding
+            ontology_binding = validate_ontology_binding(ontology_binding)
         timestamp = now_iso()
         run_id = f"RUN-{uuid4().hex[:6].upper()}"
         steps = []
@@ -100,13 +104,14 @@ class WorkflowEngine:
             "title": title.strip() or "新建软件交付运行", "status": "running",
             "currentStepId": self.definition["startStepId"], "createdAt": timestamp, "updatedAt": timestamp,
             "requestedBy": requested_by, "environment": environment, "revision": 1,
+            "ontologyBinding": ontology_binding,
             "steps": steps,
         }
         first = self._step(run, run["currentStepId"])
         first["status"] = "running"
         first["attempt"] = 1
         first["startedAt"] = timestamp
-        event = self._event("run.created", f"创建工作流运行：{run['title']}", actor=requested_by, payload={"workflowVersion": run["workflowVersion"]})
+        event = self._event("run.created", f"创建工作流运行：{run['title']}", actor=requested_by, payload={"workflowVersion": run["workflowVersion"], "ontologySnapshotId": (ontology_binding or {}).get("snapshotId"), "ontologyDigest": (ontology_binding or {}).get("digest"), "ontologyVersion": (ontology_binding or {}).get("ontologyVersion"), "ontologySchemaVersion": (ontology_binding or {}).get("schemaVersion")})
         self.store.insert_new_run(run, event)
         return self.get_run(run_id)
 

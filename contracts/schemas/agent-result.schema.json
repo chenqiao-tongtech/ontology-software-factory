@@ -7,13 +7,19 @@
   "required": [
     "taskId",
     "roleId",
+    "ontologyVersion",
+    "ontologySnapshotId",
+    "ontologyDigest",
+    "ontologySchemaVersion",
     "status",
     "summary",
     "outputs",
     "evidenceRefs",
     "humanReviewRequired",
     "errors",
-    "completedAt"
+    "completedAt",
+    "skillRefs",
+    "roleDigest"
   ],
   "properties": {
     "taskId": {
@@ -65,7 +71,25 @@
               "Vulnerability",
               "Release",
               "Deployment",
-              "Incident"
+              "Incident",
+              "OntologyCandidate",
+              "OntologyTermCandidate",
+              "OntologyRelationCandidate",
+              "OntologyConstraintCandidate",
+              "CompetencyQuestion",
+              "OntologySourceEvidence",
+              "OntologyEvaluation",
+              "OntologyApproval",
+              "OntologyRevision",
+              "AgentTeam",
+              "AgentRole",
+              "Skill",
+              "AgentTask",
+              "AgentHandoff",
+              "AgentResult",
+              "ContextReference",
+              "CoordinationDecision",
+              "ReviewDecision"
             ]
           },
           "schemaVersion": {
@@ -152,6 +176,52 @@
     "completedAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "ontologySnapshotId": {
+      "type": "string",
+      "pattern": "^ont-[a-f0-9]{16}$"
+    },
+    "ontologyDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ontologySchemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "ontologyVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "skillRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "skillId",
+          "version",
+          "digest"
+        ],
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,70}$"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "roleDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
     }
   }
 }
