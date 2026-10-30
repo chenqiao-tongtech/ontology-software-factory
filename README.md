@@ -438,3 +438,27 @@ python scripts/run_ontology_discovery.py \
 - [连接器平台与本体数据接入设计](docs/connector-platform-and-ontology-ingestion.md)：覆盖 Harness、Skills、Tools、连接器边界与数据源路线图。
 
 目录中标记为 `planned` 或 `adapter-required` 的项目只是能力路线图，不能被运行时调用。当前未因此新增 Confluence、SharePoint、Google Drive、Kafka Schema Registry、GraphQL 等真实外部适配器，也未实现生产级 OAuth/Secret Broker。
+
+
+## Harness、Skill Registry 与连接器运行时
+
+本阶段增加了三项本地参考运行组件，并扩展只读 Agent 工具：
+
+- `src/ontology_software_factory/harness.py`：按角色字段白名单装配上下文，校验租户/项目绑定，限制工具调用和模型 Token 预算，支持审批校验回调、元数据审计和文件型 Kill Switch。
+- `src/ontology_software_factory/skill_registry.py`：校验 Skill JSON Schema、角色兼容关系、所需能力 ID，并对 `skill.json` 与 `SKILL.md` 生成内容摘要锁。
+- `src/ontology_software_factory/connector_runtime.py`：通过注入式只读 Source Adapter 执行扫描，检查主体/租户/连接器状态，投影来源资产元数据并写入审计事件。
+- `src/ontology_software_factory/api_contract_connectors.py`：离线解析 OpenAPI JSON、AsyncAPI JSON、GraphQL SDL 和 Protobuf 文件，抽取 API 操作、Schema、事件通道、消息、类型和 RPC 候选。
+- Agent 工具新增 `ontology.definition.read`、`source.catalog.read`、`dependencies.inspect`，按角色白名单开放。
+- Portal 的 `/api/observability` 和统一监控视图新增 Harness / Connector 审计摘要。
+
+校验命令：
+
+```bash
+make harness
+make skill-registry
+make connector-catalog
+make connector-runtime
+make test
+```
+
+当前实现边界：Harness 尚未作为 OpenAI Agents Runtime 的默认工具中介；SkillRegistry 尚未替换 Agent Workflow 当前的 Skill 装载路径；ConnectorRuntime 尚未统一接管 Portal 全部数据源路径。API 契约解析只接受显式提供的文件，OpenAPI/AsyncAPI 当前解析 JSON，GraphQL 使用受限 SDL 解析，Protobuf 不执行 protoc 或导入解析。企业 SSO、OAuth/Secret Broker、分布式预算、跨节点连接器任务、Webhook 增量同步、企业 ACL 传播和防篡改审计仍需后续建设。
