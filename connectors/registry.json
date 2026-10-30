@@ -212,10 +212,9 @@
       "name": "dbt manifest and catalog",
       "category": "ontology-source",
       "direction": "read",
-      "implementationStatus": "planned",
+      "implementationStatus": "implemented",
       "operations": [
-        "read.manifest",
-        "read.catalog"
+        "read.manifest"
       ],
       "dataClasses": [
         "data-lineage",
@@ -225,7 +224,7 @@
       "credentialRef": null,
       "networkEgress": "none",
       "approvalRequired": false,
-      "notes": "Ingest generated artifacts rather than executing dbt projects."
+      "notes": "Offline import of explicit dbt manifest.json and optional catalog.json; does not execute dbt."
     },
     {
       "connectorId": "action.github-pull-request",
@@ -321,6 +320,24 @@
       "networkEgress": "none",
       "approvalRequired": false,
       "notes": "Offline parser for explicitly supplied .proto files; does not invoke protoc or resolve imports."
+    },
+    {
+      "connectorId": "source.schema-registry-export",
+      "name": "Kafka Schema Registry export file",
+      "category": "ontology-source",
+      "direction": "read",
+      "implementationStatus": "implemented",
+      "operations": [
+        "import.export"
+      ],
+      "dataClasses": [
+        "event-schema"
+      ],
+      "authMode": "none",
+      "credentialRef": null,
+      "networkEgress": "none",
+      "approvalRequired": false,
+      "notes": "Offline import of explicit JSON subject/version export; live Schema Registry API connection remains a separate planned adapter."
     }
   ]
 }
