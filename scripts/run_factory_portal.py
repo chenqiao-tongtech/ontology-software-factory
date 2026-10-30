@@ -1069,7 +1069,7 @@ class PortalHandler(BaseHTTPRequestHandler):
                     raise ValueError("snapshot is already active")
                 active = next((item for item in snapshots if item.get("snapshotId") == active_id), None)
                 compat = compatibility_report(active, target) if active else {
-                    "compatible": False, "breakingChanges": [], "reviewItems": [{"kind": "initial-baseline-review"}],
+                    "compatible": True, "baselineMissing": True, "breakingChanges": [], "reviewItems": [{"kind": "initial-baseline-review"}],
                     "reviewRequired": True, "versionOrderValid": True, "majorVersionBump": False,
                     "summary": {"breakingChanges": 0, "reviewItems": 1},
                     "policy": "首次发布没有既有活动版本；必须由人工确认其作为初始基线。"
