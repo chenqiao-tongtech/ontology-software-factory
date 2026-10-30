@@ -361,7 +361,11 @@ class OpenAIAgentsRuntime:
             },
             evidence_refs=[str(item) for item in task_input.get("evidence_refs", [])],
         )
-        allowed = self.effective_tool_ids(role_id, set(tools_by_id))
+        policy_enabled = set(registry.effective_tools(role_id))
+        allowed = [
+            item for item in self.effective_tool_ids(role_id, set(tools_by_id))
+            if item in policy_enabled
+        ]
         tools = [tools_by_id[item] for item in allowed]
         unavailable_skill_tools = sorted({
             str(tool_id)
