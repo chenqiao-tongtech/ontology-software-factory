@@ -638,7 +638,7 @@ def discover_candidates() -> dict:
         key = re.sub(r"[_-]+", " ", term["label"]).lower()
         if key not in formal_names:
             unique.setdefault(term["label"].lower(), term)
-    candidate = {"candidateId": "ocand-" + uuid.uuid4().hex[:12], "createdAt": now_iso(), "engine": "local-rule-based-extraction", "sourceMode": "local-read-only-metadata-and-symbols", "formalOntologyVersion": ontology["ontologyVersion"], "status": "needs-review", "terms": list(unique.values()), "sourceSummary": [{"id": x["id"], "name": x["name"], "type": x["type"], "status": x["status"], "assetCount": x["assetCount"], "fixture": x.get("fixture", False)} for x in scans], "notice": "本候选由本地规则抽取生成，不是 LLM 结果；它不会自动合并到正式本体。请先核实来源和语义。"}
+    candidate = {"candidateId": "ocand-" + uuid.uuid4().hex[:12], "createdAt": now_iso(), "engine": "local-rule-based-extraction", "sourceMode": "configured-read-only-source-metadata-and-symbols", "formalOntologyVersion": ontology["ontologyVersion"], "status": "needs-review", "terms": list(unique.values()), "sourceSummary": [{"id": x["id"], "name": x["name"], "type": x["type"], "status": x["status"], "assetCount": x["assetCount"], "fixture": x.get("fixture", False)} for x in scans], "notice": "本候选由本地规则抽取生成，不是 LLM 结果；它不会自动合并到正式本体。请先核实来源和语义。"}
     def change(state):
         state.setdefault("ontologyCandidates", []).insert(0, candidate)
         state["ontologyCandidates"] = state["ontologyCandidates"][:30]
