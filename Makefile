@@ -1,11 +1,11 @@
 PYTHON ?= python
 export PYTHONPATH := src
 
-.PHONY: portal validate architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow runner-tests test demo-pipeline demo-gate demo-e2e demo-ontology-discovery demo-ontology-discovery-worker observability clean-local
+.PHONY: portal validate architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow ontology-consumers runner-tests test demo-pipeline demo-gate demo-e2e demo-ontology-discovery demo-ontology-discovery-worker observability clean-local
 portal:
 	$(PYTHON) scripts/run_factory_portal.py --host 127.0.0.1 --port 8770
 
-validate: architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow
+validate: architecture-baseline scope ontology catalog agent-contracts multi-agent workflow ontology-discovery-config ontology-discovery-workflow ontology-consumers
 architecture-baseline:
 	$(PYTHON) scripts/validate_architecture_baseline.py
 scope:
@@ -25,6 +25,8 @@ ontology-discovery-config:
 	$(PYTHON) scripts/validate_ontology_discovery_config.py
 ontology-discovery-workflow:
 	$(PYTHON) scripts/validate_ontology_discovery_workflow.py
+ontology-consumers:
+	$(PYTHON) scripts/validate_ontology_consumers.py
 runner-tests:
 	$(PYTHON) -m unittest tests.test_kafka_profile -v
 test:

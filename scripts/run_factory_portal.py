@@ -36,6 +36,7 @@ from ontology_software_factory.source_connectors import (
 from ontology_software_factory.remote_connectors import RemoteRepositoryConnector
 from ontology_software_factory.database_connectors import PostgreSQLSchemaConnector, MySQLSchemaConnector
 from ontology_software_factory.ontology_versioning import create_snapshot, diff_snapshots, find_snapshot, ontology_digest
+from ontology_software_factory.ontology_governance import build_consumer_graph, analyze_consumer_impact, compatibility_report
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps" / "factory-portal" / "index.html"
@@ -110,6 +111,9 @@ def ensure_state() -> dict:
     # Additive state migration: preserve existing local portal data.
     state.setdefault("sourceSyncHistory", {})
     state.setdefault("ontologySnapshots", [])
+    state.setdefault("ontologyGovernanceProposals", [])
+    state.setdefault("ontologyReleases", [])
+    state.setdefault("activeOntologySnapshotId", None)
     return state
 
 
@@ -920,6 +924,28 @@ class PortalHandler(BaseHTTPRequestHandler):
             snapshots = state_read().get("ontologySnapshots", [])
             public = [{key: value for key, value in item.items() if key != "ontology"} for item in snapshots]
             return self._send_json(200, {"snapshots": public, "currentDigest": ontology_digest(load_json(FORMAL_ONTOLOGY, {}))})
+        if path == "/api/ontology/dependencies":
+            ontology = load_json(FORMAL_ONTOLOGY, {})
+            graph = build_consumer_graph(ROOT, ontology)
+            params = parse_qs(urlparse(self.path).query)
+            changed = [item for item in (params.get("classes") or [""])[0].split(",") if item]
+            impact = analyze_consumer_impact(changed, graph) if changed else None
+            return self._send_json(200, {"graph": graph, "impact": impact})
+        if path == "/api/ontology/governance":
+            state = state_read()
+            snapshots = state.get("ontologySnapshots", [])
+            active_id = state.get("activeOntologySnapshotId")
+            active = next((item for item in snapshots if item.get("snapshotId") == active_id), None)
+            public_active = {key: value for key, value in active.items() if key != "ontology"} if active else None
+            return self._send_json(200, {"activeSnapshot": public_active,
+                "proposals": state.get("ontologyGovernanceProposals", []),
+                "releases": state.get("ontologyReleases", [])})
+        if path == "/api/ontology/compatibility":
+            params = parse_qs(urlparse(self.path).query)
+            snapshots = state_read().get("ontologySnapshots", [])
+            before = find_snapshot(snapshots, (params.get("from") or [""])[0])
+            after = find_snapshot(snapshots, (params.get("to") or [""])[0])
+            return self._send_json(200, compatibility_report(before, after))
         if path == "/api/ontology/diff":
             params = parse_qs(urlparse(self.path).query)
             from_id = (params.get("from") or [""])[0]
@@ -927,7 +953,11 @@ class PortalHandler(BaseHTTPRequestHandler):
             snapshots = state_read().get("ontologySnapshots", [])
             before = find_snapshot(snapshots, from_id)
             after = find_snapshot(snapshots, to_id)
-            return self._send_json(200, diff_snapshots(before, after))
+            result = diff_snapshots(before, after)
+            graph = build_consumer_graph(ROOT, after.get("ontology", {}), additional_ontologies=[before.get("ontology", {})])
+            result["consumerImpact"] = analyze_consumer_impact(result["impact"]["affectedClasses"], graph)
+            result["compatibility"] = compatibility_report(before, after)
+            return self._send_json(200, result)
         if path == "/api/ontology":
             state = state_read()
             sources = source_configs()
@@ -1022,6 +1052,123 @@ class PortalHandler(BaseHTTPRequestHandler):
                     f"正式本体快照{'已创建' if created else '已存在'}：{snapshot['snapshotId']}",
                     {"snapshotId": snapshot["snapshotId"], "digest": snapshot["digest"]}, actor=actor)
                 return self._send_json(201 if created else 200, {"snapshot": {key: value for key, value in snapshot.items() if key != "ontology"}, "created": created})
+            if path == "/api/ontology/governance/proposals":
+                snapshot_id = str(body.get("snapshotId", "")).strip()
+                action = str(body.get("action", "promote")).strip()
+                actor = str(body.get("actor", "")).strip()
+                reason = str(body.get("reason", "")).strip()
+                if action not in {"promote", "rollback"}: raise ValueError("action must be promote or rollback")
+                if not actor or not reason: raise ValueError("actor and reason are required")
+                state = state_read()
+                snapshots = state.get("ontologySnapshots", [])
+                target = find_snapshot(snapshots, snapshot_id)
+                active_id = state.get("activeOntologySnapshotId")
+                if action == "rollback" and (not active_id or active_id == snapshot_id):
+                    raise ValueError("rollback requires a different active snapshot")
+                if action == "promote" and active_id == snapshot_id:
+                    raise ValueError("snapshot is already active")
+                active = next((item for item in snapshots if item.get("snapshotId") == active_id), None)
+                if active_id and not active: raise ValueError("active ontology pointer references a missing snapshot")
+                if action == "rollback":
+                    target_index = next(i for i, item in enumerate(snapshots) if item.get("snapshotId") == snapshot_id)
+                    active_index = next(i for i, item in enumerate(snapshots) if item.get("snapshotId") == active_id)
+                    if target_index <= active_index: raise ValueError("rollback target must be an older saved snapshot")
+                compat = compatibility_report(active, target) if active else {
+                    "compatible": True, "baselineMissing": True, "breakingChanges": [], "reviewItems": [{"kind": "initial-baseline-review"}],
+                    "reviewRequired": True, "versionOrderValid": True, "majorVersionBump": False,
+                    "summary": {"breakingChanges": 0, "reviewItems": 1},
+                    "policy": "首次发布没有既有活动版本；必须由人工确认其作为初始基线。"
+                }
+                if action == "rollback" and active:
+                    compat = compatibility_report(active, target)
+                    compat["rollbackNote"] = "回退会恢复旧快照；版本号可能下降，需人工确认数据/消费者兼容性。"
+                proposal = {
+                    "proposalId": "ogp-" + uuid.uuid4().hex[:12],
+                    "action": action, "snapshotId": snapshot_id, "snapshotDigest": target["digest"],
+                    "expectedActiveSnapshotId": active_id, "requestedBy": actor[:100],
+                    "reason": reason[:1000], "createdAt": now_iso(), "status": "pending-approval",
+                    "compatibility": compat, "approval": None, "executedAt": None
+                }
+                def add_proposal(st): st.setdefault("ontologyGovernanceProposals", []).insert(0, proposal)
+                state_update(add_proposal)
+                record_event("ontology.governance.proposal", f"本体版本{action}提案已创建：{proposal['proposalId']}",
+                    {"proposalId": proposal["proposalId"], "snapshotId": snapshot_id, "action": action}, actor=actor)
+                return self._send_json(201, {"proposal": proposal})
+            m = re.fullmatch(r"/api/ontology/governance/proposals/([^/]+)/decision", path)
+            if m:
+                proposal_id = unquote(m.group(1))
+                actor = str(body.get("actor", "")).strip()
+                notes = str(body.get("notes", "")).strip()
+                decision = str(body.get("decision", "")).strip()
+                accept_breaking = body.get("acceptBreakingChanges", False)
+                if not isinstance(accept_breaking, bool): raise ValueError("acceptBreakingChanges must be a boolean")
+                if decision not in {"approve", "reject"}: raise ValueError("decision must be approve or reject")
+                if not actor or not notes: raise ValueError("actor and notes are required")
+                state = state_read()
+                proposal = next((p for p in state.get("ontologyGovernanceProposals", []) if p.get("proposalId") == proposal_id), None)
+                if not proposal: raise KeyError("governance proposal not found")
+                if proposal.get("status") != "pending-approval": raise ValueError("proposal is no longer pending")
+                if actor == proposal.get("requestedBy"): raise ValueError("requester and approver must be different actors")
+                compat = proposal.get("compatibility", {})
+                incompatible = not compat.get("compatible", False)
+                if decision == "approve" and proposal.get("action") == "promote" and (
+                    not compat.get("versionOrderValid", True) or compat.get("majorVersionBumpRequired", False)
+                ):
+                    raise ValueError("promotion is blocked: ontology/schema semantic version must be valid and breaking changes require a major-version bump")
+                if decision == "approve" and incompatible and not accept_breaking:
+                    raise ValueError("compatibility report is not clean; explicit acceptBreakingChanges=true and a reason are required")
+                approval = {"decision": decision, "actor": actor[:100], "notes": notes[:1000],
+                    "acceptBreakingChanges": accept_breaking, "approvedAt": now_iso(),
+                    "snapshotDigest": proposal.get("snapshotDigest")}
+                def decide(st):
+                    item = next(p for p in st["ontologyGovernanceProposals"] if p.get("proposalId") == proposal_id)
+                    if item.get("status") != "pending-approval":
+                        raise ValueError("proposal is no longer pending")
+                    item["approval"] = approval
+                    item["status"] = "approved" if decision == "approve" else "rejected"
+                state_update(decide)
+                record_event("ontology.governance." + decision, f"本体版本提案 {proposal_id} 已{('批准' if decision=='approve' else '驳回')}",
+                    {"proposalId": proposal_id, "acceptBreakingChanges": accept_breaking}, actor=actor)
+                return self._send_json(200, {"proposal": next(p for p in state_read()["ontologyGovernanceProposals"] if p["proposalId"] == proposal_id)})
+            m = re.fullmatch(r"/api/ontology/governance/proposals/([^/]+)/execute", path)
+            if m:
+                proposal_id = unquote(m.group(1))
+                actor = str(body.get("actor", "")).strip()
+                reason = str(body.get("reason", "")).strip()
+                if not actor or not reason: raise ValueError("executor and execution reason are required")
+                state = state_read()
+                proposal = next((p for p in state.get("ontologyGovernanceProposals", []) if p.get("proposalId") == proposal_id), None)
+                if not proposal: raise KeyError("governance proposal not found")
+                if proposal.get("status") != "approved" or not proposal.get("approval"):
+                    raise ValueError("proposal must be independently approved before execution")
+                if actor in {proposal.get("requestedBy"), proposal["approval"].get("actor")}:
+                    raise ValueError("executor must be independent from requester and approver")
+                if state.get("activeOntologySnapshotId") != proposal.get("expectedActiveSnapshotId"):
+                    raise ValueError("active ontology changed after proposal creation; create a fresh proposal")
+                snapshot = find_snapshot(state.get("ontologySnapshots", []), proposal["snapshotId"])
+                if snapshot.get("digest") != proposal.get("snapshotDigest"):
+                    raise ValueError("snapshot digest no longer matches approved proposal")
+                release = {"releaseId": "onr-" + uuid.uuid4().hex[:12],
+                    "snapshotId": snapshot["snapshotId"], "snapshotDigest": snapshot["digest"],
+                    "ontologyVersion": snapshot.get("ontologyVersion"), "action": proposal["action"],
+                    "previousSnapshotId": state.get("activeOntologySnapshotId"),
+                    "executedAt": now_iso(), "executedBy": actor[:100], "executionReason": reason[:1000],
+                    "approvalActor": proposal["approval"]["actor"], "proposalId": proposal_id,
+                    "formalFileModified": False, "runtimeActivation": "catalog-pointer-only"}
+                def execute(st):
+                    item = next(p for p in st["ontologyGovernanceProposals"] if p.get("proposalId") == proposal_id)
+                    if item.get("status") != "approved":
+                        raise ValueError("proposal is no longer approved")
+                    if st.get("activeOntologySnapshotId") != item.get("expectedActiveSnapshotId"):
+                        raise ValueError("active ontology changed concurrently; create a fresh proposal")
+                    item["status"] = "executed"
+                    item["executedAt"] = release["executedAt"]
+                    st["activeOntologySnapshotId"] = snapshot["snapshotId"]
+                    st.setdefault("ontologyReleases", []).insert(0, release)
+                state_update(execute)
+                record_event("ontology.governance.executed", f"本体版本指针已更新：{snapshot['snapshotId']}",
+                    {"releaseId": release["releaseId"], "snapshotId": snapshot["snapshotId"], "action": proposal["action"], "reason": reason}, actor=actor)
+                return self._send_json(200, {"release": release, "activeSnapshotId": snapshot["snapshotId"]})
             if path == "/api/ontology/discover": return self._send_json(201, {"candidate": discover_candidates()})
             if path == "/api/ontology/changes":
                 cid = str(body.get("candidateId", "")); decision = str(body.get("decision", "")); actor = str(body.get("actor", "")).strip(); notes = str(body.get("notes", "")).strip()
