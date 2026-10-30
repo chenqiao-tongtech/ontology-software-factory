@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import hashlib
 import mimetypes
 import os
 import re
@@ -474,6 +475,11 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
             "assetId": asset.get("assetId"),
             "contentSha256": asset.get("sha256"),
             "sourceRevision": asset.get("sourceRevision") or scan_details.get("sourceRevision"),
+            "assetFingerprint": hashlib.sha256(json.dumps({
+                "path": path, "kind": kind, "name": asset.get("name"),
+                "schema": asset.get("schema"), "columns": asset.get("columns", []),
+            }, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+                if source_cfg.get("type") in {"sqlite", "postgresql", "mysql"} else None,
             "scannedAt": scan.get("lastSyncAt"),
             "browseUrl": asset.get("browseUrl") or (
                 remote_asset_browse_url(source_cfg, path, scan_details.get("defaultBranch"))
@@ -481,7 +487,7 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
             ),
         }
     for asset in scan.get("assets", []):
-        if source_cfg.get("type") == "sqlite":
+        if source_cfg.get("type") in {"sqlite", "postgresql", "mysql"}:
             table_name = str(asset.get("name", "")).strip()
             if table_name:
                 labels = [(table_name, "sql-table")]
@@ -551,6 +557,73 @@ def safe_extract_source_terms(scan: dict) -> list[dict]:
         except OSError:
             continue
     return sorted(terms.values(), key=lambda x: (-len(x["evidence"]), x["label"].lower()))[:160]
+
+
+def assess_evidence_validity(evidence: dict, source_map: dict, scan_map: dict) -> dict:
+    """Compare a stored evidence locator with the latest available source inventory."""
+    source_id = str(evidence.get("sourceId", ""))
+    source = source_map.get(source_id)
+    if not source:
+        return {"status": "source-removed", "reason": "Source is no longer registered"}
+    scan = scan_map.get(source_id)
+    if not scan or scan.get("status") == "not-synced":
+        return {"status": "not-yet-checked", "reason": "No current source scan is available"}
+    scan_status = scan.get("status")
+    if scan_status not in {"connected", "partial"}:
+        return {"status": "source-unavailable", "reason": str(scan.get("message") or scan_status)}
+    path = evidence.get("path")
+    asset = next((item for item in scan.get("assets", []) if item.get("path") == path), None)
+    if asset is None and evidence.get("assetId"):
+        asset = next((item for item in scan.get("assets", []) if item.get("assetId") == evidence.get("assetId")), None)
+    if asset is None:
+        if scan_status == "partial":
+            return {"status": "inconclusive-partial-scan", "reason": "The latest inventory is truncated; absence is not proof of deletion"}
+        return {"status": "asset-missing", "reason": "The source scan completed but this asset was not found"}
+    old_hash = evidence.get("contentSha256")
+    new_hash = asset.get("sha256")
+    if old_hash:
+        if not new_hash:
+            return {"status": "unverifiable", "reason": "Current scan did not provide a content hash"}
+        if old_hash != new_hash:
+            return {"status": "content-changed", "reason": "The local source content hash changed"}
+        return {"status": "current", "reason": "The local source content hash matches"}
+    old_fingerprint = evidence.get("assetFingerprint")
+    if old_fingerprint:
+        current_fingerprint = hashlib.sha256(json.dumps({
+            "path": path, "kind": evidence.get("kind"), "name": asset.get("name"),
+            "schema": asset.get("schema"), "columns": asset.get("columns", []),
+        }, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if old_fingerprint != current_fingerprint:
+            return {"status": "schema-changed", "reason": "The table or column metadata changed"}
+        return {"status": "current", "reason": "The schema metadata fingerprint matches"}
+    if source.get("type") in {"github", "gitlab"}:
+        old_revision = evidence.get("sourceRevision")
+        current_revision = scan.get("details", {}).get("sourceRevision")
+        if old_revision and current_revision and old_revision != current_revision:
+            return {"status": "revision-changed-review", "reason": "Repository tree revision changed; file-level content is not fetched"}
+        if old_revision and current_revision:
+            return {"status": "current", "reason": "Repository tree revision matches"}
+        return {"status": "unverifiable", "reason": "The provider did not expose a comparable revision"}
+    return {"status": "present-unverified", "reason": "The asset locator exists, but no comparable fingerprint is available"}
+
+
+def annotate_candidate_evidence(candidate: dict, source_map: dict, scan_map: dict) -> dict:
+    """Return a UI-safe candidate copy with dynamic evidence validity annotations."""
+    result = json.loads(json.dumps(candidate))
+    counts = {}
+    for term in result.get("terms", []):
+        for evidence in term.get("evidence", []):
+            validity = assess_evidence_validity(evidence, source_map, scan_map)
+            evidence["validity"] = validity
+            counts[validity["status"]] = counts.get(validity["status"], 0) + 1
+    result["evidenceValidity"] = counts
+    result["evidenceCheckedAt"] = now_iso()
+    result["affectedTermCount"] = sum(
+        1 for term in result.get("terms", [])
+        if any((e.get("validity") or {}).get("status") not in {"current", "present-unverified"}
+               for e in term.get("evidence", []))
+    )
+    return result
 
 
 def discover_candidates() -> dict:
@@ -842,7 +915,14 @@ class PortalHandler(BaseHTTPRequestHandler):
         if path == "/api/overview": return self._send_json(200, get_overview())
         if path == "/api/sources": return self._send_json(200, {"sources": source_scan_results()})
         if path == "/api/ontology":
-            state = state_read(); return self._send_json(200, {"formal": load_ontology(), "candidates": state.get("ontologyCandidates", []), "changes": state.get("ontologyChanges", [])})
+            state = state_read()
+            sources = source_configs()
+            scans = source_scan_results()
+            source_map = {item["id"]: item for item in sources}
+            scan_map = {item["id"]: item for item in scans}
+            candidates = [annotate_candidate_evidence(item, source_map, scan_map)
+                          for item in state.get("ontologyCandidates", [])]
+            return self._send_json(200, {"formal": load_ontology(), "candidates": candidates, "changes": state.get("ontologyChanges", [])})
         if path == "/api/agents": return self._send_json(200, {"runs": state_read().get("agentRuns", []), "roles": roles_and_stages()[0], "realRuntimeUrl": "http://127.0.0.1:8769"})
         if path == "/api/quality": return self._send_json(200, {"runs": state_read().get("qualityRuns", []), "scanners": available_scanners(), "policy": load_json(ROOT / "policies/quality/quality-gate-policy.json", {})})
         if path == "/api/releases": return self._send_json(200, {"releases": list_releases(), "approvals": state_read().get("releaseApprovals", [])})
