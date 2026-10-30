@@ -35,6 +35,8 @@ class AgentContractError(RuntimeError):
 
 
 class OpenAIAgentsRuntime:
+    requires_ontology_binding = True
+
     def __init__(self, *, project_root: str | Path, model: str | None = None,
                  max_turns: int = 8, tracing_enabled: bool | None = None):
         self.project_root = Path(project_root).resolve()
