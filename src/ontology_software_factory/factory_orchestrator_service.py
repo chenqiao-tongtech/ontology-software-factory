@@ -63,6 +63,8 @@ class FactoryOrchestratorService:
                     ],
                     "budget": {"maxAgentAssignments": 10, "maxParallelAssignments": 3,
                                "maxRevisionLoops": 2, "maxToolCalls": 100, "timeoutSeconds": 3600},
+                    "run_budget": {"maxToolCalls": 20, "maxInputTokens": 100_000,
+                                   "maxOutputTokens": 40_000},
                 },
                 ontology_binding=binding, task_contract=task_contract,
                 runtime_contract_lock=lock, assigned_skill_id="factory-orchestration",
