@@ -32,6 +32,8 @@ from ontology_software_factory.source_connectors import (
     SourceConnectorError,
     SourceConnectorRegistry,
 )
+from ontology_software_factory.remote_connectors import RemoteRepositoryConnector
+from ontology_software_factory.database_connectors import PostgreSQLSchemaConnector, MySQLSchemaConnector
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps" / "factory-portal" / "index.html"
