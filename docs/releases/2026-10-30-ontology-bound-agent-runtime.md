@@ -7,7 +7,7 @@
 ### 运行时实现
 - 新增 `ontology_runtime.py`：从 Portal 活动版本目录加载完整快照，重新计算 SHA-256，并核对快照 ID、Ontology Version 和 Schema Version。
 - Workflow Run 创建时持久化完整本体快照；每个 Worker Task 复制同一绑定，避免工作流运行期间发布新版本导致阶段间语义漂移。
-- Agent Task JSON Schema 增加 `ontologySnapshotId`、`ontologyDigest`、`ontologySchemaVersion`，Agent Result 增加相同绑定字段。
+- Agent Task / Agent Result JSON Schema 增加 `ontologySnapshotId`、`ontologyDigest`、`ontologySchemaVersion` 和 `skillRefs`；Skill 引用包含版本号及 `skill.json + SKILL.md` 的 SHA-256。
 - 每次 Agent 执行前校验 Role、Skill 输入输出类；校验 Skill 与 Role 兼容性、Skill 所需工具是否被 Role 授权；校验 Workflow Step 的 Role / Skill 引用。
 - OpenAI Agents Runtime 接收绑定本体的类、关系、受控词汇、不变量及 Skill 契约；返回结构化输出后检查显式实体类型。
 - 每个 Agent 阶段生成 `agent-result.json`，并把本体快照摘要写入输出、Result 和 Evidence。
