@@ -37,10 +37,20 @@ class Handler(BaseHTTPRequestHandler):
                 agent_sdk = True
             except ImportError:
                 agent_sdk = False
+            try:
+                from ontology_software_factory.ontology_runtime import load_active_ontology_binding
+                binding = load_active_ontology_binding(ROOT)
+                ontology_binding = {key: binding[key] for key in ("snapshotId", "digest", "ontologyVersion", "schemaVersion")}
+                ontology_error = None
+            except Exception as exc:
+                ontology_binding = None
+                ontology_error = type(exc).__name__
             self._json(200, {
                 "api_key_configured": bool(os.getenv("OPENAI_API_KEY")),
                 "model": os.getenv("OPENAI_MODEL", "gpt-6.1-sol"),
                 "agent_sdk_installed": agent_sdk,
+                "ontology_binding": ontology_binding,
+                "ontology_binding_error": ontology_error,
                 "tracing_enabled": os.getenv("AGENT_TRACE_ENABLED", "false").lower() in {"1", "true", "yes"},
                 "notice": "Status does not reveal secret values. API calls require credentials and network access.",
             })
@@ -90,8 +100,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 from ontology_software_factory.agent_runtime import OpenAIAgentsRuntime
                 from ontology_software_factory.software_factory_pipeline import SoftwareFactoryPipeline
+                from ontology_software_factory.ontology_runtime import load_active_ontology_binding
+                binding = load_active_ontology_binding(ROOT)
                 runtime = OpenAIAgentsRuntime(project_root=ROOT)
-                pipeline = SoftwareFactoryPipeline(runtime, artifact_root=ROOT / "data" / "agent-pipeline" / "runs")
+                pipeline = SoftwareFactoryPipeline(runtime, artifact_root=ROOT / "data" / "agent-pipeline" / "runs", ontology_binding=binding)
                 result = pipeline.run(requirement)
                 self._json(200, {"ok": True, "result": result.as_dict()})
             except Exception as exc:
