@@ -1121,11 +1121,16 @@ class PortalHandler(BaseHTTPRequestHandler):
             m = re.fullmatch(r"/api/ontology/governance/proposals/([^/]+)/execute", path)
             if m:
                 proposal_id = unquote(m.group(1))
+                actor = str(body.get("actor", "")).strip()
+                reason = str(body.get("reason", "")).strip()
+                if not actor or not reason: raise ValueError("executor and execution reason are required")
                 state = state_read()
                 proposal = next((p for p in state.get("ontologyGovernanceProposals", []) if p.get("proposalId") == proposal_id), None)
                 if not proposal: raise KeyError("governance proposal not found")
                 if proposal.get("status") != "approved" or not proposal.get("approval"):
                     raise ValueError("proposal must be independently approved before execution")
+                if actor in {proposal.get("requestedBy"), proposal["approval"].get("actor")}:
+                    raise ValueError("executor must be independent from requester and approver")
                 if state.get("activeOntologySnapshotId") != proposal.get("expectedActiveSnapshotId"):
                     raise ValueError("active ontology changed after proposal creation; create a fresh proposal")
                 snapshot = find_snapshot(state.get("ontologySnapshots", []), proposal["snapshotId"])
@@ -1135,7 +1140,7 @@ class PortalHandler(BaseHTTPRequestHandler):
                     "snapshotId": snapshot["snapshotId"], "snapshotDigest": snapshot["digest"],
                     "ontologyVersion": snapshot.get("ontologyVersion"), "action": proposal["action"],
                     "previousSnapshotId": state.get("activeOntologySnapshotId"),
-                    "executedAt": now_iso(), "executedBy": "local-operator",
+                    "executedAt": now_iso(), "executedBy": actor[:100], "executionReason": reason[:1000],
                     "approvalActor": proposal["approval"]["actor"], "proposalId": proposal_id,
                     "formalFileModified": False, "runtimeActivation": "catalog-pointer-only"}
                 def execute(st):
@@ -1146,7 +1151,7 @@ class PortalHandler(BaseHTTPRequestHandler):
                     st.setdefault("ontologyReleases", []).insert(0, release)
                 state_update(execute)
                 record_event("ontology.governance.executed", f"本体版本指针已更新：{snapshot['snapshotId']}",
-                    {"releaseId": release["releaseId"], "snapshotId": snapshot["snapshotId"], "action": proposal["action"]})
+                    {"releaseId": release["releaseId"], "snapshotId": snapshot["snapshotId"], "action": proposal["action"], "reason": reason}, actor=actor)
                 return self._send_json(200, {"release": release, "activeSnapshotId": snapshot["snapshotId"]})
             if path == "/api/ontology/discover": return self._send_json(201, {"candidate": discover_candidates()})
             if path == "/api/ontology/changes":
