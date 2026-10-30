@@ -10,6 +10,10 @@ from typing import Any
 
 from .task_runtime import PermanentTaskError, TransientTaskError, TaskContext
 from .software_factory_pipeline import SoftwareFactoryPipeline, PipelineValidationError
+from .ontology_runtime import (
+    build_agent_task_contract, build_agent_result_contract, validate_agent_output,
+    validate_ontology_binding, validate_role_ontology_contract,
+)
 
 
 class AgentWorkflowStepHandler:
@@ -34,6 +38,7 @@ class AgentWorkflowStepHandler:
 
     def __init__(self, runtime: Any, *, artifact_root: str | Path):
         self.runtime = runtime
+        self.project_root = Path(getattr(runtime, "project_root", Path(__file__).resolve().parents[2])).resolve()
         self.artifact_root = Path(artifact_root).resolve()
         self.artifact_root.mkdir(parents=True, exist_ok=True)
 
@@ -50,6 +55,19 @@ class AgentWorkflowStepHandler:
         requirement = input_payload.get("requirement") or input_payload.get("source_requirement")
         if not isinstance(requirement, str) or not requirement.strip():
             raise PermanentTaskError("workflow input is missing a non-empty requirement")
+        try:
+            binding = validate_ontology_binding(payload.get("ontologyBinding", {}))
+            role = json.loads((self.project_root / "agents" / "roles" / f"{role_id}.json").read_text(encoding="utf-8"))
+            validate_role_ontology_contract(role, binding)
+            workflow_attempt = int(payload.get("workflowAttempt", 1))
+            task_contract = build_agent_task_contract(
+                self.project_root, role=role, binding=binding, run_id=run_id, step_id=step_id,
+                attempt=workflow_attempt, objective=requirement,
+                timeout_seconds=900, max_attempts=int(payload.get("workerMaxAttempts", 3)),
+                idempotency_key=context.idempotency_key,
+            )
+        except Exception as exc:
+            raise PermanentTaskError(f"pinned ontology or Agent Task contract is invalid: {type(exc).__name__}") from exc
 
         stage_dir = self.artifact_root / run_id / step_id / f"workflow-attempt-{int(payload.get('workflowAttempt', 1))}" / f"worker-attempt-{context.attempt}"
         if stage_dir.exists():
@@ -88,10 +106,13 @@ class AgentWorkflowStepHandler:
                                              "Review evidence gaps and require independent human approval"]
 
         try:
-            execution = self.runtime.run_agent(role_id, task_input)
+            execution = self.runtime.run_agent(
+                role_id, task_input, ontology_binding=binding, task_contract=task_contract
+            )
             output = execution.get("output")
             if not isinstance(output, dict):
                 raise PipelineValidationError("Agent output must be a JSON object")
+            validate_agent_output(output, role=role, binding=binding)
             stored_proposed_files = []
             if step_id == "implementation-proposal":
                 proposal_dir = stage_dir / "proposed_changes"
@@ -104,6 +125,8 @@ class AgentWorkflowStepHandler:
                 "workflow_attempt": int(payload.get("workflowAttempt", 1)), "worker_attempt": context.attempt,
                 "created_at": datetime.now(timezone.utc).isoformat(), "model": execution.get("model"),
                 "latency_ms": int(execution.get("latency_ms", 0)), "tool_ids": execution.get("tool_ids", []),
+                "ontologyBinding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")},
+                "taskContract": task_contract,
                 "output": output,
             }
             self._write_json(stage_dir / "output.json", artifact)
@@ -120,15 +143,39 @@ class AgentWorkflowStepHandler:
                 evidence.append({"type": evidence_type,
                                  "uri": f"artifact://{run_id}/{step_id}/workflow-attempt-{payload.get('workflowAttempt', 1)}/worker-attempt-{context.attempt}/evidence/{evidence_type}.json",
                                  "sha256": digest, "createdAt": datetime.now(timezone.utc).isoformat(),
-                                 "mediaType": "application/json", "metadata": {"artifactSha256": sha, "realAgentRuntime": True}})
-            self._write_json(stage_dir / "evidence-index.json", {"evidence": evidence, "output_sha256": sha})
+                                 "mediaType": "application/json", "metadata": {
+                                     "artifactSha256": sha, "realAgentRuntime": True,
+                                     "ontologySnapshotId": binding["snapshotId"], "ontologyDigest": binding["digest"],
+                                     "ontologyVersion": binding["ontologyVersion"]}})
+            artifact_uri = f"artifact://{run_id}/{step_id}/workflow-attempt-{payload.get('workflowAttempt', 1)}/worker-attempt-{context.attempt}/output.json"
+            agent_result = build_agent_result_contract(
+                self.project_root, task_contract=task_contract, role=role, binding=binding,
+                output=output, evidence=evidence, artifact_uri=artifact_uri,
+                completed_at=datetime.now(timezone.utc).isoformat(),
+                status="blocked" if step_id == "security-review" and output.get("release_recommendation") == "blocked" else "succeeded",
+            )
+            result_path = stage_dir / "agent-result.json"
+            self._write_json(result_path, agent_result)
+            result_sha = hashlib.sha256(result_path.read_bytes()).hexdigest()
+            evidence.append({
+                "type": "agent-result-contract", "uri": f"artifact://{run_id}/{step_id}/workflow-attempt-{payload.get('workflowAttempt', 1)}/worker-attempt-{context.attempt}/agent-result.json",
+                "sha256": result_sha, "createdAt": datetime.now(timezone.utc).isoformat(),
+                "mediaType": "application/json", "metadata": {
+                    "ontologySnapshotId": binding["snapshotId"], "ontologyDigest": binding["digest"],
+                    "ontologyVersion": binding["ontologyVersion"], "contractValidated": True,
+                },
+            })
+            self._write_json(stage_dir / "evidence-index.json", {
+                "evidence": evidence, "output_sha256": sha, "agent_result_sha256": result_sha,
+                "ontologyBinding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyVersion", "schemaVersion")},
+            })
             context.check_deadline()
             if step_id == "security-review" and output.get("release_recommendation") == "blocked":
                 raise PermanentTaskError(
-                    f"security review blocked the proposal; inspect artifact {stage_dir.relative_to(self.artifact_root)}/output.json"
+                    f"security review blocked the proposal; inspect artifact {stage_dir.relative_to(self.artifact_root)}/agent-result.json"
                 )
             return {"output": {"roleId": role_id, "stepId": step_id, "artifact": artifact,
-                               "proposedFiles": stored_proposed_files}, "evidence": evidence}
+                               "agentResult": agent_result, "proposedFiles": stored_proposed_files}, "evidence": evidence}
         except (PermanentTaskError, PipelineValidationError):
             raise
         except Exception as exc:
