@@ -65,11 +65,46 @@ def write_change_proposal(path:str|Path,**kwargs)->dict[str,Any]:
 
 
 
+
+def _read_metadata_audit(path: str | Path | None, *, kind: str) -> dict[str, Any]:
+    """Read only an explicit allowlist of audit metadata fields."""
+    if path is None:
+        return {"available": False, "total": 0, "byStatus": {}, "byOperation": {}, "recent": []}
+    target = Path(path).expanduser().resolve()
+    if not target.is_file():
+        return {"available": False, "total": 0, "byStatus": {}, "byOperation": {}, "recent": []}
+    allowed = (
+        {"occurredAt", "runId", "taskId", "principalId", "roleId", "toolId", "status", "durationMs", "resultSha256"}
+        if kind == "harness"
+        else {"occurredAt", "principalId", "sourceId", "connectorId", "status", "assetCount", "durationMs"}
+    )
+    rows = []
+    for line in target.read_text(encoding="utf-8", errors="replace").splitlines()[-2000:]:
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            rows.append({key: value[key] for key in allowed if key in value})
+    by_status: dict[str, int] = {}
+    by_operation: dict[str, int] = {}
+    operation_key = "toolId" if kind == "harness" else "connectorId"
+    for item in rows:
+        status = str(item.get("status", "unknown"))
+        operation = str(item.get(operation_key, "unknown"))
+        by_status[status] = by_status.get(status, 0) + 1
+        by_operation[operation] = by_operation.get(operation, 0) + 1
+    return {"available": True, "total": len(rows), "byStatus": by_status,
+            "byOperation": by_operation, "recent": rows[-20:]}
+
+
 def build_platform_observability_report(
     runs_root: str | Path,
     portal_state: dict[str, Any],
     rates_path: str | Path | None = None,
     agent_workflow_db: str | Path | None = None,
+    harness_audit_path: str | Path | None = None,
+    connector_audit_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Combine pipeline run records with sanitized local Portal/Agent state.
 
@@ -128,6 +163,8 @@ def build_platform_observability_report(
     }
     report["platform"] = {
         "mode": "local-reference-portal",
+        "harnessAudit": _read_metadata_audit(harness_audit_path, kind="harness"),
+        "connectorAudit": _read_metadata_audit(connector_audit_path, kind="connector"),
         "realAgentWorkflow": real_agent_workflow,
         "agentRuns": {
             "total": len(agent_runs),
@@ -158,5 +195,6 @@ def build_platform_observability_report(
         "Portal/Agent counters are local JSON state and are not a distributed, multi-tenant telemetry backend.",
         "Fixture Agent runs are reported separately by runtimeMode and must not be interpreted as real LLM executions.",
         "Event payloads, prompts, model responses, credentials and raw tool arguments are intentionally excluded.",
+        "Harness and Connector audit summaries include only metadata fields from configured local JSONL files; they are not tamper-evident audit storage.",
     ]
     return report
