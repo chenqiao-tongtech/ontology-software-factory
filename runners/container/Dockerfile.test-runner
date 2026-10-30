@@ -1,0 +1,13 @@
+# Build locally; the runtime never pulls an image automatically.
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /opt/ontology-software-factory
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN python -m pip install --no-cache-dir .
+
+# The container is launched with the host workspace owner's numeric UID/GID,
+# a read-only root filesystem, no network, dropped Linux capabilities and resource limits.
