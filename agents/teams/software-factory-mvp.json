@@ -62,7 +62,7 @@
     },
     {
       "roleId": "factory-orchestrator",
-      "kind": "planner",
+      "kind": "specialist",
       "stage": "factory-planning",
       "mayApproveHighRisk": false
     }
