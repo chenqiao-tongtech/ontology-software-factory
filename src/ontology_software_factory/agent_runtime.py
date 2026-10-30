@@ -98,6 +98,59 @@ class OpenAIAgentsRuntime:
             LOGGER.info("agent.tool.completed tool_id=catalog.read")
             return json.dumps({"roles": roles, "skills": skills}, ensure_ascii=False)
 
+        @function_tool(name_override="ontology_definition_read", description_override=
+                       "Read a bounded summary of the approved software-factory ontology. This tool is read-only.")
+        def ontology_definition_read(concept_name: str = "") -> str:
+            """Return ontology class and relation metadata, optionally filtered by concept name."""
+            ontology_path = self.project_root / "ontology" / "software-factory-ontology.json"
+            ontology = json.loads(ontology_path.read_text(encoding="utf-8"))
+            classes = list(ontology.get("classes", []))
+            relations = list(ontology.get("relations", []))
+            extensions = ontology.get("operationalExtensions", {})
+            if isinstance(extensions, dict):
+                classes.extend(extensions.get("classes", []))
+                relations.extend(extensions.get("relations", []))
+            needle = concept_name.strip().casefold()
+            if needle:
+                classes = [item for item in classes if needle in str(item.get("name", "")).casefold()]
+                relations = [item for item in relations if needle in str(item.get("name", "")).casefold()
+                             or needle in str(item.get("source", "")).casefold()
+                             or needle in str(item.get("target", "")).casefold()]
+            payload = {"ontologyId": ontology.get("ontologyId"), "ontologyVersion": ontology.get("ontologyVersion"),
+                       "classes": classes[:80], "relations": relations[:120]}
+            LOGGER.info("agent.tool.completed tool_id=ontology.definition.read")
+            return json.dumps(payload, ensure_ascii=False)[:24000]
+
+        @function_tool(name_override="source_catalog_read", description_override=
+                       "List registered source and action connector metadata. Does not connect to external systems.")
+        def source_catalog_read(category: str = "") -> str:
+            """Return connector metadata without credential values or provider calls."""
+            from .connector_catalog import ConnectorCatalog
+            catalog = ConnectorCatalog(self.project_root)
+            items = catalog.list_connectors(category=category or None)
+            payload = [{"connectorId": item.connector_id, "category": item.category,
+                        "direction": item.direction, "status": item.implementation_status,
+                        "operations": list(item.operations), "dataClasses": list(item.data_classes),
+                        "networkEgress": item.network_egress, "approvalRequired": item.approval_required}
+                       for item in items]
+            LOGGER.info("agent.tool.completed tool_id=source.catalog.read")
+            return json.dumps(payload, ensure_ascii=False)[:20000]
+
+        @function_tool(name_override="dependencies_inspect", description_override=
+                       "Read declared project dependencies and optional extras from pyproject.toml.")
+        def dependencies_inspect() -> str:
+            """Return declared dependency names and version ranges; never reads environment secrets."""
+            import tomllib
+            config_path = self.project_root / "pyproject.toml"
+            with config_path.open("rb") as handle:
+                config = tomllib.load(handle)
+            project = config.get("project", {})
+            payload = {"python": project.get("requires-python"),
+                       "dependencies": project.get("dependencies", []),
+                       "optionalDependencies": project.get("optional-dependencies", {})}
+            LOGGER.info("agent.tool.completed tool_id=dependencies.inspect")
+            return json.dumps(payload, ensure_ascii=False)[:12000]
+
         @function_tool(name_override="contract_validate", description_override=
                        "Validate a JSON payload against a supplied JSON Schema. Does not write or execute files.")
         def contract_validate(payload_json: str, schema_json: str) -> str:
@@ -119,6 +172,9 @@ class OpenAIAgentsRuntime:
             "documents.read": documents_read,
             "catalog.read": catalog_read,
             "contract.validate": contract_validate,
+            "ontology.definition.read": ontology_definition_read,
+            "source.catalog.read": source_catalog_read,
+            "dependencies.inspect": dependencies_inspect,
         }
         if workspace is not None:
             @function_tool(name_override="workspace_read", description_override="Read a bounded file from this workflow run's isolated candidate workspace.")
