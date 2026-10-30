@@ -3,7 +3,7 @@
 | 文档属性 | 内容 |
 |---|---|
 | 文档编号 | OSF-SDS-001 |
-| 文档版本 | 1.0 |
+| 文档版本 | 1.1 |
 | 基线日期 | 2026-10-30 |
 | 适用系统 | ontology-software-factory |
 | 基线分支 | main |
@@ -232,7 +232,7 @@ flowchart TB
 - NVIDIA Auto Ontology 目录导入适配器与 Cognee 候选图适配器已有代码；真实服务连通待验收；
 - HTTP JSON、MCP stdio 适配器已有实现；
 - Connector Catalog 已有 Schema、目录加载与默认拒绝检查；
-- Confluence、SharePoint、Kafka Schema Registry、dbt、GitHub PR、Jira 和 CI 动作连接器在目录中登记，当前属于规划或适配器待实现状态。
+- Confluence、SharePoint、实时 Kafka Schema Registry API、GitHub PR、Jira 和 CI 动作连接器在目录中登记，当前属于规划状态；Schema Registry 文件导入已实现。
 
 ### 4.7 S7 受控执行
 
@@ -512,7 +512,7 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 | 1 | Harness Runtime | 将现有本地 Harness 接入 Agent/Workflow；补齐 PDP 接口、策略版本、预算持久化、审计和 Kill Switch 运维接口 | 现有 Tool/Role/Policy/Workflow 契约 |
 | 2 | Skill Registry | 将现有内容寻址 Registry 接入 Agent Runtime；补齐 Skill 依赖、回归测试、发布/弃用和发现 API | 现有 Skill JSON/SKILL.md |
 | 3 | Connector Runtime | 将现有只读扫描 Runtime 接入 Portal 与 Source Sync；补齐同步游标、健康状态、凭据注入和动作连接器幂等执行 | Source Connector、Connector Catalog |
-| 4 | 本体发现连接器扩展 | 已支持 OpenAPI/AsyncAPI JSON、GraphQL SDL、Protobuf 离线解析；继续接入文档 SaaS、Schema Registry、数据目录和运维元数据 | Connector Runtime 与 Source Evidence 模型 |
+| 4 | 本体发现连接器扩展 | 已支持 OpenAPI/AsyncAPI JSON、GraphQL SDL、Protobuf、dbt manifest/catalog 和 Schema Registry JSON 导出；继续接入文档 SaaS、实时 Schema Registry、数据目录和运维元数据 | Connector Runtime 与 Source Evidence 模型 |
 | 5 | Agent Tools 扩展 | 本体查询、代码分析、依赖分析、测试、扫描、制品和工单工具 | Harness Tool Gateway 与独立权限 |
 | 6 | 统一监控台 | Agent/Skill/Tool/Connector/Workflow Trace、证据导航、成本、告警和运行控制 | 统一事件与 Trace 关联模型 |
 
@@ -550,3 +550,11 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 | catalog/ | 产品与组件资产目录 |
 | runners/ | 受限执行器、容器构建定义和扫描规则 |
 | observability/ | 成本费率示例与观测配置 |
+
+
+## 14. 修订记录
+
+| 版本 | 日期 | 修订内容 |
+|---|---|---|
+| 1.0 | 2026-10-30 | 建立系统现状、架构、组件、依赖、接口、安全和部署基线 |
+| 1.1 | 2026-10-30 | 纳入 HarnessRuntime、SkillRegistry、ConnectorRuntime、API/事件契约解析器、Agent 元数据工具及 Portal 审计监控扩展 |
