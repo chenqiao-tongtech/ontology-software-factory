@@ -237,15 +237,6 @@ class SQLiteWorkflowStore:
                         "INSERT INTO factory_plan_phases(plan_id,phase_id,run_id,status,updated_at) VALUES(?,?,?,'pending',?)",
                         (plan_id, phase["phaseId"], run_id, event["at"]),
                     )
-                self._conn.execute(
-                    "INSERT INTO factory_plan_approvals(plan_id,run_id,plan_digest,status,requested_at) VALUES(?,?,?,'pending',?)",
-                    (plan_id, run_id, digest, event["at"]),
-                )
-                for phase in plan.get("phases", []):
-                    self._conn.execute(
-                        "INSERT INTO factory_plan_phases(plan_id,phase_id,run_id,status,updated_at) VALUES(?,?,?,'pending',?)",
-                        (plan_id, phase["phaseId"], run_id, event["at"]),
-                    )
                 persisted_event = dict(event)
                 persisted_event["payload"] = {**event.get("payload", {}), "planDigest": digest}
                 self._insert_event(run_id, persisted_event)
