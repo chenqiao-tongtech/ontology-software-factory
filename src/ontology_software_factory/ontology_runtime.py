@@ -114,7 +114,7 @@ def _validate_schema(instance: dict, schema_path: Path, label: str, ontology_cla
             Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(instance),
             key=lambda error: list(error.absolute_path),
         )
-    except (OSError, json.JSONDecodeError, Exception) as exc:
+    except Exception as exc:
         raise OntologyBindingError(f"cannot validate {label} contract ({type(exc).__name__})") from exc
     if errors:
         first = errors[0]
