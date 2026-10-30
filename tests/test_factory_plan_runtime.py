@@ -175,6 +175,30 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         self.assertTrue(task["idempotencyKey"].endswith(":attempt:2"))
         self.assertEqual(task["payload"]["factoryPhaseAttempt"], 2)
 
+        succeeded_payload = dict(failed_payload)
+        succeeded_payload.update({
+            "eventId": "EVT-FACTORY-SUCCEEDED-ATTEMPT-2",
+            "factoryPhaseAttempt": 2,
+            "taskId": task["id"],
+            "taskStatus": "succeeded",
+            "output": {"artifactUri": "artifacts/retry/result.json", "artifactSha256": "b" * 64},
+            "errorClass": None,
+            "errorMessage": "",
+        })
+        self.engine.apply_factory_assignment_event(succeeded_payload)
+        final_state = next(
+            item for item in self.workflow_store.list_factory_plan_phases(self.run["id"], self.plan["planId"])
+            if item["phaseId"] == phase["phaseId"]
+        )
+        self.assertEqual(final_state["status"], "succeeded")
+        self.assertEqual(final_state["attempt"], 2)
+        assignment_result = next(
+            item for item in self.workflow_store.list_factory_assignment_results(self.run["id"], self.plan["planId"])
+            if item["assignmentId"] == assignment["assignmentId"]
+        )
+        self.assertEqual(assignment_result["phaseAttempt"], 2)
+        self.assertEqual(assignment_result["status"], "succeeded")
+
     def test_phase_retry_requires_failed_phase_and_has_bounded_attempts(self):
         phase = self.plan["phases"][0]
         assignment = phase["assignments"][0]
