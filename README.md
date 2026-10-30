@@ -278,7 +278,7 @@ make portal
 | 功能模块 | 当前实现 | 重要边界 |
 |---|---|---|
 | 平台基础 | 统一导航、REST API、稳定对象 ID、本地状态与事件账本、同源写操作校验 | 本地 JSON 状态；无企业登录、多租户 IAM 或不可篡改审计存储 |
-| 企业资产接入与本体工作台 | 目录/文档/SQLite/PostgreSQL/MySQL Schema 只读扫描、本地 Git 元数据、GitHub.com/GitLab.com HTTPS 仓库元数据只读 API、交互式 SVG 关系图、候选证据卡片与 GitHub/GitLab 文件浏览链接、每数据源同步历史和错误分类 | 没有 OAuth/SSO、自托管 GitLab 或 Webhook；远端候选仅依据文件路径，本地候选使用规则抽取且不调用 LLM；数据库只读取 information_schema；审批不自动修改正式本体 |
+| 企业资产接入与本体工作台 | 目录/文档/SQLite/PostgreSQL/MySQL Schema 只读扫描、本地 Git 元数据、GitHub.com/GitLab.com HTTPS 仓库元数据只读 API、交互式 SVG 关系图、候选证据卡片与文件浏览链接、同步历史/错误分类、候选证据有效性与影响术语计数 | 没有 OAuth/SSO、自托管 GitLab 或 Webhook；远端候选仅依据文件路径和 tree revision，本地候选使用规则抽取且不调用 LLM；数据库只读取 information_schema；证据状态依赖最近扫描而非实时监听；审批不自动修改正式本体 |
 | Agent 与质量安全 | 离线 Agent 阶段状态机、事件证据、真实校验脚本/测试套件、可选 Semgrep/Gitleaks/Trivy 扫描器检查 | 离线 Agent 不调用真实模型；扫描器缺失/未执行不能显示 PASS；非容器隔离测试床 |
 | 交付发布 | 触发现有端到端流水线，显示配置包 manifest、哈希、配置范围 SBOM、独立审批和本地升级/回退演练 | 不包含 Kafka 二进制，不部署真实环境；SBOM 只描述配置交付包 |
 
@@ -372,5 +372,7 @@ python scripts/run_ontology_discovery.py \
 9. `article/`：第 15–24 篇正式公众号稿，以及 `article/supplementary/` 下此前完成的工程补充篇 A–E。
 
 本轮 Portal 证据导航与连接器运行状态实现说明见 [Evidence Navigation and Connector Operations Console](docs/2026-10-30-evidence-navigation-and-connector-console.md)。
+
+本轮证据生命周期与真实数据库联调测试说明见 [Ontology Evidence Lifecycle and Live Database Checks](docs/2026-10-30-evidence-lifecycle-and-live-db-checks.md)。
 
 **验收原则：** 只有当真实执行结果、退出码、日志、摘要与必需证据齐全时，才将相应任务标记为 `PASS`。模型生成的自然语言总结、fixture 结果或设计文档本身，都不能替代真实构建、测试、安全扫描和部署证据。
