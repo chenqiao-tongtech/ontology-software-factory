@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -77,7 +78,45 @@ class WorkflowEngine:
 
     def get_run_detail(self, run_id: str) -> dict[str, Any]:
         run = self.get_run(run_id)
-        return {"run": run, "events": self.store.get_events(run_id)}
+        plans = self.store.list_factory_orchestrator_plans(run_id)
+        return {"run": run, "events": self.store.get_events(run_id), "orchestratorPlans": plans}
+
+    def submit_factory_orchestrator_plan(self, run_id: str, plan: dict[str, Any],
+                                         actor: str = "factory-orchestrator") -> dict[str, Any]:
+        """Validate and durably attach an immutable Orchestrator plan to its Workflow Run."""
+        run = self.get_run(run_id)
+        if run.get("status") not in {"running", "queued", "waiting_approval"}:
+            raise WorkflowError("cannot submit an Orchestrator plan to a terminal or paused run", 409)
+        if not isinstance(plan, dict) or plan.get("workflowRunId") != run_id:
+            raise WorkflowError("plan workflowRunId must match the target Workflow Run", 422)
+        binding = run.get("ontologyBinding")
+        if not isinstance(binding, dict):
+            raise WorkflowError("Workflow Run has no pinned ontology binding", 409)
+        try:
+            from .factory_orchestration import validate_factory_plan
+            validation = validate_factory_plan(
+                Path(__file__).resolve().parents[2], plan, ontology_binding=binding
+            )
+        except Exception as exc:
+            raise WorkflowError(f"Orchestrator plan validation failed: {type(exc).__name__}: {exc}", 422) from exc
+        timestamp = now_iso()
+        event = self._event(
+            "factory.plan.submitted",
+            f"主控计划已通过校验并持久化：{plan['planId']}",
+            actor=actor,
+            payload={
+                "planId": plan["planId"], "planDigest": None,
+                "phaseCount": validation["phaseCount"],
+                "assignmentCount": validation["assignmentCount"],
+                "ontologySnapshotId": validation["ontologySnapshotId"],
+            },
+        )
+        event["at"] = timestamp
+        try:
+            record, created = self.store.insert_factory_orchestrator_plan(run_id, plan, event)
+        except ValueError as exc:
+            raise WorkflowError(str(exc), 409) from exc
+        return {"plan": record, "validation": validation, "created": created}
 
     def create_run(self, title: str, requested_by: str = "local-operator", environment: str = "staging",
                    ontology_binding: dict[str, Any] | None = None,
