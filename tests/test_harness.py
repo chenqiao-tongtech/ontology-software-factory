@@ -136,6 +136,7 @@ class HarnessRuntimeTests(unittest.TestCase):
         events = store.list_harness_usage_events("shared-run")
         self.assertEqual([item["status"] for item in events], ["recorded", "budget_exceeded"])
         self.assertTrue(all(item["policyVersion"] == "test-policy-v1" for item in events))
+        self.assertTrue(all(item["policyDigest"] == "sha256:test-policy" for item in events))
         self.assertTrue(all("payload" not in item["metadata"] for item in events))
 
     def test_persistent_model_token_usage_survives_runtime_recreation(self):
