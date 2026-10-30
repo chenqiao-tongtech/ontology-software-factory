@@ -176,8 +176,13 @@ def build_runtime_contract_lock(
             "roleDigest": hashlib.sha256(canonical_json(role).encode("utf-8")).hexdigest(),
             "skillRefs": refs,
         }
+    policy_path = root / "policies" / "tool-permissions.json"
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    policy_digest = hashlib.sha256(canonical_json(policy).encode("utf-8")).hexdigest()
     lock = {
         "schemaVersion": "1.0.0",
+        "toolPolicyVersion": str(policy.get("policyVersion", "unknown")),
+        "toolPolicyDigest": policy_digest,
         "workflowId": str(workflow_definition.get("id", "")),
         "workflowVersion": str(workflow_definition.get("version", "")),
         "workflowDefinitionDigest": hashlib.sha256(canonical_json(workflow_definition).encode("utf-8")).hexdigest(),
@@ -201,6 +206,16 @@ def validate_runtime_contract_lock(
     if lock.get("digest") != expected_digest:
         raise OntologyBindingError("Workflow Role/Skill lock digest mismatch")
     verified = validate_ontology_binding(binding)
+    policy_path = root / "policies" / "tool-permissions.json"
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise OntologyBindingError("Tool permission policy is unavailable") from exc
+    current_policy_digest = hashlib.sha256(canonical_json(policy).encode("utf-8")).hexdigest()
+    if lock.get("toolPolicyVersion") != str(policy.get("policyVersion", "unknown")):
+        raise OntologyBindingError("Tool permission policy version drift detected for this Run")
+    if lock.get("toolPolicyDigest") != current_policy_digest:
+        raise OntologyBindingError("Tool permission policy content drift detected for this Run")
     if lock.get("ontologySnapshotId") != verified["snapshotId"] or lock.get("ontologyDigest") != verified["digest"]:
         raise OntologyBindingError("Workflow Role/Skill lock is bound to a different ontology snapshot")
     definitions_root = root / "workflows" / "definitions"
