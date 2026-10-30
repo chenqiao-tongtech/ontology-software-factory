@@ -103,7 +103,7 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
             try:
                 detail = self.engine.get_run_detail(run_id)
                 detail["factoryPlanExecutions"] = [
-                    get_factory_plan_execution(self.task_store, item)
+                    get_factory_plan_execution(self.task_store, item, self.workflow_store)
                     for item in detail.get("orchestratorPlans", [])
                 ]
                 self._json(200, detail)
@@ -275,7 +275,7 @@ def main() -> int:
     AgentWorkflowConsoleHandler.worker = worker
     AgentWorkflowConsoleHandler.relay = relay
     AgentWorkflowConsoleHandler.plan_dispatcher = FactoryPlanDispatcher(
-        task_store, project_root=ROOT
+        task_store, project_root=ROOT, workflow_store=workflow_store
     )
     AgentWorkflowConsoleHandler.orchestrator_service = FactoryOrchestratorService(
         runtime, project_root=ROOT
