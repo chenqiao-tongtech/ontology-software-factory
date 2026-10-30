@@ -100,6 +100,7 @@ class SQLiteWorkflowStore:
             CREATE TABLE IF NOT EXISTS harness_usage_events (
                 event_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, task_id TEXT NOT NULL,
                 event_type TEXT NOT NULL, occurred_at TEXT NOT NULL, policy_version TEXT NOT NULL,
+                policy_digest TEXT NOT NULL DEFAULT 'unknown',
                 provider TEXT, model TEXT, tool_id TEXT, input_tokens INTEGER NOT NULL DEFAULT 0,
                 output_tokens INTEGER NOT NULL DEFAULT 0, tool_calls INTEGER NOT NULL DEFAULT 0,
                 context_bytes INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, metadata_json TEXT NOT NULL
@@ -107,6 +108,13 @@ class SQLiteWorkflowStore:
             CREATE INDEX IF NOT EXISTS idx_harness_usage_events_run
               ON harness_usage_events(run_id, occurred_at);
         """)
+        usage_columns = {
+            row["name"] for row in self._conn.execute("PRAGMA table_info(harness_usage_events)").fetchall()
+        }
+        if "policy_digest" not in usage_columns:
+            self._conn.execute(
+                "ALTER TABLE harness_usage_events ADD COLUMN policy_digest TEXT NOT NULL DEFAULT 'unknown'"
+            )
         self._conn.commit()
 
     def close(self) -> None:
@@ -385,7 +393,7 @@ class SQLiteWorkflowStore:
 
     def record_harness_usage(
         self, *, event_id: str, run_id: str, task_id: str, event_type: str,
-        policy_version: str, occurred_at: str, tool_calls: int = 0,
+        policy_version: str, policy_digest: str = "unknown", occurred_at: str, tool_calls: int = 0,
         context_bytes: int = 0, input_tokens: int = 0, output_tokens: int = 0,
         provider: str | None = None, model: str | None = None, tool_id: str | None = None,
         status: str = "recorded", metadata: dict[str, Any] | None = None,
@@ -432,10 +440,10 @@ class SQLiteWorkflowStore:
                     )
                 self._conn.execute(
                     """INSERT INTO harness_usage_events(
-                    event_id,run_id,task_id,event_type,occurred_at,policy_version,provider,model,tool_id,
+                    event_id,run_id,task_id,event_type,occurred_at,policy_version,policy_digest,provider,model,tool_id,
                     input_tokens,output_tokens,tool_calls,context_bytes,status,metadata_json
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (event_id, run_id, task_id, event_type, occurred_at, policy_version,
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (event_id, run_id, task_id, event_type, occurred_at, policy_version, policy_digest,
                      provider, model, tool_id, deltas["input_tokens"], deltas["output_tokens"],
                      deltas["tool_calls"], deltas["context_bytes"],
                      "budget_exceeded" if over and enforce_limits else status,
@@ -467,7 +475,7 @@ class SQLiteWorkflowStore:
     def list_harness_usage_events(self, run_id: str, limit: int = 200) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT event_id,task_id,event_type,occurred_at,policy_version,provider,model,tool_id,"
+                "SELECT event_id,task_id,event_type,occurred_at,policy_version,policy_digest,provider,model,tool_id,"
                 "input_tokens,output_tokens,tool_calls,context_bytes,status,metadata_json "
                 "FROM harness_usage_events WHERE run_id=? ORDER BY occurred_at,event_id LIMIT ?",
                 (run_id, max(1, min(int(limit), 1000))),
@@ -475,7 +483,7 @@ class SQLiteWorkflowStore:
         return [{
             "eventId": row["event_id"], "taskId": row["task_id"], "eventType": row["event_type"],
             "occurredAt": row["occurred_at"], "policyVersion": row["policy_version"],
-            "provider": row["provider"], "model": row["model"], "toolId": row["tool_id"],
+            "policyDigest": row["policy_digest"], "provider": row["provider"], "model": row["model"], "toolId": row["tool_id"],
             "inputTokens": row["input_tokens"], "outputTokens": row["output_tokens"],
             "toolCalls": row["tool_calls"], "contextBytes": row["context_bytes"],
             "status": row["status"], "metadata": json.loads(row["metadata_json"]),
