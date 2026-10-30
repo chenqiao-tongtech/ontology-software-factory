@@ -58,6 +58,7 @@ Agent Result contract + SHA-256 Evidence
 - `ontologySnapshotId`
 - `ontologyDigest`
 - `ontologySchemaVersion`
+- `roleDigest`：Role JSON 定义的 SHA-256。
 - `skillRefs[]`：每个 Skill 的 ID、语义版本和基于 `skill.json + SKILL.md` 计算的 SHA-256。
 
 Task 仍然包含 task / tenant / project / role、输入实体类型、期望输出实体类型、验收标准、上下文引用、敏感级别、资源限制和幂等键。运行时会将 JSON Schema 中的实体类型 enum 与所绑定快照的类集合对齐，并进一步验证输入实体类型属于 Role 的 `inputEntityTypes`。每个 Role 引用的 Skill 也会逐个读取 `skill.json`，验证 Skill 输入/输出类存在于同一快照、Skill 声明兼容当前 Role，且 Skill 所需工具全部位于 Role 的工具授权列表内。Workflow 派发的 Role / Skill ID 必须与注册的阶段处理器和 Role 声明一致。
