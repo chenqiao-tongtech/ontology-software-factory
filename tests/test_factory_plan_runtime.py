@@ -208,6 +208,7 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         self.assertEqual(relayed["delivered"], 1)
         detail = self.engine.get_run_detail(self.run["id"])
         self.assertEqual(detail["factoryAssignmentResults"][0]["assignmentId"], "analyze-requirement")
+        self.assertEqual(detail["factoryAssignmentResults"][0]["phaseAttempt"], 1)
         self.assertIn("factory.assignment.succeeded", [item["action"] for item in detail["events"]])
         execution = get_factory_plan_execution(self.task_store, self.plan_record, self.workflow_store)
         self.assertEqual(execution["completedAssignments"], 1)
