@@ -75,6 +75,7 @@ class HarnessRuntime:
         kill_switch_path: str | Path | None = None,
         usage_store: Any | None = None,
         policy_version: str = "unknown",
+        policy_digest: str = "unknown",
     ):
         self.root = Path(project_root).resolve()
         self.tool_registry = tool_registry
@@ -84,6 +85,7 @@ class HarnessRuntime:
         self.kill_switch_path = Path(kill_switch_path).resolve() if kill_switch_path else None
         self.usage_store = usage_store
         self.policy_version = str(policy_version)
+        self.policy_digest = str(policy_digest)
         self._usage: dict[str, _Usage] = {}
         self._lock = threading.RLock()
         self._tool_defs = {item["toolId"]: item for item in json.loads(
@@ -128,7 +130,7 @@ class HarnessRuntime:
         return self.usage_store.record_harness_usage(
             event_id=f"harness:{uuid4().hex}", run_id=run_id, task_id=task_id,
             event_type=event_type, policy_version=self.policy_version,
-            occurred_at=datetime.now(timezone.utc).isoformat(),
+            policy_digest=self.policy_digest, occurred_at=datetime.now(timezone.utc).isoformat(),
             tool_calls=tool_calls, context_bytes=context_bytes,
             input_tokens=input_tokens, output_tokens=output_tokens,
             provider=provider, model=model, tool_id=tool_id, status=status,
@@ -302,6 +304,7 @@ class HarnessRuntime:
                 "roleId": principal.role_id,
                 "toolId": tool_id,
                 "policyVersion": self.policy_version,
+                "policyDigest": self.policy_digest,
                 "status": status,
                 "approvalRef": approval_ref if approved else None,
                 "durationMs": elapsed_ms,
