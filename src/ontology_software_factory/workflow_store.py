@@ -63,6 +63,21 @@ class SQLiteWorkflowStore:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_factory_plans_run ON factory_orchestrator_plans(run_id, created_at);
+            CREATE TABLE IF NOT EXISTS factory_assignment_results (
+                plan_id TEXT NOT NULL,
+                assignment_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                output_json TEXT NOT NULL,
+                evidence_json TEXT NOT NULL,
+                error_json TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(plan_id, assignment_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_factory_assignment_results_run
+              ON factory_assignment_results(run_id, plan_id);
         """)
         self._conn.commit()
 
@@ -207,6 +222,73 @@ class SQLiteWorkflowStore:
         with self._lock:
             rows = self._conn.execute("SELECT plan_id,run_id,payload_sha256,payload_json,created_at FROM factory_orchestrator_plans WHERE run_id=? ORDER BY created_at,plan_id", (run_id,)).fetchall()
         return [{"planId": row["plan_id"], "workflowRunId": row["run_id"], "status": "submitted", "digest": row["payload_sha256"], "createdAt": row["created_at"], "plan": json.loads(row["payload_json"])} for row in rows]
+
+    def record_factory_assignment_result(
+        self, *, run_id: str, plan_id: str, assignment_id: str, task_id: str,
+        status: str, output: dict[str, Any], evidence: list[dict[str, Any]],
+        error: dict[str, Any], event_id: str, event: dict[str, Any],
+    ) -> bool:
+        """Atomically persist a Factory Assignment result, workflow event and inbox receipt."""
+        if status not in {"succeeded", "failed", "dead_letter"}:
+            raise ValueError("Factory Assignment result must be terminal")
+        with self._lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                seen = self._conn.execute(
+                    "SELECT 1 FROM workflow_inbox WHERE integration_event_id=?", (event_id,)
+                ).fetchone()
+                if seen:
+                    self._conn.rollback()
+                    return False
+                plan = self._conn.execute(
+                    "SELECT 1 FROM factory_orchestrator_plans WHERE plan_id=? AND run_id=?",
+                    (plan_id, run_id),
+                ).fetchone()
+                if plan is None:
+                    self._conn.rollback()
+                    raise ValueError("Factory Assignment result references an unknown plan or Workflow Run")
+                self._conn.execute(
+                    """INSERT INTO factory_assignment_results(
+                        plan_id,assignment_id,run_id,task_id,status,output_json,evidence_json,error_json,event_id,updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(plan_id,assignment_id) DO UPDATE SET
+                        task_id=excluded.task_id,status=excluded.status,output_json=excluded.output_json,
+                        evidence_json=excluded.evidence_json,error_json=excluded.error_json,
+                        event_id=excluded.event_id,updated_at=excluded.updated_at""",
+                    (plan_id, assignment_id, run_id, task_id, status,
+                     json.dumps(output, ensure_ascii=False), json.dumps(evidence, ensure_ascii=False),
+                     json.dumps(error, ensure_ascii=False), event_id, event["at"]),
+                )
+                self._insert_event(run_id, event)
+                self._conn.execute(
+                    "INSERT INTO workflow_inbox(integration_event_id,run_id,action,processed_at) VALUES(?,?,?,?)",
+                    (event_id, run_id, event["action"], event["at"]),
+                )
+                self._conn.commit()
+                return True
+            except Exception:
+                self._conn.rollback()
+                raise
+
+    def list_factory_assignment_results(self, run_id: str, plan_id: str | None = None) -> list[dict[str, Any]]:
+        query = (
+            "SELECT plan_id,assignment_id,run_id,task_id,status,output_json,evidence_json,error_json,event_id,updated_at "
+            "FROM factory_assignment_results WHERE run_id=?"
+        )
+        params: tuple[Any, ...] = (run_id,)
+        if plan_id is not None:
+            query += " AND plan_id=?"
+            params = (run_id, plan_id)
+        query += " ORDER BY updated_at,assignment_id"
+        with self._lock:
+            rows = self._conn.execute(query, params).fetchall()
+        return [{
+            "planId": row["plan_id"], "assignmentId": row["assignment_id"],
+            "workflowRunId": row["run_id"], "taskId": row["task_id"],
+            "status": row["status"], "output": json.loads(row["output_json"]),
+            "evidence": json.loads(row["evidence_json"]), "error": json.loads(row["error_json"]),
+            "eventId": row["event_id"], "updatedAt": row["updated_at"],
+        } for row in rows]
 
     def has_processed_integration_event(self, event_id: str) -> bool:
         with self._lock:
