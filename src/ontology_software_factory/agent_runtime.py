@@ -337,6 +337,11 @@ class OpenAIAgentsRuntime:
         task_id = str(task_contract["taskId"])
         run_id = str(task_input.get("run_id", ""))
         registry = ToolRegistry(self.project_root, self._tool_handlers)
+        if (
+            registry.policy_version != runtime_contract_lock.get("toolPolicyVersion")
+            or registry.policy_digest != runtime_contract_lock.get("toolPolicyDigest")
+        ):
+            raise AgentContractError("Tool permission policy changed during Agent initialization")
         harness = HarnessRuntime(
             project_root=self.project_root, tool_registry=registry,
             audit_path=os.getenv("FACTORY_HARNESS_AUDIT", str(self.project_root / ".local-runs/harness-audit.jsonl")),
