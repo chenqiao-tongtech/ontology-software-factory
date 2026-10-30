@@ -65,6 +65,45 @@ class WorkspaceExecutionTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["shell"], False)
         self.assertNotIn("OPENAI_API_KEY", run.call_args.kwargs["env"])
 
+    def test_container_runner_uses_networkless_readonly_privilege_dropped_docker(self):
+        inspect = Mock(returncode=0, stdout="[]")
+        run_result = Mock(returncode=0, stdout="Ran 1 test\\nOK\\n")
+        with patch.dict(os.environ, {"FACTORY_ENABLE_CONTAINER_EXECUTION": "1"}, clear=True):
+            with patch("ontology_software_factory.workspace_execution.shutil.which", return_value="/usr/bin/docker"):
+                with patch("ontology_software_factory.workspace_execution.subprocess.run", side_effect=[inspect, run_result]) as run:
+                    result = self.service.run_tests("python-unit-tests")
+        self.assertEqual(result["status"], "passed")
+        command = run.call_args_list[1].args[0]
+        self.assertIn("--network=none", command)
+        self.assertIn("--read-only", command)
+        self.assertIn("--cap-drop=ALL", command)
+        self.assertIn("--security-opt=no-new-privileges", command)
+        self.assertIn("--pull=never", command)
+
+    def test_git_worktree_backend_creates_a_local_run_branch(self):
+        import shutil
+        import subprocess
+        git = shutil.which("git")
+        if not git:
+            self.skipTest("Git CLI is unavailable")
+        subprocess.run([git, "-C", str(self.project), "init"], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run([git, "-C", str(self.project), "config", "user.email", "test@example.invalid"], check=True)
+        subprocess.run([git, "-C", str(self.project), "config", "user.name", "Test"], check=True)
+        subprocess.run([git, "-C", str(self.project), "add", "."], check=True)
+        subprocess.run([git, "-C", str(self.project), "commit", "-m", "baseline"], check=True, stdout=subprocess.DEVNULL)
+        manager = WorkspaceManager(self.project, workspace_root=self.base / "git-worktrees")
+        with patch.dict(os.environ, {"FACTORY_WORKSPACE_BACKEND": "git-worktree"}):
+            worktree = manager.open("run-git-001")
+            current = subprocess.run([git, "-C", str(worktree), "branch", "--show-current"],
+                                      check=True, capture_output=True, text=True).stdout.strip()
+            self.assertEqual(current, "agent/run-run-git-001")
+            metadata = manager.describe("run-git-001")
+            self.assertEqual(metadata["backend"], "git-worktree")
+            self.assertFalse(metadata["pushEnabled"])
+            self.assertFalse(metadata["mergeEnabled"])
+        subprocess.run([git, "-C", str(self.project), "worktree", "remove", "--force", str(worktree)], check=True)
+        subprocess.run([git, "-C", str(self.project), "branch", "-D", "agent/run-run-git-001"], check=True, stdout=subprocess.DEVNULL)
+
     def test_workspace_diff_is_reviewable_and_source_checkout_stays_unchanged(self):
         self.service.write_candidate("src/module.py", "value = 2\n")
         result = self.service.diff_patch()
