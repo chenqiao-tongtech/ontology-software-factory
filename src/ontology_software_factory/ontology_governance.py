@@ -139,9 +139,13 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
             role_id = step.get("roleId")
             skill_id = step.get("skillId")
             if role_id:
-                add_edge(step_node, "role:" + str(role_id), "dispatches-role")
-                if role_id not in roles:
-                    issues.append({"code": "unknown-role-reference", "consumer": step_node, "target": role_id})
+                role_target = ("human-role:" if step.get("executionMode") == "human" else "role:") + str(role_id)
+                if step.get("executionMode") == "human":
+                    add_node(role_target, "human-approval-role", str(role_id), str(path.relative_to(root)))
+                else:
+                    add_edge(step_node, role_target, "dispatches-role")
+                    if role_id not in roles:
+                        issues.append({"code": "unknown-role-reference", "consumer": step_node, "target": role_id})
             if skill_id:
                 add_edge(step_node, "skill:" + str(skill_id), "invokes-skill")
                 if skill_id not in skills:
