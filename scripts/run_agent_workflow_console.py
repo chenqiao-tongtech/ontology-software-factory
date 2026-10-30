@@ -140,6 +140,17 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                 target.write_text(json.dumps({"requirement": requirement.strip()}, ensure_ascii=False, indent=2), encoding="utf-8")
                 self._json(201, {"run": run})
                 return
+            if path.endswith("/orchestrator-plan") and path.startswith("/api/runs/"):
+                run_id = unquote(path[len("/api/runs/"):-len("/orchestrator-plan")].strip("/"))
+                plan = body.get("plan")
+                if not isinstance(plan, dict):
+                    self._json(400, {"error": "plan must be a JSON object"})
+                    return
+                result = self.engine.submit_factory_orchestrator_plan(
+                    run_id, plan, actor=str(body.get("actor", "factory-orchestrator"))
+                )
+                self._json(201 if result["created"] else 200, result)
+                return
             if path.endswith("/dispatch") and path.startswith("/api/runs/"):
                 run_id = unquote(path[len("/api/runs/"):-len("/dispatch")].strip("/"))
                 run = self.engine.get_run(run_id)
