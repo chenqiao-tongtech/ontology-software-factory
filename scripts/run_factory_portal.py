@@ -1111,6 +1111,10 @@ class PortalHandler(BaseHTTPRequestHandler):
                 if actor == proposal.get("requestedBy"): raise ValueError("requester and approver must be different actors")
                 compat = proposal.get("compatibility", {})
                 incompatible = not compat.get("compatible", False)
+                if decision == "approve" and proposal.get("action") == "promote" and (
+                    not compat.get("versionOrderValid", True) or compat.get("majorVersionBumpRequired", False)
+                ):
+                    raise ValueError("promotion is blocked: ontology/schema semantic version must be valid and breaking changes require a major-version bump")
                 if decision == "approve" and incompatible and not accept_breaking:
                     raise ValueError("compatibility report is not clean; explicit acceptBreakingChanges=true and a reason are required")
                 approval = {"decision": decision, "actor": actor[:100], "notes": notes[:1000],
