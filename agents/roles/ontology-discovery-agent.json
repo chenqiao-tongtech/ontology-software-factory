@@ -2,20 +2,93 @@
   "roleId": "ontology-discovery-agent",
   "displayName": "本体发现 Agent",
   "purpose": "从获授权文档、Schema、API 描述和资产元数据中提出术语、关系、约束与能力问题候选；必须为可核实主张附上来源证据。",
-  "inputEntityTypes": ["Requirement", "Product", "Component", "Version", "Artifact"],
-  "outputEntityTypes": ["OntologyCandidate", "Artifact"],
-  "skillIds": ["ontology-discovery"],
-  "toolIds": ["documents.read", "workspace.read", "ontology.source.inspect", "ontology.discovery.run", "ontology.candidate.validate", "ontology.candidate.write"],
-  "allowedActions": ["requirement.read", "catalog.read", "ontology.source.inspect", "ontology.discovery.run", "ontology.candidate.write", "ontology.candidate.validate"],
-  "forbiddenActions": ["ontology.publish", "repository.merge.protected_branch", "production.deploy", "secrets.read.raw", "policy.modify", "agent.approve_self", "cross_tenant.read"],
+  "inputEntityTypes": [
+    "Requirement",
+    "Product",
+    "Component",
+    "Version",
+    "Artifact"
+  ],
+  "outputEntityTypes": [
+    "OntologyCandidate",
+    "Artifact"
+  ],
+  "skillIds": [
+    "ontology-discovery"
+  ],
+  "toolIds": [
+    "documents.read",
+    "ontology.candidate.validate",
+    "ontology.candidate.write",
+    "ontology.definition.read",
+    "ontology.discovery.run",
+    "ontology.source.inspect",
+    "source.catalog.read",
+    "workspace.read"
+  ],
+  "allowedActions": [
+    "requirement.read",
+    "catalog.read",
+    "ontology.source.inspect",
+    "ontology.discovery.run",
+    "ontology.candidate.write",
+    "ontology.candidate.validate"
+  ],
+  "forbiddenActions": [
+    "ontology.publish",
+    "repository.merge.protected_branch",
+    "production.deploy",
+    "secrets.read.raw",
+    "policy.modify",
+    "agent.approve_self",
+    "cross_tenant.read"
+  ],
   "contextPolicy": {
-    "sharedContextFields": ["task_id", "tenant_id", "project_id", "domain_id", "source_manifest", "ontology_version"],
-    "taskLocalContextFields": ["term_candidates", "relation_candidates", "constraint_candidates", "competency_questions", "critic_notes"],
-    "restrictedContextFields": ["raw_passwords", "API_keys", "production_credentials", "other_tenant_source_code"],
+    "sharedContextFields": [
+      "task_id",
+      "tenant_id",
+      "project_id",
+      "domain_id",
+      "source_manifest",
+      "ontology_version"
+    ],
+    "taskLocalContextFields": [
+      "term_candidates",
+      "relation_candidates",
+      "constraint_candidates",
+      "competency_questions",
+      "critic_notes"
+    ],
+    "restrictedContextFields": [
+      "raw_passwords",
+      "API_keys",
+      "production_credentials",
+      "other_tenant_source_code"
+    ],
     "tenantBoundary": "same_tenant_and_project_only",
-    "untrustedInputs": ["external_documents", "repository_files", "database_metadata", "tool_outputs"]
+    "untrustedInputs": [
+      "external_documents",
+      "repository_files",
+      "database_metadata",
+      "tool_outputs"
+    ]
   },
-  "humanApprovalRequiredFor": ["ontology_baseline_change", "new_domain_class", "policy_candidate", "ontology_version_promotion"],
-  "handoffRequirements": ["候选术语和关系必须保留 sourceId、locator、原文引用与来源摘要。", "模型置信度不等于事实真值或发布批准。", "只写入候选目录，不修改正式本体或策略。"],
-  "escalationConditions": [{"condition": "来源冲突、证据不足或约束可能改变权限/合规边界", "handoffToRoleId": "ontology-critic-agent", "severity": "blocking"}]
+  "humanApprovalRequiredFor": [
+    "ontology_baseline_change",
+    "new_domain_class",
+    "policy_candidate",
+    "ontology_version_promotion"
+  ],
+  "handoffRequirements": [
+    "候选术语和关系必须保留 sourceId、locator、原文引用与来源摘要。",
+    "模型置信度不等于事实真值或发布批准。",
+    "只写入候选目录，不修改正式本体或策略。"
+  ],
+  "escalationConditions": [
+    {
+      "condition": "来源冲突、证据不足或约束可能改变权限/合规边界",
+      "handoffToRoleId": "ontology-critic-agent",
+      "severity": "blocking"
+    }
+  ]
 }
