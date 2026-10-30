@@ -91,6 +91,16 @@ class OntologyGovernanceTests(unittest.TestCase):
         self.assertIn("workflow:delivery/step:analysis", ids)
         self.assertIn("contract:agent-task.schema", ids)
 
+    def test_removed_class_impact_uses_historical_class_reference(self):
+        historical = self.ontology
+        current = {**self.ontology, "classes": [{"name": "Artifact"}, {"name": "Build"}]}
+        graph = build_consumer_graph(self.root, current, additional_ontologies=[historical])
+        impact = analyze_consumer_impact(["Requirement"], graph)
+        ids = {item["id"] for item in impact["affectedConsumers"]}
+        self.assertIn("role:analyst", ids)
+        self.assertIn("skill:example-skill", ids)
+        self.assertIn("workflow:delivery/step:analysis", ids)
+
     def test_unknown_class_and_missing_tool_are_reported(self):
         role = json.loads((self.root / "agents/roles/analyst.json").read_text())
         role["outputEntityTypes"].append("UnknownClass")
