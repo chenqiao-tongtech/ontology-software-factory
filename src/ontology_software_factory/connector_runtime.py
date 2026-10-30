@@ -43,6 +43,7 @@ class SourceBinding:
     location: str
     enabled: bool = True
     approved: bool = True
+    operation: str = "scan.assets"
 
 
 class ConnectorRuntime:
@@ -126,7 +127,7 @@ class ConnectorRuntime:
                 raise ConnectorRuntimeDenied("source binding tenant does not match principal tenant")
             if not binding.enabled or not binding.approved:
                 raise ConnectorRuntimeDenied("source binding is disabled or not approved")
-            descriptor = self.catalog.authorize(binding.connector_id, "scan.assets")
+            descriptor = self.catalog.authorize(binding.connector_id, binding.operation)
             if descriptor.category != "ontology-source" or descriptor.direction != "read":
                 raise ConnectorRuntimeDenied("connector is not an ontology source")
             adapter = self.source_adapters.get(binding.connector_id)
