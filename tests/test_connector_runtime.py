@@ -3,7 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from ontology_software_factory.connector_catalog import ConnectorCatalog
+from ontology_software_factory.connector_catalog import ConnectorCatalog, ConnectorPolicyError
 from ontology_software_factory.connector_runtime import (
     ConnectorPrincipal, ConnectorRuntime, ConnectorRuntimeDenied,
     ConnectorRuntimeUnavailable, SourceBinding
