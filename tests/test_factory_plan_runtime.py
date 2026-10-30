@@ -123,7 +123,7 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         self.assertEqual(result["task"]["evidence"][0]["type"], "agent-result-contract")
         execution = get_factory_plan_execution(self.task_store, self.plan_record)
         self.assertEqual(execution["completedAssignments"], 1)
-        self.assertEqual(execution["phases"][0]["status"], "running")
+        self.assertEqual(execution["phases"][0]["status"], "succeeded")
         self.assertTrue(list((Path(self.temp.name) / "artifacts").rglob("agent-result.json")))
 
 
