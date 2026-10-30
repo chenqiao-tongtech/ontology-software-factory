@@ -66,6 +66,7 @@ class HarnessRuntimeTests(unittest.TestCase):
             tool_id="documents.read", payload={"relativePath": "docs/architecture.md"}
         )
         self.assertEqual(result, {"text": "ok"})
+        self.assertEqual(self.harness.usage("run-1")["toolCalls"], 1)
         with self.assertRaises(HarnessBudgetExceeded):
             self.harness.invoke_tool(
                 self.principal, run_id="run-1", task_id="task-2",
