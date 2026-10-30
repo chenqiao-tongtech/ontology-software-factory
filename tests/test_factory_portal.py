@@ -172,6 +172,64 @@ class FactoryPortalServiceTests(unittest.TestCase):
             "src/domain.py", "main",
         ))
 
+    def test_evidence_validity_detects_local_change_missing_and_unavailable(self):
+        source_map = {"repo": {"id": "repo", "type": "repository"}}
+        evidence = {"sourceId": "repo", "path": "src/domain.py", "contentSha256": "old-hash"}
+        current_scan = {"id": "repo", "status": "connected", "assets": [
+            {"path": "src/domain.py", "sha256": "old-hash"}]}
+        self.assertEqual(portal.assess_evidence_validity(evidence, source_map, {"repo": current_scan})["status"], "current")
+        changed_scan = {"id": "repo", "status": "connected", "assets": [
+            {"path": "src/domain.py", "sha256": "new-hash"}]}
+        self.assertEqual(portal.assess_evidence_validity(evidence, source_map, {"repo": changed_scan})["status"], "content-changed")
+        missing_scan = {"id": "repo", "status": "connected", "assets": []}
+        self.assertEqual(portal.assess_evidence_validity(evidence, source_map, {"repo": missing_scan})["status"], "asset-missing")
+        partial_scan = {"id": "repo", "status": "partial", "assets": []}
+        self.assertEqual(portal.assess_evidence_validity(evidence, source_map, {"repo": partial_scan})["status"], "inconclusive-partial-scan")
+        failed_scan = {"id": "repo", "status": "unavailable", "assets": [], "message": "provider offline"}
+        self.assertEqual(portal.assess_evidence_validity(evidence, source_map, {"repo": failed_scan})["status"], "source-unavailable")
+        self.assertEqual(portal.assess_evidence_validity(evidence, {}, {})["status"], "source-removed")
+
+    def test_evidence_validity_marks_remote_revision_change_for_review(self):
+        evidence = {"sourceId": "remote", "path": "src/order.py", "sourceRevision": "tree-old"}
+        sources = {"remote": {"id": "remote", "type": "github"}}
+        scans = {"remote": {"id": "remote", "status": "connected",
+                            "details": {"sourceRevision": "tree-new"},
+                            "assets": [{"path": "src/order.py", "assetId": "asset-1"}]}}
+        validity = portal.assess_evidence_validity(evidence, sources, scans)
+        self.assertEqual(validity["status"], "revision-changed-review")
+
+    def test_sql_schema_evidence_fingerprint_detects_column_changes(self):
+        source = {"id": "pg-source", "name": "PG", "type": "postgresql"}
+        portal.dump(portal.SOURCES_PATH, {"schemaVersion": "1.0.0", "sources": [source]})
+        asset = {"name": "orders", "path": "public.orders", "kind": "table", "assetId": "asset-orders",
+                 "schema": "public", "columns": [{"name": "order_id", "type": "uuid", "nullable": False, "ordinal": 1}]}
+        scan = {"id": "pg-source", "name": "PG", "type": "postgresql", "lastSyncAt": portal.now_iso(),
+                "status": "connected", "assets": [asset], "details": {}}
+        terms = portal.safe_extract_source_terms(scan)
+        order_term = next(term for term in terms if term["label"] == "orders")
+        evidence = order_term["evidence"][0]
+        self.assertTrue(evidence.get("assetFingerprint"))
+        self.assertEqual(portal.assess_evidence_validity(evidence, {"pg-source": source},
+            {"pg-source": {"status": "connected", "assets": [asset], "details": {}}})["status"], "current")
+        changed_asset = {**asset, "columns": asset["columns"] + [
+            {"name": "customer_id", "type": "uuid", "nullable": False, "ordinal": 2}]}
+        self.assertEqual(portal.assess_evidence_validity(evidence, {"pg-source": source},
+            {"pg-source": {"status": "connected", "assets": [changed_asset], "details": {}}})["status"], "schema-changed")
+
+    def test_candidate_evidence_annotation_counts_affected_terms(self):
+        candidate = {"candidateId": "c-1", "terms": [
+            {"label": "Order", "evidence": [{"sourceId": "repo", "path": "order.py", "contentSha256": "old"}]},
+            {"label": "Customer", "evidence": [{"sourceId": "repo", "path": "customer.py", "contentSha256": "same"}]},
+        ]}
+        sources = {"repo": {"id": "repo", "type": "repository"}}
+        scans = {"repo": {"status": "connected", "assets": [
+            {"path": "order.py", "sha256": "new"}, {"path": "customer.py", "sha256": "same"}]}}
+        annotated = portal.annotate_candidate_evidence(candidate, sources, scans)
+        self.assertEqual(annotated["evidenceValidity"]["content-changed"], 1)
+        self.assertEqual(annotated["evidenceValidity"]["current"], 1)
+        self.assertEqual(annotated["affectedTermCount"], 1)
+        self.assertNotIn("validity", candidate["terms"][0]["evidence"][0])
+
     def test_source_sync_history_records_duration_status_and_error_class(self):
         def fake_scan(source, *, allow_remote=False):
             status = "connected" if source["id"] != "test-docs" else "unavailable"
