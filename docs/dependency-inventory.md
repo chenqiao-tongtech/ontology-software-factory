@@ -131,3 +131,14 @@ python scripts/check_llm_connection.py
 | 文件系统漏洞/配置扫描 | Trivy CLI 与本地数据库 | blocked，不启动 | FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1 |
 
 注意：Docker 测试镜像由 `runners/container/Dockerfile.test-runner` 构建，执行使用无网络、只读 rootfs、capability drop、no-new-privileges、PID/内存/CPU 限制。`FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION=1` 仍是危险的宿主机演示回退开关。Semgrep/Gitleaks/Trivy 当前仍使用本机 CLI，尚未容器化。缺少工具、超时或缺失报告都不能标记为 PASS。
+
+
+## 9. 容器扫描器镜像（可选，生产建议）
+
+| 扫描器 | 容器入口 | 配置变量 | 运行要求 |
+|---|---|---|---|
+| Semgrep | digest 固定的 Semgrep 镜像 | FACTORY_SEMGREP_IMAGE | 使用 runners/container/semgrep-rules.yml 离线规则 |
+| Gitleaks | digest 固定的 Gitleaks 镜像 | FACTORY_GITLEAKS_IMAGE | 工作区只读、报告目录可写 |
+| Trivy | digest 固定的 Trivy 镜像 | FACTORY_TRIVY_IMAGE、FACTORY_TRIVY_CACHE_DIR | 需预先填充漏洞数据库缓存，运行时禁网且跳过 DB 更新 |
+
+启用容器扫描需 Docker Engine、FACTORY_ENABLE_CONTAINER_SECURITY_SCANS=1 和三个不可变 image digest。镜像必须预先拉取，运行时不 pull。容器扫描不共享 Docker socket，不挂载宿主机根目录；源工作区只读，证据目录单独可写。Semgrep 使用项目本地规则文件，不依赖运行时访问在线规则仓库。
