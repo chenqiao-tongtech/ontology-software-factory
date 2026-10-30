@@ -90,6 +90,14 @@ class SourceConnectorTests(unittest.TestCase):
         with self.assertRaises(SourceConnectorError):
             connector.scan("db-1", database)
 
+    def test_repository_and_document_directory_types_can_be_registered_separately(self):
+        registry = SourceConnectorRegistry()
+        registry.register(LocalDirectoryConnector([self.root], source_type="repository"))
+        registry.register(LocalDirectoryConnector([self.root], source_type="documents"))
+        result = registry.scan("documents", "docs-1", self.project)
+        self.assertEqual(result.source_type, "documents")
+        self.assertGreater(len(result.assets), 0)
+
     def test_registry_fails_closed_for_unknown_connector(self):
         registry = SourceConnectorRegistry()
         registry.register(LocalDirectoryConnector([self.root]))
