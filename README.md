@@ -263,6 +263,7 @@ make observability
 - [安装指南](docs/installation.md)：Python 环境、虚拟环境、基础安装、可选 extras、外部工具安装和首次启动。
 - [依赖工具与组件清单](docs/dependency-inventory.md)：基础 Python 包、OpenAI Agents SDK、PostgreSQL/MySQL 驱动、Semgrep/Gitleaks/Trivy、Git、MCP、Cognee、NVIDIA 和所需外部服务。
 - [本体版本绑定与 Agent Runtime 运行手册](docs/ontology-runtime-version-binding.md)：活动版本初始化、审批发布、Runtime 启动、任务执行、证据核验和故障排查。
+- [本次发布说明](docs/releases/2026-10-30-ontology-bound-agent-runtime.md)：实现范围、安装升级、首次运行前置条件和验收边界。
 
 最小安装仍然是 `python -m pip install -e .`。真实多 Agent Runtime 额外安装 `python -m pip install -e '.[agent-runtime]'`；PostgreSQL / MySQL 连接器分别安装 `.[postgres]` / `.[mysql]`。本项目静态前端不需要 Node.js / npm。不要为了未启用的外部集成安装全部组件。
 
