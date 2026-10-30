@@ -29,6 +29,9 @@ class StageResult:
     latency_ms: int
     tool_ids: list[str]
     artifact_path: str
+    ontology_binding: dict[str, Any] | None = None
+    task_contract: dict[str, Any] | None = None
+    task_contract_digest: str | None = None
 
 
 @dataclass
@@ -124,6 +127,9 @@ class SoftwareFactoryPipeline:
                     latency_ms=int(execution.get("latency_ms", 0)),
                     tool_ids=list(execution.get("tool_ids", [])),
                     artifact_path=f"stages/{role_id}.json",
+                    ontology_binding=execution.get("ontology_binding"),
+                    task_contract=task_contract if getattr(self.agent_runner, "requires_ontology_binding", False) else None,
+                    task_contract_digest=execution.get("task_contract_digest"),
                 )
                 self._atomic_json(run_dir / stage_result.artifact_path, asdict(stage_result))
                 stage_results.append(stage_result)
