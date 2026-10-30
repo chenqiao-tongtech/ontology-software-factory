@@ -3,7 +3,7 @@
 | 文档属性 | 内容 |
 |---|---|
 | 文档编号 | OSF-SDS-001 |
-| 文档版本 | 1.3 |
+| 文档版本 | 1.4 |
 | 基线日期 | 2026-10-30 |
 | 适用系统 | ontology-software-factory |
 | 基线分支 | main |
@@ -515,7 +515,7 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 | 4 | 本体发现连接器扩展 | 已支持 OpenAPI/AsyncAPI JSON、GraphQL SDL、Protobuf、dbt manifest/catalog 和 Schema Registry JSON 导出；继续接入文档 SaaS、实时 Schema Registry、数据目录和运维元数据 | Connector Runtime 与 Source Evidence 模型 |
 | 5 | Agent Tools 扩展 | 本体查询、代码分析、依赖分析、测试、扫描、制品和工单工具 | Harness Tool Gateway 与独立权限 |
 | 6 | 统一监控台 | Agent/Skill/Tool/Connector/Workflow Trace、证据导航、成本、告警和运行控制 | 统一事件与 Trace 关联模型 |
-| 7 | Factory Orchestrator 与本体模块治理 | 受限主控 Role/Skill、AgentPlan Schema、Typed Output、确定性校验、Workflow Run 绑定的不可变计划持久化、计划提交 API、本体模块清单 | assignment 级 Worker Task 实例化和动态阶段调度尚未接通；模块清单仍基于单一权威本体 JSON |
+| 7 | Factory Orchestrator 与本体模块治理 | 受限主控 Role/Skill、AgentPlan Schema、确定性校验、不可变计划持久化、依赖感知 Assignment 调度、Agent Worker 执行、运行进度派生视图、本体模块清单 | 主控自动生成计划、独立审批服务、Workflow 级 Assignment 结果事件投影、Harness 全量工具中介和分布式调度尚未完成；模块清单仍基于单一权威本体 JSON |
 
 每个方向均需交付代码、Schema、单元与集成测试、运行说明、依赖更新、权限矩阵、监控指标和验收报告。跨模块能力按 ADR 管理。
 
@@ -561,3 +561,4 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 | 1.1 | 2026-10-30 | 纳入 HarnessRuntime、SkillRegistry、ConnectorRuntime、API/事件契约解析器、Agent 元数据工具及 Portal 审计监控扩展 |
 | 1.2 | 2026-10-30 | 纳入 Factory Orchestrator 受限规划角色、Skill、Plan Schema/Typed Output、确定性计划校验、本体 1.1.0 与 49 类/47 关系逻辑模块清单；明确 Workflow 运行时集成和独立模块发布仍未完成 |
 | 1.3 | 2026-10-30 | 增加 Workflow Engine 的 AgentPlan 校验提交与 SQLite 不可变持久化，记录计划摘要和工作流事件，增加计划提交 API 与运行详情查询；assignment 级 Worker Task 实例化仍待完成 |
+| 1.4 | 2026-10-30 | 增加 Assignment 到 Worker Task 的依赖感知派发、Role/Skill 与本体快照锁定、Agent Runtime 执行、Agent Result 与证据制品、运行详情派生进度视图；独立审批与 Workflow 事件投影仍待完成 |
