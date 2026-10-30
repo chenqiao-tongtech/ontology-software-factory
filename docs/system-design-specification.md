@@ -203,7 +203,7 @@ flowchart TB
 - Tool Registry：工具定义与权限交集；
 - Harness：统一策略、上下文、预算、凭据、隔离和证据控制。
 
-**现状：** 团队拓扑、角色文件、Skill 文件、Skill Schema、Agent SDK 适配器、结构化输出和工具权限交集已有实现。当前 Skill 目录尚无完整的独立运行时注册、依赖解析、兼容性验证和 Skill 回归执行体系；Harness 的策略检查分散在 Agent Runtime、Tool Registry、Workflow 和 Workspace 层。统一 Harness Runtime、PDP、Context Broker、Secret Broker、预算与熔断模块列入后续建设。
+**现状：** 团队拓扑、角色文件、Skill 文件、Skill Schema、Agent SDK 适配器、结构化输出和工具权限交集已有实现。本阶段新增 SkillRegistry，支持 Skill Schema 校验、角色/能力目录引用校验、指令文件读取及内容摘要锁；该 Registry 尚未接入 Agent Workflow 的运行时加载链路。新增 HarnessRuntime 本地参考实现，提供按角色字段白名单组装上下文、租户/项目绑定、工具调用预算、模型 Token 预算、独立审批回调、元数据审计和文件型 Kill Switch。HarnessRuntime 当前由调用方显式注入 ToolRegistry，尚未成为 OpenAIAgentsRuntime 的默认中介，也未提供企业 PDP、Secret Broker 或分布式预算存储。
 
 **执行约束：** Agent 最大轮次受配置限制；默认工具范围有限；SDK tracing 默认关闭；生产部署、秘密读取、策略修改、自我审批和跨租户读取为全局拒绝动作。
 
@@ -509,10 +509,10 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 
 | 序号 | 建设方向 | 主要交付物 | 前置条件 |
 |---|---|---|---|
-| 1 | Harness Runtime | 统一 PDP、Context Broker、Budget、Tool Gateway、Audit 和 Kill Switch | 现有 Tool/Role/Policy/Workflow 契约 |
-| 2 | Skill Registry | Skill 版本、依赖、输入输出契约、兼容检查、测试与发现 API | 现有 Skill JSON/SKILL.md |
-| 3 | Connector Runtime | 连接器执行协议、认证注入、同步游标、健康状态、审计与策略 | Source Connector、Connector Catalog |
-| 4 | 本体发现连接器扩展 | 文档、API/事件契约、数据目录、工单、观测和身份元数据接入 | Connector Runtime 与 Source Evidence 模型 |
+| 1 | Harness Runtime | 将现有本地 Harness 接入 Agent/Workflow；补齐 PDP 接口、策略版本、预算持久化、审计和 Kill Switch 运维接口 | 现有 Tool/Role/Policy/Workflow 契约 |
+| 2 | Skill Registry | 将现有内容寻址 Registry 接入 Agent Runtime；补齐 Skill 依赖、回归测试、发布/弃用和发现 API | 现有 Skill JSON/SKILL.md |
+| 3 | Connector Runtime | 将现有只读扫描 Runtime 接入 Portal 与 Source Sync；补齐同步游标、健康状态、凭据注入和动作连接器幂等执行 | Source Connector、Connector Catalog |
+| 4 | 本体发现连接器扩展 | 已支持 OpenAPI/AsyncAPI JSON、GraphQL SDL、Protobuf 离线解析；继续接入文档 SaaS、Schema Registry、数据目录和运维元数据 | Connector Runtime 与 Source Evidence 模型 |
 | 5 | Agent Tools 扩展 | 本体查询、代码分析、依赖分析、测试、扫描、制品和工单工具 | Harness Tool Gateway 与独立权限 |
 | 6 | 统一监控台 | Agent/Skill/Tool/Connector/Workflow Trace、证据导航、成本、告警和运行控制 | 统一事件与 Trace 关联模型 |
 
