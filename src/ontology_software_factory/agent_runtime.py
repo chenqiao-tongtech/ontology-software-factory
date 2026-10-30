@@ -251,6 +251,7 @@ class OpenAIAgentsRuntime:
         latency_ms = int((time.perf_counter() - started) * 1000)
         LOGGER.info("agent.run.completed role_id=%s latency_ms=%d item_count=%d",
                     role_id, latency_ms, len(getattr(result, "new_items", []) or []))
+        workspace_changes = workspace.diff_patch() if workspace is not None else None
         return {
             "role_id": role_id,
             "model": self.model,
@@ -260,6 +261,8 @@ class OpenAIAgentsRuntime:
             "ontology_binding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")},
             "task_contract_digest": task_digest,
             "unavailable_skill_tools": unavailable_skill_tools,
+            "workspace_operations": list(workspace.operations) if workspace is not None else [],
+            "workspace_changes": workspace_changes,
             "evidence": [{"type": "agent_run_metadata", "uri": f"runtime://{role_id}",
                            "sha256": "not_applicable", "note": "SDK result metadata; not a content attestation"}],
         }
