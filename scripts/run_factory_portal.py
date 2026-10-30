@@ -38,6 +38,7 @@ from ontology_software_factory.database_connectors import PostgreSQLSchemaConnec
 from ontology_software_factory.ontology_versioning import create_snapshot, diff_snapshots, find_snapshot, ontology_digest
 from ontology_software_factory.ontology_governance import build_consumer_graph, analyze_consumer_impact, compatibility_report
 from ontology_software_factory.source_sync import compare_asset_manifests
+from ontology_software_factory.source_webhooks import verify_source_webhook, SourceWebhookError
 from ontology_software_factory.observability import build_platform_observability_report
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -371,7 +372,7 @@ def _source_error_class(result: dict) -> str | None:
     return "connector-error"
 
 
-def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> list[dict]:
+def source_scan_results(*, force: bool = False, allow_remote: bool = False, source_ids: set[str] | None = None) -> list[dict]:
     """Return recent scan metadata. Remote HTTP requests run only after explicit sync/discovery actions."""
     state = state_read()
     cache = state.get("sourceScans", {})
@@ -380,6 +381,8 @@ def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> l
     updated_cache = dict(cache)
     updated_histories = dict(histories)
     for source in source_configs():
+        if source_ids is not None and source["id"] not in source_ids:
+            continue
         cached = cache.get(source["id"])
         cache_fresh = False
         if cached and not force:
@@ -917,10 +920,12 @@ class PortalHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _body(self):
+    def _body(self, max_bytes: int = 80_000):
         length = int(self.headers.get("Content-Length", "0"))
-        if length < 1 or length > 80_000: raise ValueError("Request body is empty or too large")
-        data = json.loads(self.rfile.read(length).decode("utf-8"))
+        if length < 1 or length > max_bytes: raise ValueError("Request body is empty or too large")
+        raw = self.rfile.read(length)
+        self._last_body_raw = raw
+        data = json.loads(raw.decode("utf-8"))
         if not isinstance(data, dict): raise ValueError("Request body must be a JSON object")
         return data
 
@@ -993,10 +998,49 @@ class PortalHandler(BaseHTTPRequestHandler):
         if path == "/api/events": return self._send_json(200, {"events": state_read().get("portalEvents", [])[-200:]})
         return self._send_json(404, {"error": "Not found"})
 
+    def _handle_source_webhook(self, path: str, body: dict) -> None:
+        match = re.fullmatch(r"/api/webhooks/(github|gitlab)/([A-Za-z0-9_-]{1,71})", path)
+        if not match:
+            return self._send_json(404, {"error": "Webhook endpoint not found"})
+        provider, source_id = match.groups()
+        source = next((item for item in source_configs() if item.get("id") == source_id), None)
+        if not source or source.get("type") != provider or not source.get("enabled", True):
+            return self._send_json(404, {"error": "Configured webhook source not found"})
+        verified = verify_source_webhook(
+            provider, source, self.headers, getattr(self, "_last_body_raw", b""), body
+        )
+        deliveries = state_read().get("webhookDeliveries", {})
+        delivery_key = provider + ":" + verified["deliveryId"]
+        if delivery_key in deliveries:
+            return self._send_json(202, {"accepted": True, "duplicate": True, "sourceId": source_id})
+        synced = source_scan_results(force=True, allow_remote=True, source_ids={source_id})
+        result = next((item for item in synced if item.get("id") == source_id), None)
+        if not result:
+            raise RuntimeError("webhook source sync did not return a result")
+        def remember(st):
+            entries = st.setdefault("webhookDeliveries", {})
+            entries[delivery_key] = {"sourceId": source_id, "eventType": verified["eventType"], "receivedAt": now_iso()}
+            if len(entries) > 1000:
+                for key in list(entries)[:len(entries) - 1000]:
+                    entries.pop(key, None)
+        state_update(remember)
+        record_event("source.webhook.sync", "数据源 Webhook 已验证并触发同步", {
+            "sourceId": source_id, "provider": provider, "eventType": verified["eventType"],
+            "deliveryId": verified["deliveryId"], "syncStatus": result.get("status"),
+        }, actor="source-webhook")
+        return self._send_json(202, {
+            "accepted": True, "duplicate": False, "sourceId": source_id,
+            "syncStatus": result.get("status"), "assetCount": result.get("assetCount", 0),
+            "changeSummary": result.get("changeSummary"),
+        })
+
     def do_POST(self):  # noqa: N802
         path = urlparse(self.path).path
         if not self._same_origin(): return self._send_json(403, {"error": "Cross-origin request rejected"})
         try:
+            if path.startswith("/api/webhooks/"):
+                body = self._body(max_bytes=1_000_000)
+                return self._handle_source_webhook(path, body)
             body = self._body()
             if path == "/api/sources":
                 source_type = body.get("type")
@@ -1042,6 +1086,11 @@ class PortalHandler(BaseHTTPRequestHandler):
                 else: source["path"] = source_path_label
                 source["tokenEnv"] = "GITHUB_TOKEN" if source_type == "github" else "GITLAB_TOKEN" if source_type == "gitlab" else None
                 if source.get("tokenEnv") is None: source.pop("tokenEnv", None)
+                webhook_secret_env = str(body.get("webhookSecretEnv", "")).strip()
+                if webhook_secret_env:
+                    if source_type not in {"github", "gitlab"} or not re.fullmatch(r"[A-Z_][A-Z0-9_]{0,127}", webhook_secret_env):
+                        raise ValueError("webhookSecretEnv must be an environment variable name for GitHub/GitLab sources")
+                    source["webhookSecretEnv"] = webhook_secret_env
                 sources.append(source); save_sources(sources)
                 scan = scan_source(source, allow_remote=True)
                 def cache_scan(st): st.setdefault("sourceScans", {})[source_id] = scan
