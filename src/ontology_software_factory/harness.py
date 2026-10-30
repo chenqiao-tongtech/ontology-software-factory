@@ -9,6 +9,7 @@ import hashlib
 import json
 import threading
 import time
+from uuid import uuid4
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,7 @@ class HarnessBudget:
     max_context_bytes: int = 48_000
     max_input_tokens: int = 100_000
     max_output_tokens: int = 40_000
+    max_run_tool_calls: int = 500
 
 
 @dataclass
@@ -71,6 +73,8 @@ class HarnessRuntime:
         budget: HarnessBudget | None = None,
         approval_validator: Callable[[str, str, str], bool] | None = None,
         kill_switch_path: str | Path | None = None,
+        usage_store: Any | None = None,
+        policy_version: str = "unknown",
     ):
         self.root = Path(project_root).resolve()
         self.tool_registry = tool_registry
@@ -78,6 +82,8 @@ class HarnessRuntime:
         self.budget = budget or HarnessBudget()
         self.approval_validator = approval_validator or (lambda _ref, _run, _tool: False)
         self.kill_switch_path = Path(kill_switch_path).resolve() if kill_switch_path else None
+        self.usage_store = usage_store
+        self.policy_version = str(policy_version)
         self._usage: dict[str, _Usage] = {}
         self._lock = threading.RLock()
         self._tool_defs = {item["toolId"]: item for item in json.loads(
@@ -97,6 +103,8 @@ class HarnessRuntime:
         return self._usage.setdefault(run_id, _Usage())
 
     def usage(self, run_id: str) -> dict[str, int]:
+        if self.usage_store is not None:
+            return self.usage_store.get_harness_usage(run_id)
         with self._lock:
             value = self._usage_for(run_id)
             return {
@@ -106,9 +114,58 @@ class HarnessRuntime:
                 "outputTokens": value.output_tokens,
             }
 
-    def record_model_usage(self, run_id: str, *, input_tokens: int = 0, output_tokens: int = 0) -> None:
+    def _record_usage(
+        self, *, run_id: str, task_id: str, event_type: str,
+        tool_calls: int = 0, context_bytes: int = 0,
+        input_tokens: int = 0, output_tokens: int = 0,
+        provider: str | None = None, model: str | None = None,
+        tool_id: str | None = None, status: str = "recorded",
+        metadata: dict[str, Any] | None = None,
+        limits: dict[str, int] | None = None, enforce_limits: bool = False,
+    ) -> dict[str, Any]:
+        if self.usage_store is None:
+            return {"allowed": True, "usage": self.usage(run_id)}
+        return self.usage_store.record_harness_usage(
+            event_id=f"harness:{uuid4().hex}", run_id=run_id, task_id=task_id,
+            event_type=event_type, policy_version=self.policy_version,
+            occurred_at=datetime.now(timezone.utc).isoformat(),
+            tool_calls=tool_calls, context_bytes=context_bytes,
+            input_tokens=input_tokens, output_tokens=output_tokens,
+            provider=provider, model=model, tool_id=tool_id, status=status,
+            metadata=metadata, limits=limits, enforce_limits=enforce_limits,
+        )
+
+    def assert_model_budget_available(self, run_id: str) -> None:
+        current = self.usage(run_id)
+        if current["inputTokens"] >= self.budget.max_input_tokens:
+            raise HarnessBudgetExceeded("run input token budget is exhausted")
+        if current["outputTokens"] >= self.budget.max_output_tokens:
+            raise HarnessBudgetExceeded("run output token budget is exhausted")
+
+    def record_model_usage(
+        self, run_id: str, *, input_tokens: int = 0, output_tokens: int = 0,
+        task_id: str = "unknown-task", provider: str | None = None,
+        model: str | None = None, response_id: str | None = None,
+        latency_ms: int | None = None,
+    ) -> None:
         if input_tokens < 0 or output_tokens < 0:
             raise ValueError("token usage must be non-negative")
+        if self.usage_store is not None:
+            recorded = self._record_usage(
+                run_id=run_id, task_id=task_id, event_type="model.usage",
+                input_tokens=input_tokens, output_tokens=output_tokens,
+                provider=provider, model=model,
+                metadata={"responseId": response_id, "latencyMs": latency_ms},
+                limits={"inputTokens": self.budget.max_input_tokens,
+                        "outputTokens": self.budget.max_output_tokens},
+                enforce_limits=False,
+            )
+            usage = recorded.get("usage", {})
+            if usage.get("inputTokens", 0) > self.budget.max_input_tokens:
+                raise HarnessBudgetExceeded("run input token budget exceeded after recording actual usage")
+            if usage.get("outputTokens", 0) > self.budget.max_output_tokens:
+                raise HarnessBudgetExceeded("run output token budget exceeded after recording actual usage")
+            return
         with self._lock:
             value = self._usage_for(run_id)
             if value.input_tokens + input_tokens > self.budget.max_input_tokens:
@@ -152,11 +209,20 @@ class HarnessRuntime:
         size = len(payload.encode("utf-8"))
         if size > self.budget.max_context_bytes:
             raise HarnessBudgetExceeded("assembled context exceeds byte budget")
-        with self._lock:
-            usage = self._usage_for(run_id)
-            if usage.context_bytes + size > self.budget.max_context_bytes:
+        if self.usage_store is not None:
+            recorded = self._record_usage(
+                run_id=run_id, task_id=task_id, event_type="context.assembled",
+                context_bytes=size, limits={"contextBytes": self.budget.max_context_bytes},
+                enforce_limits=True, metadata={"roleId": principal.role_id},
+            )
+            if not recorded.get("allowed"):
                 raise HarnessBudgetExceeded("run context byte budget exceeded")
-            usage.context_bytes += size
+        else:
+            with self._lock:
+                usage = self._usage_for(run_id)
+                if usage.context_bytes + size > self.budget.max_context_bytes:
+                    raise HarnessBudgetExceeded("run context byte budget exceeded")
+                usage.context_bytes += size
         return HarnessContext(run_id, task_id, principal.role_id, fields, refs, size)
 
     def invoke_tool(
@@ -192,8 +258,19 @@ class HarnessRuntime:
                 usage = self._usage_for(run_id)
                 if usage.tool_calls >= self.budget.max_tool_calls:
                     status = "budget_exceeded"
-                    raise HarnessBudgetExceeded("tool call budget exceeded")
-                usage.tool_calls += 1
+                    raise HarnessBudgetExceeded("per-Agent tool call budget exceeded")
+            if self.usage_store is not None:
+                recorded = self._record_usage(
+                    run_id=run_id, task_id=task_id, event_type="tool.invoked",
+                    tool_calls=1, tool_id=tool_id,
+                    limits={"toolCalls": self.budget.max_run_tool_calls},
+                    enforce_limits=True, metadata={"roleId": principal.role_id},
+                )
+                if not recorded.get("allowed"):
+                    status = "budget_exceeded"
+                    raise HarnessBudgetExceeded("Workflow Run tool call budget exceeded")
+            with self._lock:
+                self._usage_for(run_id).tool_calls += 1
             result = self.tool_registry.invoke(
                 principal.role_id, tool_id, payload, approval_granted=approved
             )
@@ -224,6 +301,7 @@ class HarnessRuntime:
                 "principalId": principal.principal_id,
                 "roleId": principal.role_id,
                 "toolId": tool_id,
+                "policyVersion": self.policy_version,
                 "status": status,
                 "approvalRef": approval_ref if approved else None,
                 "durationMs": elapsed_ms,
