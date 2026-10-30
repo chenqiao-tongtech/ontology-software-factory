@@ -100,9 +100,15 @@ def validate_role_ontology_contract(role: dict[str, Any], binding: dict[str, Any
             )
 
 
-def _validate_schema(instance: dict, schema_path: Path, label: str) -> None:
+def _validate_schema(instance: dict, schema_path: Path, label: str, ontology_classes: set[str] | None = None) -> None:
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        if ontology_classes is not None:
+            if label == "Agent Task":
+                schema["properties"]["inputs"]["items"]["properties"]["entityType"]["enum"] = sorted(ontology_classes)
+                schema["properties"]["expectedOutputEntityTypes"]["items"]["enum"] = sorted(ontology_classes)
+            elif label == "Agent Result":
+                schema["properties"]["outputs"]["items"]["properties"]["entityType"]["enum"] = sorted(ontology_classes)
         Draft202012Validator.check_schema(schema)
         errors = sorted(
             Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(instance),
@@ -197,7 +203,7 @@ def build_agent_task_contract(
         allowed_types=set(role["inputEntityTypes"]),
         label="Agent Task",
     )
-    _validate_schema(contract, Path(project_root) / "contracts/schemas/agent-task.schema.json", "Agent Task")
+    _validate_schema(contract, Path(project_root) / "contracts/schemas/agent-task.schema.json", "Agent Task", _class_names(verified["ontology"]))
     return contract
 
 
@@ -210,7 +216,7 @@ def validate_agent_task_contract(
 ) -> None:
     verified = validate_ontology_binding(binding)
     validate_role_ontology_contract(role, verified)
-    _validate_schema(contract, Path(project_root) / "contracts/schemas/agent-task.schema.json", "Agent Task")
+    _validate_schema(contract, Path(project_root) / "contracts/schemas/agent-task.schema.json", "Agent Task", _class_names(verified["ontology"]))
     expected = {
         "roleId": role["roleId"],
         "ontologyVersion": verified["ontologyVersion"],
@@ -240,3 +246,79 @@ def validate_agent_output(
         allowed_types=set(role["outputEntityTypes"]),
         label="Agent output",
     )
+
+def build_agent_result_contract(
+    project_root: str | Path,
+    *,
+    task_contract: dict[str, Any],
+    role: dict[str, Any],
+    binding: dict[str, Any],
+    output: dict[str, Any],
+    evidence: list[dict[str, Any]],
+    artifact_uri: str,
+    completed_at: str,
+    status: str = "succeeded",
+) -> dict[str, Any]:
+    """Build and validate the semantic result envelope persisted with every Agent stage."""
+    verified = validate_ontology_binding(binding)
+    validate_role_ontology_contract(role, verified)
+    summary = output.get("summary")
+    if not isinstance(summary, str) or not summary.strip():
+        summary = f"{role.get('displayName', role['roleId'])} returned typed structured output"
+    result = {
+        "taskId": task_contract["taskId"],
+        "roleId": role["roleId"],
+        "ontologyVersion": verified["ontologyVersion"],
+        "ontologySnapshotId": verified["snapshotId"],
+        "ontologyDigest": verified["digest"],
+        "ontologySchemaVersion": verified["schemaVersion"],
+        "status": status,
+        "summary": summary[:2000],
+        "outputs": [{
+            "entityId": f"sf:artifact:{task_contract['taskId'].removeprefix('sf:task:')}.{entity_type.lower()}",
+            "entityType": entity_type,
+            "schemaVersion": verified["schemaVersion"],
+            "uri": artifact_uri,
+        } for entity_type in role["outputEntityTypes"]],
+        "evidenceRefs": [{
+            "evidenceType": "artifact_digest",
+            "refId": str(item.get("uri", "")),
+            "summary": f"{item.get('type', 'evidence')} SHA-256 {item.get('sha256', '')}",
+        } for item in evidence if item.get("uri")],
+        "humanReviewRequired": True,
+        "errors": [],
+        "completedAt": completed_at,
+    }
+    _validate_schema(
+        result, Path(project_root) / "contracts/schemas/agent-result.schema.json",
+        "Agent Result", _class_names(verified["ontology"]),
+    )
+    return result
+
+
+def validate_agent_result_contract(
+    project_root: str | Path,
+    contract: dict[str, Any],
+    *,
+    role: dict[str, Any],
+    binding: dict[str, Any],
+) -> None:
+    verified = validate_ontology_binding(binding)
+    validate_role_ontology_contract(role, verified)
+    _validate_schema(
+        contract, Path(project_root) / "contracts/schemas/agent-result.schema.json",
+        "Agent Result", _class_names(verified["ontology"]),
+    )
+    expected = {
+        "roleId": role["roleId"],
+        "ontologyVersion": verified["ontologyVersion"],
+        "ontologySnapshotId": verified["snapshotId"],
+        "ontologyDigest": verified["digest"],
+        "ontologySchemaVersion": verified["schemaVersion"],
+    }
+    for key, value in expected.items():
+        if contract.get(key) != value:
+            raise OntologyBindingError(f"Agent Result does not match pinned runtime context: {key}")
+    actual = {item.get("entityType") for item in contract.get("outputs", []) if isinstance(item, dict)}
+    if actual != set(role["outputEntityTypes"]):
+        raise OntologyBindingError("Agent Result output entity types do not match the Role contract")
