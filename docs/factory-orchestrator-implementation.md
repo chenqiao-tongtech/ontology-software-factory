@@ -1,7 +1,7 @@
-# Factory Orchestrator and Modular Ontology: implementation increment 2
+# Factory Orchestrator and Modular Ontology: implementation increment 3
 
 **Date:** 2026-10-30  
-**Status:** validated plan intake and immutable Workflow Run persistence are implemented; assignment-level Worker task instantiation remains pending.
+**Status:** validated plan intake, dependency-aware Assignment dispatch and Agent Worker execution are implemented; durable Workflow-level result projection and Harness-wide tool mediation remain pending.
 
 ## Delivered
 
@@ -21,6 +21,16 @@
 - Repeated submission of the same `planId` and identical payload is idempotent. Reusing the ID with a different Run or payload is rejected.
 - Added `POST /api/runs/{runId}/orchestrator-plan`; `GET /api/runs/{runId}` now includes `orchestratorPlans`.
 - Added tests for valid persistence, Run/ontology mismatch, idempotent replay and plan-ID payload conflicts.
+
+### Assignment dispatch and Worker execution
+
+- Added `FactoryPlanDispatcher` to instantiate plan Assignments as idempotent `agent.factory-assignment` Worker tasks.
+- The dispatcher checks the Workflow Run binding, immutable Role/Skill lock, plan approval requirement, Phase dependency completion and `maxParallelAssignments` before enqueueing work.
+- Added `FactoryAssignmentHandler`, which validates the pinned Role, selected Skill, Agent Task contract and assignment output entity types; invokes the Agent Runtime with only the assigned Skill instructions; and writes output artifacts, an Agent Result contract and SHA-256 evidence.
+- Added `additional_role_ids` support to the Workflow Run Role/Skill lock builder. The real Agent console locks all registered team Roles at Run creation so later plan assignments cannot silently pick up changed Role/Skill definitions.
+- Added `POST /api/runs/{runId}/orchestrator-plan/dispatch`. Run detail includes a derived `factoryPlanExecutions` view with Phase/Assignment status, task IDs, outputs and evidence references.
+- High/critical plans or any plan with `requiresHumanApproval=true` are not dispatched by this endpoint. A separate independent approval workflow is still required before such plans can execute.
+- Existing fixed-stage Agent Proposal workflow and its outbox/inbox path remain unchanged.
 
 ### Ontology module baseline
 
@@ -45,7 +55,7 @@ make test
 
 ## Explicit implementation boundaries
 
-The `factory-orchestrator` Agent Role is not yet automatically invoked by the workflow console. The current increment provides an API intake path for a submitted plan and persists the validated plan with the Workflow Run. It does **not** yet instantiate assignment-level Worker tasks, schedule phase dependencies, execute dynamically selected Roles/Skills, or replace the existing fixed agent-proposal stage sequence. Plan submission is a recorded planning artifact; it is not an approval or authorization to execute.
+The `factory-orchestrator` Agent Role is not yet automatically invoked to produce a plan. A submitted plan can now instantiate Assignment Worker tasks through an explicit dispatch API. The dispatcher derives Phase progress from Worker task records; this progress is not yet a separate Workflow Engine state machine, and Assignment result events are not yet projected into the Workflow event ledger. Multi-process scheduling coordination, automated plan generation, independent approval records and Harness-wide tool-call mediation remain pending. Plan submission is a recorded planning artifact; it is not an approval or authorization to execute.
 
 The ontology module manifest is not yet a module package manager. It does not independently publish module releases, resolve external module dependencies, migrate instances or update a graph database. Existing ontology snapshots, digest approvals and consumer-impact analysis remain the operational governance mechanisms.
 
