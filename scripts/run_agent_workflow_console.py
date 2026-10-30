@@ -16,6 +16,9 @@ if str(ROOT / "src") not in sys.path:
 
 from ontology_software_factory.agent_runtime import OpenAIAgentsRuntime  # noqa: E402
 from ontology_software_factory.agent_workflow import AgentWorkflowStepHandler  # noqa: E402
+from ontology_software_factory.factory_plan_runtime import (  # noqa: E402
+    FactoryAssignmentHandler, FactoryPlanDispatcher, get_factory_plan_execution,
+)
 from ontology_software_factory.integration import WorkflowOutboxRelay, enqueue_workflow_step  # noqa: E402
 from ontology_software_factory.task_runtime import IdempotencyConflict, SQLiteTaskStore, TaskWorker  # noqa: E402
 from ontology_software_factory.workflow_engine import WorkflowEngine, WorkflowError  # noqa: E402
@@ -39,6 +42,7 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
     task_store: SQLiteTaskStore
     worker: TaskWorker
     relay: WorkflowOutboxRelay
+    plan_dispatcher: FactoryPlanDispatcher
     static_path: Path
     input_root: Path
 
@@ -96,7 +100,12 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/runs/"):
             run_id = unquote(path.removeprefix("/api/runs/"))
             try:
-                self._json(200, self.engine.get_run_detail(run_id))
+                detail = self.engine.get_run_detail(run_id)
+                detail["factoryPlanExecutions"] = [
+                    get_factory_plan_execution(self.task_store, item)
+                    for item in detail.get("orchestratorPlans", [])
+                ]
+                self._json(200, detail)
             except WorkflowError as exc:
                 self._json(exc.status_code, {"error": str(exc)})
             return
@@ -129,7 +138,11 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                 # Resolve the approved active ontology once, then persist the full immutable
                 # snapshot with the workflow run so later promotions cannot change in-flight work.
                 binding = load_active_ontology_binding(ROOT)
-                runtime_contract_lock = build_runtime_contract_lock(ROOT, load_definition(), binding)
+                team = json.loads((ROOT / "agents/teams/software-factory-mvp.json").read_text(encoding="utf-8"))
+    additional_roles = [item["roleId"] for item in team.get("registeredRoles", [])]
+    runtime_contract_lock = build_runtime_contract_lock(
+        ROOT, load_definition(), binding, additional_role_ids=additional_roles
+    )
                 run = self.engine.create_run(
                     str(body.get("title", "真实多 Agent 软件提案")),
                     str(body.get("requestedBy", "local-operator")), "review",
@@ -150,6 +163,18 @@ class AgentWorkflowConsoleHandler(BaseHTTPRequestHandler):
                     run_id, plan, actor=str(body.get("actor", "factory-orchestrator"))
                 )
                 self._json(201 if result["created"] else 200, result)
+                return
+            if path.endswith("/orchestrator-plan/dispatch") and path.startswith("/api/runs/"):
+                run_id = unquote(path[len("/api/runs/"):-len("/orchestrator-plan/dispatch")].strip("/"))
+                run = self.engine.get_run(run_id)
+                plan_id = str(body.get("planId", ""))
+                detail = self.engine.get_run_detail(run_id)
+                plan_record = next((item for item in detail["orchestratorPlans"] if item["planId"] == plan_id), None)
+                if plan_record is None:
+                    self._json(404, {"error": "orchestrator plan not found"})
+                    return
+                result = self.plan_dispatcher.dispatch_ready(run, plan_record)
+                self._json(200, result)
                 return
             if path.endswith("/dispatch") and path.startswith("/api/runs/"):
                 run_id = unquote(path[len("/api/runs/"):-len("/dispatch")].strip("/"))
@@ -214,6 +239,9 @@ def main() -> int:
     step_handler = AgentWorkflowStepHandler(runtime, artifact_root=artifact_root)
     handlers = {f"agent.workflow-step.{step_id}": step_handler
                 for step_id in AgentWorkflowStepHandler.STAGE_TO_ROLE}
+    handlers["agent.factory-assignment"] = FactoryAssignmentHandler(
+        runtime, artifact_root=artifact_root / "factory-plans"
+    )
     worker = TaskWorker(task_store, handlers, worker_id="real-agent-worker", lease_seconds=120)
     relay = WorkflowOutboxRelay(task_store, engine, relay_id="real-agent-relay")
     AgentWorkflowConsoleHandler.engine = engine
@@ -221,6 +249,9 @@ def main() -> int:
     AgentWorkflowConsoleHandler.task_store = task_store
     AgentWorkflowConsoleHandler.worker = worker
     AgentWorkflowConsoleHandler.relay = relay
+    AgentWorkflowConsoleHandler.plan_dispatcher = FactoryPlanDispatcher(
+        task_store, project_root=ROOT
+    )
     AgentWorkflowConsoleHandler.static_path = ROOT / "apps" / "agent-workflow-console" / "index.html"
     AgentWorkflowConsoleHandler.input_root = ROOT / "data" / "real-agent-workflow" / "inputs"
     server = ThreadingHTTPServer((args.host, args.port), AgentWorkflowConsoleHandler)
