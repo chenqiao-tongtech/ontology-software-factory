@@ -193,6 +193,27 @@ class WorkflowEngine:
             raise WorkflowError("Factory Assignment event does not match the persisted plan", 409)
         if assignment.get("roleId") != payload.get("roleId") or assignment.get("skillId") != payload.get("skillId"):
             raise WorkflowError("Factory Assignment event Role/Skill does not match the persisted plan", 409)
+        phase_state = next(
+            (item for item in self.store.list_factory_plan_phases(run_id, plan_id)
+             if item["phaseId"] == str(payload.get("factoryPhaseId"))),
+            None,
+        )
+        phase_attempt = int(payload.get("factoryPhaseAttempt", 1))
+        if phase_state is None:
+            raise WorkflowError("Factory Assignment event references an unknown Phase state", 409)
+        if phase_attempt != int(phase_state["attempt"]):
+            ignored = self._event(
+                "factory.assignment.stale_attempt_ignored", "",
+                actor="factory-assignment-projector",
+                payload={"planId": plan_id, "phaseId": phase_state["phaseId"],
+                         "assignmentId": assignment_id, "taskId": task_id,
+                         "eventAttempt": phase_attempt, "currentAttempt": phase_state["attempt"]},
+            )
+            self.store.record_ignored_integration_event(
+                run_id, ignored, event_id, "Factory Assignment result belongs to a superseded Phase attempt"
+            )
+            return {"run": self.get_run(run_id), "deduplicated": False, "ignored": True,
+                    "reason": "stale_phase_attempt"}
         task_status = str(payload.get("taskStatus", ""))
         if task_status not in {"succeeded", "failed", "dead_letter"}:
             raise WorkflowError("Factory Assignment event status is not terminal", 400)
@@ -213,7 +234,7 @@ class WorkflowEngine:
                 "evidenceTypes": sorted({str(item.get("type")) for item in evidence if isinstance(item, dict)}),
                 "artifactUri": output.get("artifactUri"),
                 "artifactSha256": output.get("artifactSha256"),
-                "errorClass": error["errorClass"],
+                "errorClass": error["errorClass"], "phaseAttempt": phase_attempt,
             },
         )
         try:
@@ -221,6 +242,7 @@ class WorkflowEngine:
                 run_id=run_id, plan_id=plan_id, assignment_id=assignment_id,
                 task_id=task_id, status=task_status, output=output, evidence=evidence,
                 error=error, event_id=event_id, event=event,
+                phase_attempt=phase_attempt,
             )
         except ValueError as exc:
             raise WorkflowError(str(exc), 409) from exc
