@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0.0",
+  "purpose": "Defines the repository fields that are authoritative typed references from runtime consumers to ontology classes and to other consumers.",
+  "roleGlob": "agents/roles/*.json",
+  "skillGlob": "skills/*/skill.json",
+  "workflowGlob": "workflows/definitions/*.json",
+  "toolCatalog": "agents/tool-catalog.json",
+  "contractFiles": [
+    "contracts/schemas/agent-task.schema.json",
+    "contracts/schemas/agent-result.schema.json"
+  ],
+  "classReferenceFields": [
+    "inputEntityTypes",
+    "outputEntityTypes"
+  ],
+  "dependencyFields": {
+    "roleSkills": "skillIds",
+    "roleTools": "toolIds",
+    "skillCompatibleRoles": "compatibleRoleIds",
+    "skillTools": "requiredToolIds",
+    "workflowRole": "roleId",
+    "workflowSkill": "skillId"
+  },
+  "contractReferenceRule": "Traverse JSON Schema enum values and link exact values matching formal ontology class names."
+}
