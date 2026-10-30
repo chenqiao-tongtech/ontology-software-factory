@@ -166,6 +166,9 @@ class FactoryPlanDispatcher:
         assignment_count = sum(len(item["assignments"]) for item in plan["phases"])
         per_assignment_tool_budget = max(1, int(plan["limits"]["maxToolCalls"]) // max(1, assignment_count))
         for phase in plan["phases"]:
+            current_phase_status = phase_status.get(phase["phaseId"], "pending")
+            if current_phase_status in {"succeeded", "failed"}:
+                continue
             if not all(phase_status.get(dep) == "succeeded" for dep in phase["dependsOn"]):
                 blocked.append(phase["phaseId"])
                 continue
