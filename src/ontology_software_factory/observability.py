@@ -69,6 +69,7 @@ def build_platform_observability_report(
     runs_root: str | Path,
     portal_state: dict[str, Any],
     rates_path: str | Path | None = None,
+    agent_workflow_db: str | Path | None = None,
 ) -> dict[str, Any]:
     """Combine pipeline run records with sanitized local Portal/Agent state.
 
@@ -121,8 +122,13 @@ def build_platform_observability_report(
                 "summary": event.get("summary"),
             })
 
+    from .runtime_observability import read_agent_workflow_store
+    real_agent_workflow = read_agent_workflow_store(agent_workflow_db) if agent_workflow_db else {
+        "available": False, "sourceMode": "read-only-sqlite", "reason": "database path not configured"
+    }
     report["platform"] = {
         "mode": "local-reference-portal",
+        "realAgentWorkflow": real_agent_workflow,
         "agentRuns": {
             "total": len(agent_runs),
             "byStatus": run_status_counts,
