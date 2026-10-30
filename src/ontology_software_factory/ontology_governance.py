@@ -102,7 +102,10 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
         if edge not in edges:
             edges.append(edge)
 
-    for path in sorted(root.glob(str(mapping["roleGlob"]))):
+    role_paths = sorted(root.glob(str(mapping["roleGlob"])))
+    if not role_paths:
+        issues.append({"code": "consumer-source-files-not-found", "source": mapping["roleGlob"]})
+    for path in role_paths:
         data = _read_json(path)
         role_id = str(data.get("roleId", ""))
         if not role_id:
@@ -122,7 +125,10 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
         for tool_id in data.get(role_tool_field, []):
             add_edge(node_id, "tool:" + str(tool_id), "uses-tool")
 
-    for path in sorted(root.glob(str(mapping["skillGlob"]))):
+    skill_paths = sorted(root.glob(str(mapping["skillGlob"])))
+    if not skill_paths:
+        issues.append({"code": "consumer-source-files-not-found", "source": mapping["skillGlob"]})
+    for path in skill_paths:
         data = _read_json(path)
         skill_id = str(data.get("skillId", ""))
         if not skill_id:
@@ -144,7 +150,10 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
         for tool_id in data.get(skill_tool_field, []):
             add_edge(node_id, "tool:" + str(tool_id), "requires-tool")
 
-    for path in sorted(root.glob(str(mapping["workflowGlob"]))):
+    workflow_paths = sorted(root.glob(str(mapping["workflowGlob"])))
+    if not workflow_paths:
+        issues.append({"code": "consumer-source-files-not-found", "source": mapping["workflowGlob"]})
+    for path in workflow_paths:
         data = _read_json(path)
         workflow_id = str(data.get("id", path.stem))
         workflow_node = "workflow:" + workflow_id
@@ -173,6 +182,8 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
 
     tool_path = root / str(mapping["toolCatalog"])
     tool_data = _read_json(tool_path)
+    if not tool_data:
+        issues.append({"code": "consumer-source-file-missing-or-invalid", "source": str(mapping["toolCatalog"])})
     for item in tool_data.get("tools", []):
         tool_id = str(item.get("toolId", ""))
         if tool_id:
@@ -188,6 +199,8 @@ def build_consumer_graph(root: Path, ontology: dict, reference_map: dict | None 
     for rel in mapping.get("contractFiles", []):
         path = root / str(rel)
         data = _read_json(path)
+        if not data:
+            issues.append({"code": "consumer-source-file-missing-or-invalid", "source": str(rel)})
         node_id = "contract:" + path.stem
         add_node(node_id, "json-contract", data.get("title", path.stem), str(rel))
         for value in sorted({str(x) for x in _walk_enums(data) if str(x) in classes}):
