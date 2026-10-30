@@ -98,7 +98,7 @@ class AgentWorkflowTests(unittest.TestCase):
             self.assertTrue(all(call[3]["skillRefs"] and all(len(ref["digest"]) == 64 for ref in call[3]["skillRefs"]) for call in runtime.calls))
             self.assertTrue(list(artifacts.rglob("evidence/*.json")))
             self.assertEqual(len(list(artifacts.rglob("agent-result.json"))), 5)
-            first_result = json.loads(next(artifacts.rglob("agent-result.json")).read_text(encoding="utf-8"))
+            first_result = json.loads((artifacts / run["id"] / "requirement-analysis" / "workflow-attempt-1" / "worker-attempt-1" / "agent-result.json").read_text(encoding="utf-8"))
             self.assertEqual(first_result["ontologySnapshotId"], binding["snapshotId"])
             self.assertEqual(first_result["skillRefs"], runtime.calls[0][3]["skillRefs"])
             self.assertTrue(list(artifacts.rglob("proposed_changes/src/generated_demo.py")))
@@ -146,20 +146,20 @@ class AgentWorkflowTests(unittest.TestCase):
             binding = create_snapshot(ontology, actor="test", reason="security block fixture")
             requirement = {"workflowRunId": "run-test", "workflowStepId": "requirement-analysis", "workflowAttempt": 1,
                            "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
-            handler(requirement, TaskContext("t1", "k1", "w", 1, 9999999999, ("normalized-requirement",)))
+            handler(requirement, TaskContext("t1", "workflow-key-1", "w", 1, 9999999999, ("normalized-requirement",)))
             architecture = {"workflowRunId": "run-test", "workflowStepId": "architecture-design", "workflowAttempt": 1,
                             "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
-            handler(architecture, TaskContext("t2", "k2", "w", 1, 9999999999, ("architecture-decision-record", "interface-contract")))
+            handler(architecture, TaskContext("t2", "workflow-key-2", "w", 1, 9999999999, ("architecture-decision-record", "interface-contract")))
             implementation = {"workflowRunId": "run-test", "workflowStepId": "implementation-proposal", "workflowAttempt": 1,
                               "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
-            handler(implementation, TaskContext("t3", "k3", "w", 1, 9999999999, ("candidate-change-set", "change-summary")))
+            handler(implementation, TaskContext("t3", "workflow-key-3", "w", 1, 9999999999, ("candidate-change-set", "change-summary")))
             test = {"workflowRunId": "run-test", "workflowStepId": "test-strategy", "workflowAttempt": 1,
                     "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
-            handler(test, TaskContext("t4", "k4", "w", 1, 9999999999, ("test-strategy",)))
+            handler(test, TaskContext("t4", "workflow-key-4", "w", 1, 9999999999, ("test-strategy",)))
             security = {"workflowRunId": "run-test", "workflowStepId": "security-review", "workflowAttempt": 1,
                         "ontologyBinding": binding, "input": {"requirement": "Build a tiny app"}}
             with self.assertRaises(PermanentTaskError):
-                handler(security, TaskContext("t5", "k5", "w", 1, 9999999999, ("security-review-summary", "evidence-gaps")))
+                handler(security, TaskContext("t5", "workflow-key-5", "w", 1, 9999999999, ("security-review-summary", "evidence-gaps")))
 
 
 if __name__ == "__main__":
