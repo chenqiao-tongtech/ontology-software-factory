@@ -88,6 +88,14 @@ class FactoryPortalServiceTests(unittest.TestCase):
         self.assertIn("SOURCE PROVENANCE", html)
         self.assertIn("REGISTERED CONSUMERS", html)
 
+    def test_portal_exposes_explicit_llm_discovery_and_digest_review(self):
+        html = portal.APP.read_text(encoding="utf-8")
+        self.assertIn('id="discoverOntologyLLM"', html)
+        self.assertIn("/api/ontology/discover-llm", html)
+        self.assertIn("candidateDigest", html)
+        self.assertIn("approvalRef", html)
+        self.assertIn("查看结构化结果", html)
+
     def test_formal_ontology_graph_has_resolvable_endpoints(self):
         graph = portal.load_ontology()
         names = {node["name"] for node in graph["classes"]}
