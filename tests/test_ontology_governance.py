@@ -22,6 +22,7 @@ class OntologyGovernanceTests(unittest.TestCase):
         self.ontology = {
             "ontologyId": "test",
             "ontologyVersion": "1.0.0",
+            "schemaVersion": "1.0.0",
             "classes": [{"name": "Requirement"}, {"name": "Artifact"}, {"name": "Build"}],
             "relations": [{"name": "produces", "source": "Build", "target": "Artifact", "field": "artifactIds", "cardinality": "0..*"}],
             "controlledVocabularies": {"status": ["draft", "active"]},
