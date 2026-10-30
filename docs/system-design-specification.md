@@ -3,7 +3,7 @@
 | 文档属性 | 内容 |
 |---|---|
 | 文档编号 | OSF-SDS-001 |
-| 文档版本 | 1.7 |
+| 文档版本 | 1.8 |
 | 基线日期 | 2026-10-30 |
 | 适用系统 | ontology-software-factory |
 | 基线分支 | main |
@@ -515,7 +515,7 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 | 4 | 本体发现连接器扩展 | 已支持 OpenAPI/AsyncAPI JSON、GraphQL SDL、Protobuf、dbt manifest/catalog 和 Schema Registry JSON 导出；继续接入文档 SaaS、实时 Schema Registry、数据目录和运维元数据 | Connector Runtime 与 Source Evidence 模型 |
 | 5 | Agent Tools 扩展 | 本体查询、代码分析、依赖分析、测试、扫描、制品和工单工具 | Harness Tool Gateway 与独立权限 |
 | 6 | 统一监控台 | Agent/Skill/Tool/Connector/Workflow Trace、证据导航、成本、告警和运行控制 | 统一事件与 Trace 关联模型 |
-| 7 | Factory Orchestrator 与本体模块治理 | 主控 Agent 生成计划、确定性校验、不可变计划持久化、独立审批记录、依赖感知 Assignment 调度、持久化 Phase 状态、Agent Worker 执行、事务 Outbox/Inbox 结果回写、本体模块清单 | Phase 级人工重试、计划取消传播、跨进程调度协调仍待完善；模块清单仍基于单一权威本体 JSON |
+| 7 | Factory Orchestrator 与本体模块治理 | 主控 Agent 生成计划、确定性校验、不可变计划持久化、独立审批记录、依赖感知 Assignment 调度、持久化 Phase 状态、三次上限的人工 Phase 重试、attempt 隔离与迟到结果抑制、Agent Worker 执行、事务 Outbox/Inbox 结果回写、本体模块清单 | 计划取消传播、跨进程调度协调仍待完善；模块清单仍基于单一权威本体 JSON |
 
 每个方向均需交付代码、Schema、单元与集成测试、运行说明、依赖更新、权限矩阵、监控指标和验收报告。跨模块能力按 ADR 管理。
 
@@ -565,3 +565,4 @@ LLM、Git、数据库和外部本体服务调用会产生网络及数据处理�
 | 1.5 | 2026-10-30 | 增加 Factory Assignment 结果事务 Outbox/Inbox 投影、Workflow 事件账本与 Assignment 结果持久化；独立 Phase 状态机和 Harness 全量工具中介仍待完成 |
 | 1.6 | 2026-10-30 | OpenAI Agents Runtime 注册工具接入 Harness Tool Gateway，增加策略矩阵交集、工具 Schema 校验、单次 Agent 任务工具预算、Kill Switch 和元数据审计；跨 Provider/Connector 中介、Token 计量和持久化预算仍待完成 |
 | 1.7 | 2026-10-30 | 增加主控 Agent 真实计划生成 API、独立 Plan 审批记录、持久化 Phase 状态与事件、Run 级 Harness 工具/上下文/Token 使用量账本、工具策略版本及摘要锁；企业身份、分布式预算和跨 Provider/Connector 中介仍待完成 |
+| 1.8 | 2026-10-30 | 增加失败 Phase 独立授权重试、最多三次 Phase attempt、attempt 专属 Worker 幂等键与制品目录、迟到 attempt 结果抑制；计划取消传播和跨进程调度仍待完成 |
