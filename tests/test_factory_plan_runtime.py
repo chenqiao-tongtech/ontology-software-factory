@@ -70,6 +70,10 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         }
         self.plan["riskAssessment"]["requiresHumanApproval"] = False
         self.plan_record = self.engine.submit_factory_orchestrator_plan(self.run["id"], self.plan)["plan"]
+        self.engine.decide_factory_orchestrator_plan(
+            self.run["id"], self.plan["planId"], "approved",
+            actor="test-reviewer", reason="Test fixture approval",
+        )
         self.dispatcher = FactoryPlanDispatcher(self.task_store, project_root=ROOT)
 
     def tearDown(self):
@@ -80,6 +84,8 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         first = self.dispatcher.dispatch_ready(self.run, self.plan_record)
         self.assertEqual([item["assignmentId"] for item in first["enqueued"]], ["analyze-requirement"])
         self.assertEqual(first["execution"]["phases"][0]["status"], "running")
+        persisted = self.workflow_store.list_factory_plan_phases(self.run["id"], self.plan["planId"])
+        self.assertEqual(persisted[0]["status"], "running")
         self.assertEqual(first["execution"]["phases"][1]["status"], "pending")
         self.assertEqual(len(self.task_store.list_tasks()), 1)
 
@@ -139,6 +145,10 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         execution = get_factory_plan_execution(self.task_store, self.plan_record)
         self.assertEqual(execution["completedAssignments"], 1)
         self.assertEqual(execution["phases"][0]["status"], "succeeded")
+        self.assertEqual(
+            self.workflow_store.list_factory_plan_phases(self.run["id"], self.plan["planId"])[0]["status"],
+            "succeeded",
+        )
         self.assertTrue(list((Path(self.temp.name) / "artifacts").rglob("agent-result.json")))
 
 
