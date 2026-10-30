@@ -377,4 +377,8 @@ python scripts/run_ontology_discovery.py \
 
 本轮本体版本快照、结构差异与影响分析说明见 [Ontology Versioning and Impact Analysis](docs/2026-10-30-ontology-versioning-and-impact-analysis.md)。
 
+本轮消费者依赖图、兼容性门禁与受控版本治理说明见 [Ontology Dependency and Governance](docs/2026-10-30-ontology-dependency-and-governance.md)。
+
+`make validate` 现额外执行 `scripts/validate_ontology_consumers.py`，验证 Agent Role、Skill、Workflow、Tool 和契约中的本体引用。
+
 **验收原则：** 只有当真实执行结果、退出码、日志、摘要与必需证据齐全时，才将相应任务标记为 `PASS`。模型生成的自然语言总结、fixture 结果或设计文档本身，都不能替代真实构建、测试、安全扫描和部署证据。
