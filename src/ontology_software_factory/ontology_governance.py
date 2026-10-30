@@ -307,7 +307,8 @@ def compatibility_report(before: dict, after: dict) -> dict:
         review.append({"kind": "schema-version-changed", "from": old_schema, "to": new_schema})
     if schema_major_bump:
         breaking.append({"kind": "schema-major-version-changed", "from": old_schema, "to": new_schema})
-    if breaking and not major_bump:
+    major_version_bump_required = bool(breaking and not major_bump)
+    if major_version_bump_required:
         review.append({"kind": "major-version-bump-required", "from": old_version, "to": new_version})
     if not ontology_version_valid or not schema_version_valid:
         review.append({"kind": "invalid-or-decreasing-semver", "from": old_version, "to": new_version,
@@ -322,6 +323,7 @@ def compatibility_report(before: dict, after: dict) -> dict:
         "breakingChanges": breaking,
         "reviewItems": review,
         "majorVersionBump": major_bump,
+        "majorVersionBumpRequired": major_version_bump_required,
         "ontologyMajorVersionBump": ontology_major_bump,
         "schemaMajorVersionBump": schema_major_bump,
         "schemaFromVersion": old_schema,
