@@ -112,6 +112,68 @@ class OntologyCriticSummary(StrictOutput):
     cannot_approve_or_publish: Literal[True] = True
 
 
+
+class PlanAssignment(StrictOutput):
+    assignmentId: str
+    roleId: str
+    skillId: str
+    objective: str
+    inputRefs: list[str]
+    outputEntityTypes: list[str]
+    acceptanceCriteria: list[str]
+
+
+class PlanPhase(StrictOutput):
+    phaseId: str
+    name: str
+    objective: str
+    dependsOn: list[str]
+    assignments: list[PlanAssignment]
+    acceptanceCriteria: list[str]
+
+
+class OntologyBindingRef(StrictOutput):
+    snapshotId: str
+    digest: str
+    ontologyId: str
+    ontologyVersion: str
+    schemaVersion: str
+
+
+class PlanLimits(StrictOutput):
+    maxAgentAssignments: int
+    maxParallelAssignments: int
+    maxRevisionLoops: int
+    maxToolCalls: int
+    timeoutSeconds: int
+
+
+class PlanRiskAssessment(StrictOutput):
+    level: Literal["low", "medium", "high", "critical"]
+    risks: list[str]
+    requiresHumanApproval: bool
+
+
+class PlanControlAssertions(StrictOutput):
+    mayChangeWorkflowState: Literal[False]
+    mayGrantPermissions: Literal[False]
+    mayApproveOwnPlan: Literal[False]
+    mayPublishOntology: Literal[False]
+
+
+class FactoryOrchestratorPlan(StrictOutput):
+    schemaVersion: Literal["1.0.0"]
+    planId: str
+    workflowRunId: str
+    objective: str
+    ontologyBinding: OntologyBindingRef
+    phases: list[PlanPhase]
+    limits: PlanLimits
+    riskAssessment: PlanRiskAssessment
+    humanEscalations: list[str]
+    controlAssertions: PlanControlAssertions
+
+
 OUTPUT_MODELS = {
     "requirement-analyst": RequirementBrief,
     "solution-architect": ArchitecturePlan,
@@ -120,4 +182,5 @@ OUTPUT_MODELS = {
     "security-reviewer": SecurityReview,
     "ontology-discovery-agent": OntologyDiscoverySummary,
     "ontology-critic-agent": OntologyCriticSummary,
+    "factory-orchestrator": FactoryOrchestratorPlan,
 }
