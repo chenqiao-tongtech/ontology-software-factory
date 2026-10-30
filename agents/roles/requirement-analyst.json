@@ -17,9 +17,11 @@
     "requirement-normalization"
   ],
   "toolIds": [
-    "documents.read",
     "catalog.read",
-    "contract.validate"
+    "contract.validate",
+    "documents.read",
+    "ontology.definition.read",
+    "source.catalog.read"
   ],
   "allowedActions": [
     "requirement.read",
