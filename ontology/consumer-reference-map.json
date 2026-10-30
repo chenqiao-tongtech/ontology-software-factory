@@ -21,5 +21,14 @@
     "workflowRole": "roleId",
     "workflowSkill": "skillId"
   },
-  "contractReferenceRule": "Traverse JSON Schema enum values and link exact values matching formal ontology class names."
+  "contractReferenceRule": "Traverse JSON Schema enum values and link exact values matching formal ontology class names.",
+  "contractEntityTypeEnumPointers": {
+    "contracts/schemas/agent-task.schema.json": [
+      "/properties/inputs/items/properties/entityType/enum",
+      "/properties/expectedOutputEntityTypes/items/enum"
+    ],
+    "contracts/schemas/agent-result.schema.json": [
+      "/properties/outputs/items/properties/entityType/enum"
+    ]
+  }
 }
