@@ -123,6 +123,8 @@ class FactoryPlanDispatcher:
         slots = max(0, int(plan["limits"]["maxParallelAssignments"]) - active_count)
         enqueued = []
         blocked = []
+        assignment_count = sum(len(item["assignments"]) for item in plan["phases"])
+        per_assignment_tool_budget = max(1, int(plan["limits"]["maxToolCalls"]) // max(1, assignment_count))
         for phase in plan["phases"]:
             if not all(phase_status.get(dep) == "succeeded" for dep in phase["dependsOn"]):
                 blocked.append(phase["phaseId"])
@@ -149,6 +151,7 @@ class FactoryPlanDispatcher:
                     "ontologyBinding": run["ontologyBinding"],
                     "runtimeContractLock": lock,
                     "timeoutSeconds": int(plan["limits"]["timeoutSeconds"]),
+                    "maxToolCalls": per_assignment_tool_budget,
                 }
                 task, duplicate = self.task_store.enqueue(
                     task_type="agent.factory-assignment", payload=payload, idempotency_key=key,
@@ -214,6 +217,7 @@ class FactoryAssignmentHandler:
                 timeout_seconds=int(payload.get("timeoutSeconds", 900)),
                 max_attempts=3, idempotency_key=context.idempotency_key,
                 output_entity_types=list(output_types),
+                max_tool_calls=int(payload.get("maxToolCalls", 50)),
             )
         except Exception as exc:
             raise PermanentTaskError(f"factory assignment contract rejected: {type(exc).__name__}") from exc
