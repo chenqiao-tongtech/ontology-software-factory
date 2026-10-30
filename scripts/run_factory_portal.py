@@ -23,7 +23,7 @@ import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
@@ -35,6 +35,7 @@ from ontology_software_factory.source_connectors import (
 )
 from ontology_software_factory.remote_connectors import RemoteRepositoryConnector
 from ontology_software_factory.database_connectors import PostgreSQLSchemaConnector, MySQLSchemaConnector
+from ontology_software_factory.ontology_versioning import create_snapshot, diff_snapshots, find_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps" / "factory-portal" / "index.html"
@@ -108,6 +109,7 @@ def ensure_state() -> dict:
         dump(STATE_PATH, state)
     # Additive state migration: preserve existing local portal data.
     state.setdefault("sourceSyncHistory", {})
+    state.setdefault("ontologySnapshots", [])
     return state
 
 
@@ -914,6 +916,18 @@ class PortalHandler(BaseHTTPRequestHandler):
         if path == "/api/health": return self._send_json(200, {"status": "ok", "mode": "local-reference-portal", "timestamp": now_iso()})
         if path == "/api/overview": return self._send_json(200, get_overview())
         if path == "/api/sources": return self._send_json(200, {"sources": source_scan_results()})
+        if path == "/api/ontology/versions":
+            snapshots = state_read().get("ontologySnapshots", [])
+            public = [{key: value for key, value in item.items() if key != "ontology"} for item in snapshots]
+            return self._send_json(200, {"snapshots": public, "currentDigest": __import__("ontology_software_factory.ontology_versioning", fromlist=["ontology_digest"]).ontology_digest(load_json(FORMAL_ONTOLOGY, {}))})
+        if path == "/api/ontology/diff":
+            params = parse_qs(urlparse(self.path).query)
+            from_id = (params.get("from") or [""])[0]
+            to_id = (params.get("to") or [""])[0]
+            snapshots = state_read().get("ontologySnapshots", [])
+            before = find_snapshot(snapshots, from_id)
+            after = find_snapshot(snapshots, to_id)
+            return self._send_json(200, diff_snapshots(before, after))
         if path == "/api/ontology":
             state = state_read()
             sources = source_configs()
@@ -988,6 +1002,26 @@ class PortalHandler(BaseHTTPRequestHandler):
                 sources = source_scan_results(force=True, allow_remote=True)
                 record_event("source.sync.completed", f"数据源同步完成：{sum(s['status']=='connected' for s in sources)}/{len(sources)} 可连接", {"count": len(sources)})
                 return self._send_json(200, {"sources": sources, "completedAt": now_iso()})
+            if path == "/api/ontology/versions/snapshot":
+                actor = str(body.get("actor", "")).strip()
+                reason = str(body.get("reason", "")).strip()
+                snapshot = create_snapshot(load_json(FORMAL_ONTOLOGY, {}), actor=actor, reason=reason)
+                created = True
+                def save_snapshot(st):
+                    nonlocal created, snapshot
+                    history = st.setdefault("ontologySnapshots", [])
+                    existing = next((item for item in history if item.get("digest") == snapshot["digest"]), None)
+                    if existing:
+                        snapshot = existing
+                        created = False
+                    else:
+                        history.insert(0, snapshot)
+                        del history[100:]
+                state_update(save_snapshot)
+                record_event("ontology.snapshot.created" if created else "ontology.snapshot.reused",
+                    f"正式本体快照{'已创建' if created else '已存在'}：{snapshot['snapshotId']}",
+                    {"snapshotId": snapshot["snapshotId"], "digest": snapshot["digest"]}, actor=actor)
+                return self._send_json(201 if created else 200, {"snapshot": {key: value for key, value in snapshot.items() if key != "ontology"}, "created": created})
             if path == "/api/ontology/discover": return self._send_json(201, {"candidate": discover_candidates()})
             if path == "/api/ontology/changes":
                 cid = str(body.get("candidateId", "")); decision = str(body.get("decision", "")); actor = str(body.get("actor", "")).strip(); notes = str(body.get("notes", "")).strip()
