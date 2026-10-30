@@ -130,6 +130,9 @@ class WorkspaceExecutionTests(unittest.TestCase):
             (host_evidence / "semgrep-report.json").write_text('{"results":[]}', encoding="utf-8")
             return Mock(returncode=0, stdout="scan complete")
         image = "registry.example/semgrep@sha256:" + "a" * 64
+        rules = self.project / "runners" / "container"
+        rules.mkdir(parents=True)
+        (rules / "semgrep-rules.yml").write_text("rules: []\\n", encoding="utf-8")
         with patch.dict(os.environ, {"FACTORY_ENABLE_CONTAINER_SECURITY_SCANS": "1",
                                      "FACTORY_SEMGREP_IMAGE": image}, clear=True):
             with patch("ontology_software_factory.workspace_execution.shutil.which", return_value="/usr/bin/docker"):
