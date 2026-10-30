@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextvars import ContextVar
 import logging
 import os
 from pathlib import Path, PurePosixPath
@@ -78,32 +79,32 @@ class OpenAIAgentsRuntime:
             raise AgentContractError(f"Unknown role definition: {role_id}")
         return json.loads(role_path.read_text(encoding="utf-8"))
 
-    def _build_tools(self, function_tool: Any, workspace: WorkspaceExecution | None = None) -> dict[str, Any]:
-        @function_tool(name_override="documents_read", description_override=
-                       "Read an allowlisted project document under docs/, skills/, workflows/, agents/roles/, contracts/schemas/, or policies/.")
-        def documents_read(relative_path: str) -> str:
-            """Read a bounded allowlisted project document by relative path."""
-            path = self._safe_read_path(relative_path)
-            payload = path.read_text(encoding="utf-8", errors="replace")
-            LOGGER.info("agent.tool.completed tool_id=documents.read path=%s bytes=%d",
-                        relative_path, len(payload.encode("utf-8")))
-            return payload[:24000]
+    def _invoke_harness_tool(self, tool_id: str, payload: dict[str, Any]) -> Any:
+        active = self._active_harness_context.get(None)
+        if active is None:
+            raise AgentContractError("Harness Tool Gateway is not active for this Agent execution")
+        harness, principal, run_id, task_id = active
+        return harness.invoke_tool(
+            principal, run_id=run_id, task_id=task_id,
+            tool_id=tool_id, payload=payload,
+        )
 
-        @function_tool(name_override="catalog_read", description_override=
-                       "List the project role and Skill identifiers without exposing secrets.")
-        def catalog_read() -> str:
-            """Return a small list of configured role and Skill identifiers."""
+    def _build_tools(self, function_tool: Any, workspace: WorkspaceExecution | None = None) -> dict[str, Any]:
+        def documents_handler(payload: dict[str, Any]) -> str:
+            path = self._safe_read_path(payload["relativePath"])
+            return path.read_text(encoding="utf-8", errors="replace")[:24000]
+
+        def catalog_handler(payload: dict[str, Any]) -> str:
+            catalog_path = payload.get("catalogPath", "agents/roles")
+            if catalog_path not in {"agents/roles", "skills"}:
+                raise AgentContractError("catalog path is outside the role/Skill metadata allowlist")
             role_dir = self.project_root / "agents" / "roles"
             skill_dir = self.project_root / "skills"
-            roles = sorted(p.stem for p in role_dir.glob("*.json")) if role_dir.exists() else []
-            skills = sorted(p.name for p in skill_dir.iterdir() if p.is_dir()) if skill_dir.exists() else []
-            LOGGER.info("agent.tool.completed tool_id=catalog.read")
+            roles = sorted(item.stem for item in role_dir.glob("*.json")) if role_dir.exists() else []
+            skills = sorted(item.name for item in skill_dir.iterdir() if item.is_dir()) if skill_dir.exists() else []
             return json.dumps({"roles": roles, "skills": skills}, ensure_ascii=False)
 
-        @function_tool(name_override="ontology_definition_read", description_override=
-                       "Read a bounded summary of the approved software-factory ontology. This tool is read-only.")
-        def ontology_definition_read(concept_name: str = "") -> str:
-            """Return ontology class and relation metadata, optionally filtered by concept name."""
+        def ontology_handler(payload: dict[str, Any]) -> str:
             ontology_path = self.project_root / "ontology" / "software-factory-ontology.json"
             ontology = json.loads(ontology_path.read_text(encoding="utf-8"))
             classes = list(ontology.get("classes", []))
@@ -112,92 +113,161 @@ class OpenAIAgentsRuntime:
             if isinstance(extensions, dict):
                 classes.extend(extensions.get("classes", []))
                 relations.extend(extensions.get("relations", []))
-            needle = concept_name.strip().casefold()
+            needle = str(payload.get("conceptName", "")).strip().casefold()
             if needle:
                 classes = [item for item in classes if needle in str(item.get("name", "")).casefold()]
                 relations = [item for item in relations if needle in str(item.get("name", "")).casefold()
                              or needle in str(item.get("source", "")).casefold()
                              or needle in str(item.get("target", "")).casefold()]
-            payload = {"ontologyId": ontology.get("ontologyId"), "ontologyVersion": ontology.get("ontologyVersion"),
-                       "classes": classes[:80], "relations": relations[:120]}
-            LOGGER.info("agent.tool.completed tool_id=ontology.definition.read")
-            return json.dumps(payload, ensure_ascii=False)[:24000]
+            return json.dumps({
+                "ontologyId": ontology.get("ontologyId"), "ontologyVersion": ontology.get("ontologyVersion"),
+                "classes": classes[:80], "relations": relations[:120],
+            }, ensure_ascii=False)[:24000]
 
-        @function_tool(name_override="source_catalog_read", description_override=
-                       "List registered source and action connector metadata. Does not connect to external systems.")
-        def source_catalog_read(category: str = "") -> str:
-            """Return connector metadata without credential values or provider calls."""
+        def source_catalog_handler(payload: dict[str, Any]) -> str:
             from .connector_catalog import ConnectorCatalog
             catalog = ConnectorCatalog(self.project_root)
+            category = payload.get("category")
             items = catalog.list_connectors(category=category or None)
-            payload = [{"connectorId": item.connector_id, "category": item.category,
-                        "direction": item.direction, "status": item.implementation_status,
-                        "operations": list(item.operations), "dataClasses": list(item.data_classes),
-                        "networkEgress": item.network_egress, "approvalRequired": item.approval_required}
-                       for item in items]
-            LOGGER.info("agent.tool.completed tool_id=source.catalog.read")
-            return json.dumps(payload, ensure_ascii=False)[:20000]
+            result = [{
+                "connectorId": item.connector_id, "category": item.category,
+                "direction": item.direction, "status": item.implementation_status,
+                "operations": list(item.operations), "dataClasses": list(item.data_classes),
+                "networkEgress": item.network_egress, "approvalRequired": item.approval_required,
+            } for item in items]
+            return json.dumps(result, ensure_ascii=False)[:20000]
 
-        @function_tool(name_override="dependencies_inspect", description_override=
-                       "Read declared project dependencies and optional extras from pyproject.toml.")
-        def dependencies_inspect() -> str:
-            """Return declared dependency names and version ranges; never reads environment secrets."""
+        def dependencies_handler(_payload: dict[str, Any]) -> str:
             import tomllib
-            config_path = self.project_root / "pyproject.toml"
-            with config_path.open("rb") as handle:
+            with (self.project_root / "pyproject.toml").open("rb") as handle:
                 config = tomllib.load(handle)
             project = config.get("project", {})
-            payload = {"python": project.get("requires-python"),
-                       "dependencies": project.get("dependencies", []),
-                       "optionalDependencies": project.get("optional-dependencies", {})}
-            LOGGER.info("agent.tool.completed tool_id=dependencies.inspect")
-            return json.dumps(payload, ensure_ascii=False)[:12000]
+            return json.dumps({
+                "python": project.get("requires-python"),
+                "dependencies": project.get("dependencies", []),
+                "optionalDependencies": project.get("optional-dependencies", {}),
+            }, ensure_ascii=False)[:12000]
 
-        @function_tool(name_override="contract_validate", description_override=
-                       "Validate a JSON payload against a supplied JSON Schema. Does not write or execute files.")
-        def contract_validate(payload_json: str, schema_json: str) -> str:
-            """Validate JSON text against a JSON Schema and return only validation status."""
+        def contract_handler(payload: dict[str, Any]) -> str:
+            payload_json = str(payload.get("payloadJson", ""))
+            schema_json = str(payload.get("schemaJson", ""))
             if len(payload_json) > 100_000 or len(schema_json) > 100_000:
                 return json.dumps({"valid": False, "reason": "input_too_large"})
             try:
                 import jsonschema
-                payload = json.loads(payload_json)
-                schema = json.loads(schema_json)
-                jsonschema.validate(payload, schema)
+                jsonschema.validate(json.loads(payload_json), json.loads(schema_json))
             except Exception as exc:
-                LOGGER.info("agent.tool.validation_failed error_type=%s", type(exc).__name__)
                 return json.dumps({"valid": False, "reason": type(exc).__name__})
-            LOGGER.info("agent.tool.completed tool_id=contract.validate")
             return json.dumps({"valid": True})
 
-        tools = {
+        handlers: dict[str, Any] = {
+            "documents.read": documents_handler,
+            "catalog.read": catalog_handler,
+            "ontology.definition.read": ontology_handler,
+            "source.catalog.read": source_catalog_handler,
+            "dependencies.inspect": dependencies_handler,
+            "contract.validate": contract_handler,
+        }
+        tools: dict[str, Any] = {}
+
+        @function_tool(name_override="documents_read", description_override=
+                       "Read an allowlisted project document under docs/, skills/, workflows/, agents/roles/, contracts/schemas/, or policies/.")
+        def documents_read(relative_path: str) -> str:
+            return self._invoke_harness_tool("documents.read", {"relativePath": relative_path})
+
+        @function_tool(name_override="catalog_read", description_override=
+                       "List registered project Roles and Skills; catalogPath is restricted to agents/roles or skills.")
+        def catalog_read(catalog_path: str = "agents/roles") -> str:
+            return self._invoke_harness_tool("catalog.read", {"catalogPath": catalog_path})
+
+        @function_tool(name_override="ontology_definition_read", description_override=
+                       "Read a bounded summary of the approved software-factory ontology. This tool is read-only.")
+        def ontology_definition_read(concept_name: str = "") -> str:
+            payload = {"conceptName": concept_name} if concept_name else {}
+            return self._invoke_harness_tool("ontology.definition.read", payload)
+
+        @function_tool(name_override="source_catalog_read", description_override=
+                       "List registered source and action connector metadata. Does not connect to external systems.")
+        def source_catalog_read(category: str = "") -> str:
+            payload = {"category": category} if category else {}
+            return self._invoke_harness_tool("source.catalog.read", payload)
+
+        @function_tool(name_override="dependencies_inspect", description_override=
+                       "Read declared project dependencies and optional extras from pyproject.toml.")
+        def dependencies_inspect() -> str:
+            return self._invoke_harness_tool("dependencies.inspect", {})
+
+        @function_tool(name_override="contract_validate", description_override=
+                       "Validate JSON text against a supplied JSON Schema and return only validation status.")
+        def contract_validate(payload_json: str, schema_json: str) -> str:
+            return self._invoke_harness_tool(
+                "contract.validate", {"payloadJson": payload_json, "schemaJson": schema_json}
+            )
+
+        tools.update({
             "documents.read": documents_read,
             "catalog.read": catalog_read,
             "contract.validate": contract_validate,
             "ontology.definition.read": ontology_definition_read,
             "source.catalog.read": source_catalog_read,
             "dependencies.inspect": dependencies_inspect,
-        }
+        })
+
         if workspace is not None:
+            def workspace_read_handler(payload: dict[str, Any]) -> str:
+                return json.dumps(workspace.read(payload["relativePath"]), ensure_ascii=False)
+
+            def repository_write_handler(payload: dict[str, Any]) -> str:
+                return json.dumps(workspace.write_candidate(
+                    payload["relativePath"], payload["content"],
+                    purpose=payload.get("purpose", "candidate code change"),
+                ), ensure_ascii=False)
+
+            def architecture_write_handler(payload: dict[str, Any]) -> str:
+                return json.dumps(workspace.architecture_plan_write(
+                    payload["relativePath"], payload["content"]
+                ), ensure_ascii=False)
+
+            def tests_handler(payload: dict[str, Any]) -> str:
+                return json.dumps(workspace.run_tests(payload["suiteId"]), ensure_ascii=False)
+
+            def security_handler(payload: dict[str, Any]) -> str:
+                return json.dumps(workspace.run_security_scan(payload["scannerId"]), ensure_ascii=False)
+
+            handlers.update({
+                "workspace.read": workspace_read_handler,
+                "repository.branch.write": repository_write_handler,
+                "architecture.plan.write": architecture_write_handler,
+                "tests.run": tests_handler,
+                "security.scan": security_handler,
+            })
+
             @function_tool(name_override="workspace_read", description_override="Read a bounded file from this workflow run's isolated candidate workspace.")
             def workspace_read(relative_path: str) -> str:
-                return json.dumps(workspace.read(relative_path), ensure_ascii=False)
+                return self._invoke_harness_tool("workspace.read", {"relativePath": relative_path})
 
             @function_tool(name_override="repository_branch_write", description_override="Write a candidate file only into the isolated run workspace. This does not create or push a Git branch.")
             def repository_branch_write(relative_path: str, content: str, purpose: str = "candidate code change") -> str:
-                return json.dumps(workspace.write_candidate(relative_path, content, purpose=purpose), ensure_ascii=False)
+                return self._invoke_harness_tool(
+                    "repository.branch.write",
+                    {"relativePath": relative_path, "content": content, "purpose": purpose},
+                )
 
             @function_tool(name_override="architecture_plan_write", description_override="Write an architecture plan or ADR draft under docs/agent-proposals/ or docs/adr-drafts/ in the isolated workspace.")
             def architecture_plan_write(relative_path: str, content: str) -> str:
-                return json.dumps(workspace.architecture_plan_write(relative_path, content), ensure_ascii=False)
+                return self._invoke_harness_tool(
+                    "architecture.plan.write", {"relativePath": relative_path, "content": content}
+                )
 
             @function_tool(name_override="tests_run", description_override="Run one fixed allowlisted test suite in the isolated workspace. Host execution is blocked unless the operator explicitly opts in.")
             def tests_run(suite_id: str) -> str:
-                return json.dumps(workspace.run_tests(suite_id), ensure_ascii=False)
+                active = self._active_harness_context.get(None)
+                run_id = active[2] if active else ""
+                return self._invoke_harness_tool("tests.run", {"runId": run_id, "suiteId": suite_id})
 
             @function_tool(name_override="security_scan", description_override="Run one fixed allowlisted security scanner in the isolated workspace. Scanner execution requires operator opt-in.")
             def security_scan(scanner_id: str) -> str:
-                return json.dumps(workspace.run_security_scan(scanner_id), ensure_ascii=False)
+                return self._invoke_harness_tool("security.scan", {"scannerId": scanner_id})
 
             tools.update({
                 "workspace.read": workspace_read,
@@ -206,6 +276,8 @@ class OpenAIAgentsRuntime:
                 "tests.run": tests_run,
                 "security.scan": security_scan,
             })
+
+        self._tool_handlers = handlers
         return tools
 
     def _safe_read_path(self, relative_path: str) -> Path:
