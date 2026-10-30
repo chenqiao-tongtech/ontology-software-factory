@@ -25,6 +25,19 @@
 - [安全边界与当前限制](#安全边界与当前限制)
 - [验收与进一步阅读](#验收与进一步阅读)
 
+## 主控智能体与模块化本体：首轮实现
+
+已加入 `factory-orchestrator` 受限规划角色、`factory-orchestration` Skill、结构化 AgentPlan Schema/示例、Typed Output 模型，以及确定性计划校验；主控角色当前仅具备只读工具权限，不能直接派发任务或改变 Workflow 状态。软件工厂本体版本更新为 1.1.0，增加主控计划、Workflow Run、Tool/Connector、来源系统和本体生命周期概念，并通过模块清单校验类与关系的完整、唯一归属。
+
+本轮新增校验命令：
+
+```bash
+make orchestrator-plan
+make ontology-modules
+```
+
+**实现边界：** 主控 Agent 尚未接入持久化 Workflow Engine 的实际计划提交/任务创建路径；本体模块清单目前是对现有单一权威 JSON 的逻辑分组，不是独立模块发布系统。详细范围见 [首轮实现说明](docs/factory-orchestrator-implementation.md)。
+
 ## 主控智能体与软件工厂本体体系设计
 
 关于 Factory Orchestrator 的职责边界、确定性控制平面、多 Agent 协作，以及软件工厂本体分类、自动发现、证据治理、版本发布、存储和运行时使用，见 [《软件工厂主控智能体与领域本体体系设计》](docs/factory-orchestrator-and-ontology-architecture.md)。该文档是下一阶段架构决策与实施拆解的设计基线，不代表其中所有目标能力已实现。
