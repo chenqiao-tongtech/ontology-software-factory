@@ -36,6 +36,7 @@ class OntologyGovernanceTests(unittest.TestCase):
             "workflowGlob": "workflows/definitions/*.json",
             "toolCatalog": "agents/tool-catalog.json",
             "contractFiles": ["contracts/schemas/agent-task.schema.json"],
+            "contractEntityTypeEnumPointers": {"contracts/schemas/agent-task.schema.json": ["/properties/entityType/enum"]},
             "classReferenceFields": ["inputEntityTypes", "outputEntityTypes"],
         })
         self._write("agents/roles/analyst.json", {
@@ -91,6 +92,13 @@ class OntologyGovernanceTests(unittest.TestCase):
         self.assertIn("workflow:delivery", ids)
         self.assertIn("workflow:delivery/step:analysis", ids)
         self.assertIn("contract:agent-task.schema", ids)
+
+    def test_unknown_contract_entity_type_is_reported(self):
+        self._write("contracts/schemas/agent-task.schema.json", {
+            "title": "Agent Task", "properties": {"entityType": {"enum": ["Requirement", "UnknownType"]}}
+        })
+        graph = build_consumer_graph(self.root, self.ontology)
+        self.assertIn("unknown-contract-ontology-class", {item["code"] for item in graph["issues"]})
 
     def test_removed_class_impact_uses_historical_class_reference(self):
         historical = self.ontology
