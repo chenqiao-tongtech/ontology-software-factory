@@ -279,6 +279,7 @@ class OpenAIAgentsRuntime:
             "task_contract_digest": task_digest,
             "unavailable_skill_tools": unavailable_skill_tools,
             "workspace_operations": list(workspace.operations) if workspace is not None else [],
+            "workspace_evidence": list(workspace.tool_evidence) if workspace is not None else [],
             "workspace_metadata": workspace_metadata,
             "workspace_changes": workspace_changes,
             "evidence": [{"type": "agent_run_metadata", "uri": f"runtime://{role_id}",
