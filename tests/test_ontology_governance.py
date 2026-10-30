@@ -132,6 +132,15 @@ class OntologyGovernanceTests(unittest.TestCase):
         self.assertTrue(report["reviewRequired"])
         self.assertTrue(report["majorVersionBump"])
 
+    def test_schema_major_version_change_is_explicitly_reported(self):
+        before = create_snapshot(self.ontology, actor="owner", reason="baseline")
+        changed = {**self.ontology, "schemaVersion": "2.0.0"}
+        after = create_snapshot(changed, actor="owner", reason="contract schema major")
+        report = compatibility_report(before, after)
+        self.assertTrue(report["schemaMajorVersionBump"])
+        self.assertTrue(any(item["kind"] == "schema-major-version-changed" for item in report["breakingChanges"]))
+        self.assertTrue(report["reviewRequired"])
+
     def test_additive_class_and_vocabulary_values_are_compatible(self):
         before = create_snapshot(self.ontology, actor="owner", reason="baseline")
         after_ontology = {**self.ontology, "ontologyVersion": "1.1.0",
