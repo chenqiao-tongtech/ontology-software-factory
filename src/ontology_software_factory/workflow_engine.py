@@ -83,6 +83,10 @@ class WorkflowEngine:
             "run": run, "events": self.store.get_events(run_id),
             "orchestratorPlans": plans,
             "factoryAssignmentResults": self.store.list_factory_assignment_results(run_id),
+            "factoryPlanApprovals": self.store.list_factory_plan_approvals(run_id),
+            "factoryPlanPhases": self.store.list_factory_plan_phases(run_id),
+            "harnessUsage": self.store.get_harness_usage(run_id),
+            "harnessUsageEvents": self.store.list_harness_usage_events(run_id),
         }
 
     def submit_factory_orchestrator_plan(self, run_id: str, plan: dict[str, Any],
@@ -121,6 +125,33 @@ class WorkflowEngine:
         except ValueError as exc:
             raise WorkflowError(str(exc), 409) from exc
         return {"plan": record, "validation": validation, "created": created}
+
+    def decide_factory_orchestrator_plan(
+        self, run_id: str, plan_id: str, decision: str, *,
+        actor: str, reason: str,
+    ) -> dict[str, Any]:
+        """Record an independent, auditable approval decision for an immutable plan."""
+        run = self.get_run(run_id)
+        if run.get("status") not in {"running", "queued", "waiting_approval"}:
+            raise WorkflowError("cannot decide a plan approval for a paused or terminal Workflow Run", 409)
+        plan = self.store.get_factory_orchestrator_plan(plan_id)
+        if plan is None or plan.get("workflowRunId") != run_id:
+            raise WorkflowError("Factory Plan not found for this Workflow Run", 404)
+        if actor == "factory-orchestrator":
+            raise WorkflowError("Factory Orchestrator cannot approve or reject its own plan", 403)
+        event = self._event(
+            f"factory.plan.{decision}",
+            f"Factory Plan {plan_id} {decision}",
+            actor=actor,
+            payload={"planId": plan_id, "planDigest": plan["digest"]},
+        )
+        try:
+            return self.store.decide_factory_plan_approval(
+                run_id=run_id, plan_id=plan_id, decision=decision,
+                actor=actor, reason=reason, event=event,
+            )
+        except ValueError as exc:
+            raise WorkflowError(str(exc), 409) from exc
 
     def apply_factory_assignment_event(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Project a terminal Assignment Worker result into the Workflow event ledger."""
