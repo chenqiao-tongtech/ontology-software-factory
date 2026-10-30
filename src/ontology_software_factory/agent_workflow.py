@@ -48,6 +48,8 @@ class AgentWorkflowStepHandler:
         role_id = self.STAGE_TO_ROLE.get(step_id)
         if not role_id:
             raise PermanentTaskError(f"unsupported Agent workflow step: {step_id}")
+        if payload.get("roleId") and payload.get("roleId") != role_id:
+            raise PermanentTaskError("Workflow Role reference does not match the registered step handler")
         run_id = str(payload.get("workflowRunId", ""))
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,100}", run_id):
             raise PermanentTaskError("workflow run identifier is invalid")
