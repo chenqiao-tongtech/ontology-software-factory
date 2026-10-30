@@ -189,6 +189,7 @@ def validate_runtime_contract_lock(
     project_root: str | Path, lock: dict[str, Any], role_id: str, binding: dict[str, Any]
 ) -> dict[str, Any]:
     """Reject Role or Skill drift between Run creation and any later Agent step."""
+    root = Path(project_root).resolve()
     if not isinstance(lock, dict) or not isinstance(lock.get("roles"), dict):
         raise OntologyBindingError("Workflow Run is missing its Role/Skill lock")
     unsigned = {key: value for key, value in lock.items() if key != "digest"}
@@ -224,8 +225,6 @@ def validate_runtime_contract_lock(
     entry = lock["roles"].get(role_id)
     if not isinstance(entry, dict):
         raise OntologyBindingError(f"Role is not included in Workflow Run lock: {role_id}")
-    root = Path(project_root).resolve()
-    role_path = root / "agents" / "roles" / f"{role_id}.json"
     try:
         role = json.loads(role_path.read_text(encoding="utf-8"))
         skills = validate_role_ontology_contract(role, verified, root)
