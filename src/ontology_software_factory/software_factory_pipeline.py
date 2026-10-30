@@ -32,6 +32,7 @@ class StageResult:
     ontology_binding: dict[str, Any] | None = None
     task_contract: dict[str, Any] | None = None
     task_contract_digest: str | None = None
+    unavailable_skill_tools: list[str] | None = None
 
 
 @dataclass
@@ -130,6 +131,7 @@ class SoftwareFactoryPipeline:
                     ontology_binding=execution.get("ontology_binding"),
                     task_contract=task_contract if getattr(self.agent_runner, "requires_ontology_binding", False) else None,
                     task_contract_digest=execution.get("task_contract_digest"),
+                    unavailable_skill_tools=execution.get("unavailable_skill_tools", []),
                 )
                 self._atomic_json(run_dir / stage_result.artifact_path, asdict(stage_result))
                 stage_results.append(stage_result)
