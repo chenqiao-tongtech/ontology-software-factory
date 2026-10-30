@@ -13,7 +13,7 @@ from ontology_software_factory.ontology_runtime import (
     validate_agent_task_contract,
     validate_agent_output,
     validate_ontology_binding,
-    validate_role_ontology_contract,
+    validate_role_ontology_contract, build_runtime_contract_lock, validate_runtime_contract_lock,
 )
 from ontology_software_factory.ontology_versioning import create_snapshot
 
@@ -48,6 +48,27 @@ class OntologyRuntimeBindingTests(unittest.TestCase):
             }), encoding="utf-8")
             with self.assertRaises(OntologyBindingError):
                 load_active_ontology_binding(temp)
+
+    def test_workflow_run_lock_detects_skill_content_drift(self):
+        definition = json.loads((ROOT / "workflows/definitions/agent-proposal-v1.json").read_text(encoding="utf-8"))
+        lock = build_runtime_contract_lock(ROOT, definition, self.snapshot)
+        verified = validate_runtime_contract_lock(ROOT, lock, "implementation-agent", self.snapshot)
+        self.assertEqual(verified["role"]["roleId"], "implementation-agent")
+        skill_path = ROOT / "skills/bounded-code-change/SKILL.md"
+        original = skill_path.read_text(encoding="utf-8")
+        try:
+            skill_path.write_text(original + "\\nrun-lock-drift-test", encoding="utf-8")
+            with self.assertRaises(OntologyBindingError):
+                validate_runtime_contract_lock(ROOT, lock, "implementation-agent", self.snapshot)
+        finally:
+            skill_path.write_text(original, encoding="utf-8")
+
+    def test_workflow_run_lock_digest_is_tamper_evident(self):
+        definition = json.loads((ROOT / "workflows/definitions/agent-proposal-v1.json").read_text(encoding="utf-8"))
+        lock = build_runtime_contract_lock(ROOT, definition, self.snapshot)
+        lock["roles"]["implementation-agent"]["roleDigest"] = "0" * 64
+        with self.assertRaises(OntologyBindingError):
+            validate_runtime_contract_lock(ROOT, lock, "implementation-agent", self.snapshot)
 
     def test_tampered_snapshot_digest_is_rejected(self):
         tampered = json.loads(json.dumps(self.snapshot))
