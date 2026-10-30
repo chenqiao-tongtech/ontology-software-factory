@@ -674,7 +674,12 @@ def run_quality(checks: list[str]) -> dict:
                     scan_status = "completed"
                 else:
                     scan_status = "incomplete"
-                results.append({"id": name, "kind": "security-scan", "status": scan_status, "exitCode": proc.returncode, "durationSeconds": round(time.monotonic()-start, 3), "reportPath": str(report_path.relative_to(ROOT)) if report_path.exists() else None, "reportPresent": report_path.exists(), "reportParsed": report_state != "incomplete", "findingCount": finding_count, "summary": summary or "Scanner completed; machine-readable report was evaluated."})
+                try:
+                    report_path_label = str(report_path.relative_to(ROOT)) if report_path.exists() else None
+                except ValueError:
+                    # Tests and custom deployments may place the state directory outside the repo.
+                    report_path_label = None
+                results.append({"id": name, "kind": "security-scan", "status": scan_status, "exitCode": proc.returncode, "durationSeconds": round(time.monotonic()-start, 3), "reportPath": report_path_label, "reportPresent": report_path.exists(), "reportParsed": report_state != "incomplete", "findingCount": finding_count, "summary": summary or "Scanner completed; machine-readable report was evaluated."})
             except subprocess.TimeoutExpired:
                 results.append({"id": name, "kind": "security-scan", "status": "timeout", "exitCode": None, "durationSeconds": round(time.monotonic()-start, 3), "summary": "Scanner timed out"})
     passed = sum(1 for r in results if r["status"] == "passed")
