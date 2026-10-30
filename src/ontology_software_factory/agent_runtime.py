@@ -225,7 +225,8 @@ class OpenAIAgentsRuntime:
     def run_agent(self, role_id: str, task_input: dict[str, Any], *,
                   ontology_binding: dict[str, Any], task_contract: dict[str, Any],
                   workspace_path: str | Path | None = None,
-                  runtime_contract_lock: dict[str, Any] | None = None) -> dict[str, Any]:
+                  runtime_contract_lock: dict[str, Any] | None = None,
+                  assigned_skill_id: str | None = None) -> dict[str, Any]:
         binding = validate_ontology_binding(ontology_binding)
         if runtime_contract_lock is None:
             raise AgentContractError("Workflow Run Role/Skill lock is required")
@@ -237,6 +238,15 @@ class OpenAIAgentsRuntime:
             raise AgentContractError(f"Workflow Run Role/Skill lock validation failed: {type(exc).__name__}") from exc
         role = locked_contract["role"]
         skill_contracts = locked_contract["skills"]
+        if assigned_skill_id is not None:
+            if assigned_skill_id not in role.get("skillIds", []):
+                raise AgentContractError("assigned Skill is not declared by the selected Role")
+            selected = [skill for skill in skill_contracts if skill.get("skillId") == assigned_skill_id]
+            if len(selected) != 1:
+                raise AgentContractError("assigned Skill is not present in the pinned Workflow Run lock")
+            execution_skills = selected
+        else:
+            execution_skills = skill_contracts
         validate_agent_task_contract(self.project_root, task_contract, role=role, binding=binding)
         if role_id not in self._models:
             raise AgentContractError(f"Role has no registered typed output model: {role_id}")
@@ -251,13 +261,14 @@ class OpenAIAgentsRuntime:
         tools = [tools_by_id[item] for item in allowed]
         unavailable_skill_tools = sorted({
             str(tool_id)
-            for skill in skill_contracts
+            for skill in execution_skills
             for tool_id in skill.get("requiredToolIds", [])
             if tool_id not in allowed
         })
         skill_parts: list[str] = []
         try:
-            for skill_id in role.get("skillIds", []):
+            selected_skill_ids = [item["skillId"] for item in execution_skills]
+            for skill_id in selected_skill_ids:
                 skill_parts.append(self.skill_registry.load_instructions(skill_id, role_id=role_id)[:12000])
         except Exception as exc:
             raise AgentContractError(f"Skill Registry rejected the assigned Skill: {type(exc).__name__}") from exc
@@ -289,6 +300,7 @@ class OpenAIAgentsRuntime:
             f"Pinned ontology context:\n{json.dumps(semantic_context, ensure_ascii=False)}\n\n"
             f"Agent Task contract:\n{json.dumps(task_contract, ensure_ascii=False)}\n\n"
             f"Role contract:\n{json.dumps({k: role.get(k) for k in ('inputEntityTypes','outputEntityTypes','allowedActions','forbiddenActions','handoffRequirements','escalationConditions')}, ensure_ascii=False)}\n\n"
+            f"Assigned Skill: {assigned_skill_id or 'all role Skills'}\n"
             f"Skills:\n{skill_text}"
         )
         task_payload = json.dumps(task_input, ensure_ascii=False, indent=2)
