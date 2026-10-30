@@ -166,10 +166,19 @@ class OpenAIAgentsRuntime:
 
     def run_agent(self, role_id: str, task_input: dict[str, Any], *,
                   ontology_binding: dict[str, Any], task_contract: dict[str, Any],
-                  workspace_path: str | Path | None = None) -> dict[str, Any]:
-        role = self._load_role(role_id)
+                  workspace_path: str | Path | None = None,
+                  runtime_contract_lock: dict[str, Any] | None = None) -> dict[str, Any]:
         binding = validate_ontology_binding(ontology_binding)
-        skill_contracts = validate_role_ontology_contract(role, binding, self.project_root)
+        if runtime_contract_lock is None:
+            raise AgentContractError("Workflow Run Role/Skill lock is required")
+        try:
+            locked_contract = validate_runtime_contract_lock(
+                self.project_root, runtime_contract_lock, role_id, binding
+            )
+        except Exception as exc:
+            raise AgentContractError(f"Workflow Run Role/Skill lock validation failed: {type(exc).__name__}") from exc
+        role = locked_contract["role"]
+        skill_contracts = locked_contract["skills"]
         validate_agent_task_contract(self.project_root, task_contract, role=role, binding=binding)
         if role_id not in self._models:
             raise AgentContractError(f"Role has no registered typed output model: {role_id}")
