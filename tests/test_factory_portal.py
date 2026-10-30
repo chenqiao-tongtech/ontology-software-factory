@@ -57,6 +57,12 @@ class FactoryPortalServiceTests(unittest.TestCase):
         self.assertTrue(all(item.get("sha256") for item in result["assets"]))
         self.assertEqual(result["details"]["connector"], "LocalDirectoryConnector")
 
+    def test_source_sync_can_target_one_configured_source(self):
+        results = portal.source_scan_results(force=True, source_ids={"test-docs"})
+        self.assertEqual([item["id"] for item in results], ["test-docs"])
+        self.assertEqual(results[0]["status"], "connected")
+        self.assertTrue(results[0]["changeSummary"]["baseline"])
+
     def test_document_directory_uses_the_same_connector_contract(self):
         source = portal.source_configs()[2]
         result = portal.scan_source(source)
