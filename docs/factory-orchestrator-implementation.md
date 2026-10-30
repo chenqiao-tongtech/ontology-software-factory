@@ -25,7 +25,7 @@
 ### Assignment dispatch and Worker execution
 
 - Added `FactoryPlanDispatcher` to instantiate plan Assignments as idempotent `agent.factory-assignment` Worker tasks.
-- The dispatcher checks the Workflow Run binding, immutable Role/Skill lock, plan approval requirement, Phase dependency completion and `maxParallelAssignments` before enqueueing work.
+- The dispatcher checks the Workflow Run binding, immutable Role/Skill lock, plan approval requirement, Phase dependency completion and `maxParallelAssignments` before enqueueing work. It rechecks the persisted plan digest and schema/role/Skill contract, verifies output classes against the Run-pinned ontology snapshot, and requires at least one tool-budget unit per Assignment.
 - Added `FactoryAssignmentHandler`, which validates the pinned Role, selected Skill, Agent Task contract and assignment output entity types; invokes the Agent Runtime with only the assigned Skill instructions; and writes output artifacts, an Agent Result contract and SHA-256 evidence.
 - Added `additional_role_ids` support to the Workflow Run Role/Skill lock builder. The real Agent console locks all registered team Roles at Run creation so later plan assignments cannot silently pick up changed Role/Skill definitions.
 - Added `POST /api/runs/{runId}/orchestrator-plan/dispatch`. Run detail includes a derived `factoryPlanExecutions` view with Phase/Assignment status, task IDs, outputs and evidence references.
