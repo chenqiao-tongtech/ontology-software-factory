@@ -81,6 +81,13 @@ class WorkspaceManager:
             )
             if root_result.returncode != 0 or Path(root_result.stdout.strip()).resolve() != self.project_root:
                 raise WorkspacePolicyError("git-worktree backend requires project_root to be the Git repository root")
+            status_result = subprocess.run(
+                [git, "-C", str(self.project_root), "status", "--porcelain", "--untracked-files=all"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, timeout=15, shell=False, check=False,
+            )
+            if status_result.returncode != 0 or status_result.stdout.strip():
+                raise WorkspacePolicyError("Git Worktree backend requires a clean source checkout")
             branch_name = f"agent/run-{run_id.lower()}"
             if not target.exists():
                 proc = subprocess.run(
