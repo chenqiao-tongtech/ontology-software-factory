@@ -94,10 +94,14 @@ class LocalDirectoryConnector:
     source_type = "repository"
 
     def __init__(self, allowed_roots: list[str | Path], *,
+                 source_type: str = "repository",
                  max_files: int = DEFAULT_MAX_FILES,
                  max_file_bytes: int = DEFAULT_MAX_FILE_BYTES):
+        if source_type not in {"repository", "documents"}:
+            raise ValueError("directory source_type must be repository or documents")
         if max_files < 1 or max_file_bytes < 1:
             raise ValueError("scan limits must be positive")
+        self.source_type = source_type
         self.allowed_roots = tuple(Path(item).expanduser().resolve() for item in allowed_roots)
         self.max_files = max_files
         self.max_file_bytes = max_file_bytes
