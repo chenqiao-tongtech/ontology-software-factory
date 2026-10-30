@@ -222,9 +222,9 @@ def build_source_connector_registry(allowed_root: Path, *, remote_fetcher=None, 
 def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
     path_label = source.get("url", source.get("path", ""))
     result = {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": str(path_label), "enabled": bool(source.get("enabled", True)), "fixture": bool(source.get("fixture")), "lastSyncAt": now_iso(), "status": "error", "assetCount": 0, "assets": [], "details": {}}
-    if source.get("type") in {"github", "gitlab"}:
+    if source.get("type") in {"github", "gitlab", "postgresql", "mysql"}:
         if not allow_remote:
-            result.update(status="not-synced", message="Remote repository is not queried by background refresh; use explicit Sync to fetch metadata")
+            result.update(status="not-synced", message="Remote repository/database is not queried by background refresh; use explicit Sync to fetch metadata")
             return result
         if not source.get("enabled", True):
             result.update(status="disabled", message="Source disabled")
@@ -339,8 +339,8 @@ def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> l
                 cache_fresh = False
         if cache_fresh:
             result = cached
-        elif source.get("type") in {"github", "gitlab"} and not allow_remote:
-            result = cached or {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": source.get("url", ""), "enabled": source.get("enabled", True), "fixture": False, "lastSyncAt": None, "status": "not-synced", "assetCount": 0, "assets": [], "details": {}, "message": "Remote repository is not queried by background refresh; use explicit Sync to fetch metadata"}
+        elif source.get("type") in {"github", "gitlab", "postgresql", "mysql"} and not allow_remote:
+            result = cached or {"id": source["id"], "name": source["name"], "type": source["type"], "pathLabel": source.get("url", source.get("connectionEnv", "")), "enabled": source.get("enabled", True), "fixture": False, "lastSyncAt": None, "status": "not-synced", "assetCount": 0, "assets": [], "details": {}, "message": "Remote repository/database is not queried by background refresh; use explicit Sync to fetch metadata"}
         else:
             result = scan_source(source, allow_remote=allow_remote)
             updated_cache[source["id"]] = result
