@@ -241,6 +241,7 @@ def scan_source(source: dict, *, allow_remote: bool = False) -> dict:
                 {
                     "name": asset.name,
                     "assetId": asset.asset_id,
+                    "path": asset.locator,
                     "kind": asset.kind,
                     "columns": [
                         {
