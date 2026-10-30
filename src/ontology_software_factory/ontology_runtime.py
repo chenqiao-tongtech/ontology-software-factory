@@ -149,13 +149,17 @@ def validate_role_ontology_contract(
 
 
 def build_runtime_contract_lock(
-    project_root: str | Path, workflow_definition: dict[str, Any], binding: dict[str, Any]
+    project_root: str | Path, workflow_definition: dict[str, Any], binding: dict[str, Any],
+    *, additional_role_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Capture Role and Skill digests once, before a Workflow Run is created."""
     verified = validate_ontology_binding(binding)
     root = Path(project_root).resolve()
-    role_ids = sorted({str(step.get("roleId")) for step in workflow_definition.get("steps", [])
-                       if step.get("roleId") and step.get("executionMode") != "human"})
+    role_ids = sorted(
+        {str(step.get("roleId")) for step in workflow_definition.get("steps", [])
+         if step.get("roleId") and step.get("executionMode") != "human"}
+        | {str(role_id) for role_id in (additional_role_ids or []) if str(role_id)}
+    )
     roles: dict[str, Any] = {}
     for role_id in role_ids:
         role_path = root / "agents" / "roles" / f"{role_id}.json"
