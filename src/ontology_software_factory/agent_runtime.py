@@ -14,6 +14,8 @@ import os
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .workspace_execution import WorkspaceExecution
+
 from .ontology_runtime import (
     validate_agent_output, validate_agent_task_contract, validate_ontology_binding,
     validate_role_ontology_contract,
@@ -37,6 +39,7 @@ class AgentContractError(RuntimeError):
 
 class OpenAIAgentsRuntime:
     requires_ontology_binding = True
+    supports_workspace_tools = True
 
     def __init__(self, *, project_root: str | Path, model: str | None = None,
                  max_turns: int = 8, tracing_enabled: bool | None = None):
@@ -57,6 +60,7 @@ class OpenAIAgentsRuntime:
         self.tracing_enabled = env_tracing if tracing_enabled is None else tracing_enabled
         # The default is privacy-first: SDK tracing is disabled until the operator opts in.
         set_tracing_disabled(not self.tracing_enabled)
+        self._function_tool = function_tool
         self._tools_by_id = self._build_tools(function_tool)
 
     def effective_tool_ids(self, role_id: str) -> list[str]:
