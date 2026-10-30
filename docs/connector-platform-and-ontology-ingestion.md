@@ -27,7 +27,7 @@ The ConnectorCatalog implemented here validates metadata and applies a default-d
 | Code and engineering | GitHub, GitLab, Bitbucket, Azure DevOps, local repositories | classes, APIs, dependencies, ownership, build/test/release lifecycle | local directory and GitHub/GitLab metadata implemented; others future |
 | Enterprise documents | Confluence, SharePoint/OneDrive, Google Drive, Notion, OpenText | glossary, policies, SOPs, process descriptions and exceptions | planned |
 | Database and warehouse | SQLite, PostgreSQL, MySQL, SQL Server, Oracle, Snowflake, Databricks, BigQuery | tables, columns, keys, constraints, lineage and ownership | SQLite/PostgreSQL/MySQL implemented; others future |
-| API contracts | OpenAPI, AsyncAPI, GraphQL SDL, Protobuf/gRPC, JSON Schema | service boundaries, operations, payload semantics and events | OpenAPI/GraphQL adapter-required; others future |
+| API contracts | OpenAPI, AsyncAPI, GraphQL SDL, Protobuf/gRPC, JSON Schema | service boundaries, operations, payload semantics and events | OpenAPI JSON、AsyncAPI JSON、GraphQL SDL、Protobuf 已实现；YAML 与在线 introspection future |
 | Event platforms | Kafka Schema Registry, Kafka Connect, Pulsar, RabbitMQ, cloud event buses | event types, producers/consumers, lifecycle and compatibility | planned |
 | Data governance | DataHub, OpenMetadata, Collibra, Apache Atlas, dbt artifacts | glossary, lineage, ownership and classification | dbt planned; others future |
 | Work management | Jira, Linear, Azure Boards, GitHub Issues | work item types, states, ownership and change history | future |
@@ -61,3 +61,17 @@ Recommended Harness modules: policy decision point, context broker, tool gateway
 ## Current implementation boundary
 
 This increment adds a JSON Schema, connector registry, Python catalog loader, default-deny operation authorization, validation CLI and unit tests. Registry entries marked planned or adapter-required are inventory only. No new live Confluence, SharePoint, Google Drive, Bitbucket, Azure DevOps, Kafka Schema Registry, AsyncAPI or GraphQL network adapter is delivered here. OAuth exchange, production secret broker, connector UI, event-driven sync and enterprise ACL propagation remain future work.
+
+
+## 9. Additional offline contract importers
+
+The source connector package now includes explicit-file importers for:
+
+- OpenAPI 3.x JSON: API operations, paths, request/response metadata and component schemas.
+- AsyncAPI JSON: channels and message definitions.
+- GraphQL SDL: type/input/interface/enum/scalar/union definitions and field signatures using a bounded SDL parser.
+- Protocol Buffers: message, enum, service and RPC declarations; imported declarations only, without invoking protoc or resolving imports.
+- dbt manifest.json with optional catalog.json: model/source metadata, columns, materialization and dependency references.
+- Schema Registry JSON export: subject/version/schema type/ID and schema digest.
+
+All importers enforce configured allowed roots and file-size limits. They preserve a source digest and emit candidate source assets. They do not execute project code, invoke dbt, call a live Schema Registry, or resolve external references.
