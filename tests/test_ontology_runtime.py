@@ -9,6 +9,7 @@ from ontology_software_factory.ontology_runtime import (
     OntologyBindingError,
     build_agent_task_contract,
     load_active_ontology_binding,
+    validate_agent_result_contract,
     validate_agent_task_contract,
     validate_agent_output,
     validate_ontology_binding,
@@ -65,6 +66,47 @@ class OntologyRuntimeBindingTests(unittest.TestCase):
         self.assertEqual(task["ontologyVersion"], self.snapshot["ontologyVersion"])
         self.assertEqual(task["roleId"], self.role["roleId"])
         validate_agent_task_contract(ROOT, task, role=self.role, binding=self.snapshot)
+
+    def test_skill_instruction_digest_is_pinned_in_task_contract(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            schema_dir = root / "contracts" / "schemas"
+            schema_dir.mkdir(parents=True)
+            shutil.copy(ROOT / "contracts/schemas/agent-task.schema.json", schema_dir / "agent-task.schema.json")
+            skill_dir = root / "skills" / "requirement-normalization"
+            skill_dir.mkdir(parents=True)
+            shutil.copy(ROOT / "skills/requirement-normalization/skill.json", skill_dir / "skill.json")
+            shutil.copy(ROOT / "skills/requirement-normalization/SKILL.md", skill_dir / "SKILL.md")
+            task = build_agent_task_contract(
+                root, role=self.role, binding=self.snapshot, run_id="RUN-ABC123",
+                step_id="requirement-analysis", attempt=1, objective="Create a small API",
+            )
+            self.assertEqual(task["skillRefs"][0]["skillId"], "requirement-normalization")
+            original_digest = task["skillRefs"][0]["digest"]
+            (skill_dir / "SKILL.md").write_text(
+                (skill_dir / "SKILL.md").read_text(encoding="utf-8") + "\\nChanged instructions",
+                encoding="utf-8",
+            )
+            with self.assertRaises(OntologyBindingError):
+                validate_agent_task_contract(root, task, role=self.role, binding=self.snapshot)
+            self.assertEqual(len(original_digest), 64)
+
+    def test_agent_result_contract_repeats_task_ontology_and_skill_binding(self):
+        from ontology_software_factory.ontology_runtime import build_agent_result_contract
+        task = build_agent_task_contract(
+            ROOT, role=self.role, binding=self.snapshot, run_id="RUN-ABC123",
+            step_id="requirement-analysis", attempt=1, objective="Create a small API",
+        )
+        result = build_agent_result_contract(
+            ROOT, task_contract=task, role=self.role, binding=self.snapshot,
+            output={"summary": "Requirement analysis completed"}, evidence=[],
+            artifact_uri="artifact://RUN-ABC123/requirement-analysis/output.json",
+            completed_at="2026-10-30T12:00:00+00:00",
+        )
+        validate_agent_result_contract(ROOT, result, role=self.role, binding=self.snapshot)
+        self.assertEqual(result["skillRefs"], task["skillRefs"])
+        self.assertEqual(result["ontologyDigest"], task["ontologyDigest"])
 
     def test_task_contract_with_stale_digest_is_rejected(self):
         task = build_agent_task_contract(
