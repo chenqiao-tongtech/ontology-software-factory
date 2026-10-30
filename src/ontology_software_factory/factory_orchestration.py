@@ -110,6 +110,8 @@ def validate_factory_plan(
                 raise FactoryPlanError(f"assignment output types exceed Skill {skill_id} contract")
     if assignment_count > limits["maxAgentAssignments"]:
         raise FactoryPlanError("actual assignment count exceeds plan maxAgentAssignments")
+    if limits["maxToolCalls"] < assignment_count:
+        raise FactoryPlanError("maxToolCalls must provide at least one call budget unit per assignment")
     if plan["riskAssessment"]["level"] in {"high", "critical"} and not plan["riskAssessment"]["requiresHumanApproval"]:
         raise FactoryPlanError("high or critical risk plan must require human approval")
     return {
