@@ -177,3 +177,18 @@ make test
 ```
 
 测试只读取 Schema 元数据；请勿将生产凭据用于测试。PostgreSQL 连接需要合规 TLS 配置，MySQL 连接启用主机名校验。细节见 `docs/2026-10-30-evidence-lifecycle-and-live-db-checks.md`。
+
+
+## 9. Agent 工作区执行配置（新增）
+
+真实 Agent Workflow 会在系统临时目录创建每个 run 独立的仓库副本，不需要额外 Python 包。工作区文件读写、测试和扫描的工具边界与证据格式见 docs/controlled-workspace-execution.md。
+
+默认情况下，tests.run 不会在宿主机执行 Agent 生成的代码。只有可信本地演示才可显式设置：
+
+    export FACTORY_ENABLE_UNSANDBOXED_TEST_EXECUTION=1
+
+安全扫描工具默认不启动；安装 Semgrep、Gitleaks 或 Trivy 并评估扫描边界后，才设置：
+
+    export FACTORY_ENABLE_LOCAL_SECURITY_SCANS=1
+
+这两个开关都不是生产沙箱的替代品。固定命令和超时不能阻止不可信代码访问宿主机文件或资源；生产使用前必须接入容器/微虚机、网络隔离、资源配额和短期凭据。未设置开关时，工具应返回 blocked，而不是伪造通过状态。

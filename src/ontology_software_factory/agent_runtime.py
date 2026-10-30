@@ -1,9 +1,9 @@
 """OpenAI Agents SDK adapter with role-file-driven, least-privilege tools.
 
-The imported framework is optional. No source-writing, shell, deploy, secret-reading,
-or repository-merge tool is registered by this MVP. Agents can read a small set of
-project documents and validate JSON contracts; generated changes are saved by the
-orchestrator in a separate proposal area, never applied to the source repository.
+The imported framework is optional. Run-scoped candidate workspace tools are registered
+only when the orchestrator supplies a workspace binding. Candidate writes stay in a
+repository copy outside the source checkout; no Git push, merge, deployment, secret
+reading, or policy mutation tool is registered. Host test/scanner execution is opt-in.
 """
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ import logging
 import os
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from .workspace_execution import WorkspaceExecution
 
 from .ontology_runtime import (
     validate_agent_output, validate_agent_task_contract, validate_ontology_binding,
@@ -37,6 +39,7 @@ class AgentContractError(RuntimeError):
 
 class OpenAIAgentsRuntime:
     requires_ontology_binding = True
+    supports_workspace_tools = True
 
     def __init__(self, *, project_root: str | Path, model: str | None = None,
                  max_turns: int = 8, tracing_enabled: bool | None = None):
@@ -57,13 +60,15 @@ class OpenAIAgentsRuntime:
         self.tracing_enabled = env_tracing if tracing_enabled is None else tracing_enabled
         # The default is privacy-first: SDK tracing is disabled until the operator opts in.
         set_tracing_disabled(not self.tracing_enabled)
+        self._function_tool = function_tool
         self._tools_by_id = self._build_tools(function_tool)
 
-    def effective_tool_ids(self, role_id: str) -> list[str]:
+    def effective_tool_ids(self, role_id: str, available_tool_ids: set[str] | None = None) -> list[str]:
         role = self._load_role(role_id)
         declared = role.get("toolIds", [])
+        available = available_tool_ids if available_tool_ids is not None else set(self._tools_by_id)
         return [tool_id for tool_id in declared
-                if tool_id not in ALWAYS_DENIED and tool_id in self._tools_by_id]
+                if tool_id not in ALWAYS_DENIED and tool_id in available]
 
     def _load_role(self, role_id: str) -> dict[str, Any]:
         role_path = self.project_root / "agents" / "roles" / f"{role_id}.json"
@@ -71,7 +76,7 @@ class OpenAIAgentsRuntime:
             raise AgentContractError(f"Unknown role definition: {role_id}")
         return json.loads(role_path.read_text(encoding="utf-8"))
 
-    def _build_tools(self, function_tool: Any) -> dict[str, Any]:
+    def _build_tools(self, function_tool: Any, workspace: WorkspaceExecution | None = None) -> dict[str, Any]:
         @function_tool(name_override="documents_read", description_override=
                        "Read an allowlisted project document under docs/, skills/, workflows/, agents/roles/, contracts/schemas/, or policies/.")
         def documents_read(relative_path: str) -> str:
@@ -110,11 +115,40 @@ class OpenAIAgentsRuntime:
             LOGGER.info("agent.tool.completed tool_id=contract.validate")
             return json.dumps({"valid": True})
 
-        return {
+        tools = {
             "documents.read": documents_read,
             "catalog.read": catalog_read,
             "contract.validate": contract_validate,
         }
+        if workspace is not None:
+            @function_tool(name_override="workspace_read", description_override="Read a bounded file from this workflow run's isolated candidate workspace.")
+            def workspace_read(relative_path: str) -> str:
+                return json.dumps(workspace.read(relative_path), ensure_ascii=False)
+
+            @function_tool(name_override="repository_branch_write", description_override="Write a candidate file only into the isolated run workspace. This does not create or push a Git branch.")
+            def repository_branch_write(relative_path: str, content: str, purpose: str = "candidate code change") -> str:
+                return json.dumps(workspace.write_candidate(relative_path, content, purpose=purpose), ensure_ascii=False)
+
+            @function_tool(name_override="architecture_plan_write", description_override="Write an architecture plan or ADR draft under docs/agent-proposals/ or docs/adr-drafts/ in the isolated workspace.")
+            def architecture_plan_write(relative_path: str, content: str) -> str:
+                return json.dumps(workspace.architecture_plan_write(relative_path, content), ensure_ascii=False)
+
+            @function_tool(name_override="tests_run", description_override="Run one fixed allowlisted test suite in the isolated workspace. Host execution is blocked unless the operator explicitly opts in.")
+            def tests_run(suite_id: str) -> str:
+                return json.dumps(workspace.run_tests(suite_id), ensure_ascii=False)
+
+            @function_tool(name_override="security_scan", description_override="Run one fixed allowlisted security scanner in the isolated workspace. Scanner execution requires operator opt-in.")
+            def security_scan(scanner_id: str) -> str:
+                return json.dumps(workspace.run_security_scan(scanner_id), ensure_ascii=False)
+
+            tools.update({
+                "workspace.read": workspace_read,
+                "repository.branch.write": repository_branch_write,
+                "architecture.plan.write": architecture_plan_write,
+                "tests.run": tests_run,
+                "security.scan": security_scan,
+            })
+        return tools
 
     def _safe_read_path(self, relative_path: str) -> Path:
         posix = PurePosixPath(relative_path)
@@ -131,15 +165,23 @@ class OpenAIAgentsRuntime:
         return resolved
 
     def run_agent(self, role_id: str, task_input: dict[str, Any], *,
-                  ontology_binding: dict[str, Any], task_contract: dict[str, Any]) -> dict[str, Any]:
+                  ontology_binding: dict[str, Any], task_contract: dict[str, Any],
+                  workspace_path: str | Path | None = None) -> dict[str, Any]:
         role = self._load_role(role_id)
         binding = validate_ontology_binding(ontology_binding)
         skill_contracts = validate_role_ontology_contract(role, binding, self.project_root)
         validate_agent_task_contract(self.project_root, task_contract, role=role, binding=binding)
         if role_id not in self._models:
             raise AgentContractError(f"Role has no registered typed output model: {role_id}")
-        allowed = self.effective_tool_ids(role_id)
-        tools = [self._tools_by_id[item] for item in allowed]
+        workspace = None
+        if workspace_path is not None:
+            workspace = WorkspaceExecution(
+                self.project_root, workspace_path,
+                run_id=str(task_input.get("run_id", "")),
+            )
+        tools_by_id = self._build_tools(self._function_tool, workspace)
+        allowed = self.effective_tool_ids(role_id, set(tools_by_id))
+        tools = [tools_by_id[item] for item in allowed]
         unavailable_skill_tools = sorted({
             str(tool_id)
             for skill in skill_contracts
@@ -209,6 +251,7 @@ class OpenAIAgentsRuntime:
         latency_ms = int((time.perf_counter() - started) * 1000)
         LOGGER.info("agent.run.completed role_id=%s latency_ms=%d item_count=%d",
                     role_id, latency_ms, len(getattr(result, "new_items", []) or []))
+        workspace_changes = workspace.diff_patch() if workspace is not None else None
         return {
             "role_id": role_id,
             "model": self.model,
@@ -218,6 +261,8 @@ class OpenAIAgentsRuntime:
             "ontology_binding": {key: binding[key] for key in ("snapshotId", "digest", "ontologyId", "ontologyVersion", "schemaVersion")},
             "task_contract_digest": task_digest,
             "unavailable_skill_tools": unavailable_skill_tools,
+            "workspace_operations": list(workspace.operations) if workspace is not None else [],
+            "workspace_changes": workspace_changes,
             "evidence": [{"type": "agent_run_metadata", "uri": f"runtime://{role_id}",
                            "sha256": "not_applicable", "note": "SDK result metadata; not a content attestation"}],
         }

@@ -88,7 +88,7 @@ flowchart TB
 | 版本化交付与回滚演练 | `release_manager.py`、`scripts/create_release.py`、`scripts/rehearse_upgrade.py` | 质量门禁通过后生成配置候选包、manifest、SHA-256 和配置包范围的 CycloneDX SBOM；升级/回滚只模拟本地状态。 |
 | 观测与成本 | `observability.py`、`observability/` | 汇总本地运行/Gate 数据、LLM usage ledger；没有价格表时成本保留 `null`，不虚构费用。 |
 | LLM Provider | `llm_provider.py` | 统一封装 OpenAI Responses API、结构化输出、有限重试、延迟/Token 使用记录，并提供 Fake Provider 测试。 |
-| Agent Runtime | `agent_runtime.py`、`agent_workflow.py`、`ontology_runtime.py` | 可选接入 OpenAI Agents SDK；每次真实执行必须绑定已审批的完整本体快照与 SHA-256，校验 Agent Task / Agent Result、Role / Skill 输入输出类型和工具授权；Evidence 记录快照版本；有效工具集合取角色白名单与运行时已注册工具的交集。真实调用需 SDK、API Key、网络和可用模型。 |
+| Agent Runtime | `agent_runtime.py`、`agent_workflow.py`、`ontology_runtime.py` | 可选接入 OpenAI Agents SDK；每次真实执行必须绑定已审批的完整本体快照与 SHA-256；现已接入每 Run 独立工作区、workspace.read、repository.branch.write、architecture.plan.write、固定 tests.run 和 security.scan；候选写入不会修改源仓库，不创建/推送 Git 分支；测试和扫描默认关闭宿主机执行，需操作员显式开启。Evidence 记录本体版本、工具报告和摘要。真实调用需 SDK、API Key、网络和可用模型。 |
 | LLM 本体发现 | `ontology_discovery.py`、`ontology_discovery_worker.py`、`adapters/nvidia_auto_ontology.py`、`adapters/cognee_ontology.py` | 四阶段候选生成、来源引用核验、独立 Critic、Benchmark、摘要绑定审批；NVIDIA 元数据适配器只读，Cognee 输出候选暂存，不直接发布正式本体。 |
 
 ## 多智能体与本体自动发现
@@ -263,6 +263,7 @@ make observability
 - [安装指南](docs/installation.md)：Python 环境、虚拟环境、基础安装、可选 extras、外部工具安装和首次启动。
 - [依赖工具与组件清单](docs/dependency-inventory.md)：基础 Python 包、OpenAI Agents SDK、PostgreSQL/MySQL 驱动、Semgrep/Gitleaks/Trivy、Git、MCP、Cognee、NVIDIA 和所需外部服务。
 - [本体版本绑定与 Agent Runtime 运行手册](docs/ontology-runtime-version-binding.md)：活动版本初始化、审批发布、Runtime 启动、任务执行、证据核验和故障排查。
+- [受控工作区、测试执行与安全扫描](docs/controlled-workspace-execution.md)：Agent 候选文件操作、固定测试套件、扫描器开关、报告摘要和执行安全边界。
 - [本次发布说明](docs/releases/2026-10-30-ontology-bound-agent-runtime.md)：实现范围、安装升级、首次运行前置条件和验收边界。
 
 最小安装仍然是 `python -m pip install -e .`。真实多 Agent Runtime 额外安装 `python -m pip install -e '.[agent-runtime]'`；PostgreSQL / MySQL 连接器分别安装 `.[postgres]` / `.[mysql]`。本项目静态前端不需要 Node.js / npm。不要为了未启用的外部集成安装全部组件。
@@ -365,7 +366,7 @@ python scripts/run_ontology_discovery.py \
 
 1. **演示目录是合成元数据。** 版本和制品摘要不能用来证明真实 Kafka 二进制的来源、许可证或兼容性。
 2. **交付范围是配置包。** `candidate-config-bundle.tar.gz` 和对应 SBOM 只描述本例 `server.properties` 配置文件，不包含 Kafka runtime。
-3. **执行器不是 OS 级沙箱。** 当前使用固定命令、参数数组、`shell=False` 和超时限制；仍需容器/微虚机隔离、网络策略、只读挂载和短期凭证，才适合执行不可信代码。
+3. **执行器不是 OS 级沙箱。** Agent 每个 Workflow Run 使用独立仓库副本；候选文件写入不会修改源 checkout。测试执行和安全扫描默认关闭，显式开启后仍是宿主机进程；固定命令、参数数组、`shell=False` 和超时限制不能替代容器/微虚机隔离、网络策略、只读挂载和短期凭证。
 4. **生产安全扫描尚需外部工具。** Trivy/Gitleaks 仅在检测到并能够运行时生成报告；当前策略覆盖候选配置目录，不等同源代码 SAST、完整依赖 SCA 或 Kafka 镜像/二进制扫描。缺少强制证据时应阻断。
 5. **生产身份和审批系统未接入。** 本地角色权限与模拟审批不是企业 IAM、审批单系统或可抵赖性审计服务。
 6. **MCP/NVIDIA/Cognee 的真实服务未在本项目环境验收。** 本地 fixture 通过不能代表外部实例已连通；NVIDIA 适配器当前只读，Cognee 适配器使用候选暂存区。
@@ -401,3 +402,6 @@ python scripts/run_ontology_discovery.py \
 `make validate` 现额外执行 `scripts/validate_ontology_consumers.py`，验证 Agent Role、Skill、Workflow、Tool 和契约中的本体引用。
 
 **验收原则：** 只有当真实执行结果、退出码、日志、摘要与必需证据齐全时，才将相应任务标记为 `PASS`。模型生成的自然语言总结、fixture 结果或设计文档本身，都不能替代真实构建、测试、安全扫描和部署证据。
+
+
+本阶段 Agent 受控工作区与工具接入说明见 [controlled workspace execution](docs/controlled-workspace-execution.md)。
