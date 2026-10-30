@@ -89,7 +89,7 @@ class WorkspaceExecutionTests(unittest.TestCase):
                     result = self.service.run_tests("python-unit-tests")
         self.assertEqual(result["status"], "incomplete")
         self.assertEqual(run.call_count, 1)
-        self.assertIn("image pulls are disabled", result.get("reason", "") + result.get("sandbox", ""))
+        self.assertEqual(result["sandbox"], "image_missing")
 
     def test_git_worktree_backend_creates_a_local_run_branch(self):
         import shutil
