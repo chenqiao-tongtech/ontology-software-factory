@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .workspace_execution import WorkspaceExecution
+from .skill_registry import SkillRegistry
 
 from .ontology_runtime import (
     validate_agent_output, validate_agent_task_contract, validate_ontology_binding,
@@ -44,6 +45,7 @@ class OpenAIAgentsRuntime:
     def __init__(self, *, project_root: str | Path, model: str | None = None,
                  max_turns: int = 8, tracing_enabled: bool | None = None):
         self.project_root = Path(project_root).resolve()
+        self.skill_registry = SkillRegistry(self.project_root)
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-6.1-sol")
         self.max_turns = max(1, min(int(max_turns), 20))
         try:
@@ -254,11 +256,11 @@ class OpenAIAgentsRuntime:
             if tool_id not in allowed
         })
         skill_parts: list[str] = []
-        skills_root = self.project_root / "skills"
-        for skill_id in role.get("skillIds", []):
-            skill_path = skills_root / skill_id / "SKILL.md"
-            if skill_path.is_file():
-                skill_parts.append(skill_path.read_text(encoding="utf-8")[:12000])
+        try:
+            for skill_id in role.get("skillIds", []):
+                skill_parts.append(self.skill_registry.load_instructions(skill_id, role_id=role_id)[:12000])
+        except Exception as exc:
+            raise AgentContractError(f"Skill Registry rejected the assigned Skill: {type(exc).__name__}") from exc
         skill_text = "\n---\n".join(skill_parts)
         ontology = binding["ontology"]
         extensions = ontology.get("operationalExtensions", {}) if isinstance(ontology.get("operationalExtensions"), dict) else {}
