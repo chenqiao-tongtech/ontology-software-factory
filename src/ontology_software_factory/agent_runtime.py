@@ -165,15 +165,23 @@ class OpenAIAgentsRuntime:
         return resolved
 
     def run_agent(self, role_id: str, task_input: dict[str, Any], *,
-                  ontology_binding: dict[str, Any], task_contract: dict[str, Any]) -> dict[str, Any]:
+                  ontology_binding: dict[str, Any], task_contract: dict[str, Any],
+                  workspace_path: str | Path | None = None) -> dict[str, Any]:
         role = self._load_role(role_id)
         binding = validate_ontology_binding(ontology_binding)
         skill_contracts = validate_role_ontology_contract(role, binding, self.project_root)
         validate_agent_task_contract(self.project_root, task_contract, role=role, binding=binding)
         if role_id not in self._models:
             raise AgentContractError(f"Role has no registered typed output model: {role_id}")
-        allowed = self.effective_tool_ids(role_id)
-        tools = [self._tools_by_id[item] for item in allowed]
+        workspace = None
+        if workspace_path is not None:
+            workspace = WorkspaceExecution(
+                self.project_root, workspace_path,
+                run_id=str(task_input.get("run_id", "")),
+            )
+        tools_by_id = self._build_tools(self._function_tool, workspace)
+        allowed = self.effective_tool_ids(role_id, set(tools_by_id))
+        tools = [tools_by_id[item] for item in allowed]
         unavailable_skill_tools = sorted({
             str(tool_id)
             for skill in skill_contracts
