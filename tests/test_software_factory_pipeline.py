@@ -8,6 +8,8 @@ from ontology_software_factory.software_factory_pipeline import (
     PipelineValidationError, SoftwareFactoryPipeline,
 )
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 class FakeRunner:
     def __init__(self):
