@@ -59,9 +59,24 @@
       "kind": "post-delivery-support",
       "stage": "operations",
       "mayApproveHighRisk": false
+    },
+    {
+      "roleId": "factory-orchestrator",
+      "kind": "planner",
+      "stage": "factory-planning",
+      "mayApproveHighRisk": false
     }
   ],
   "stages": [
+    {
+      "stageId": "factory-planning",
+      "mode": "sequential",
+      "roleIds": [
+        "factory-orchestrator"
+      ],
+      "requires": [],
+      "condition": "approved_requirement_and_ontology_snapshot_available"
+    },
     {
       "stageId": "requirements",
       "mode": "sequential",
