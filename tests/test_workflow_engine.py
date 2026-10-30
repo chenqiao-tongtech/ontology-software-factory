@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, str(ROOT / "src"))
 from ontology_software_factory.workflow_engine import WorkflowEngine, WorkflowError  # noqa: E402
 from ontology_software_factory.workflow_store import ConcurrentWorkflowUpdate, SQLiteWorkflowStore  # noqa: E402
-from ontology_software_factory.ontology_runtime import load_active_ontology_binding  # noqa: E402
+from ontology_software_factory.ontology_runtime import ontology_digest  # noqa: E402
 
 
 class WorkflowEngineTests(unittest.TestCase):
@@ -25,6 +25,18 @@ class WorkflowEngineTests(unittest.TestCase):
 
     def create(self):
         return self.engine.create_run("单元测试运行", "tester", "test")
+
+    def ontology_binding(self):
+        ontology = json.loads((ROOT / "ontology/software-factory-ontology.json").read_text(encoding="utf-8"))
+        digest = ontology_digest(ontology)
+        return {
+            "snapshotId": "ont-" + digest[:16],
+            "digest": digest,
+            "ontologyId": ontology["ontologyId"],
+            "ontologyVersion": ontology["ontologyVersion"],
+            "schemaVersion": ontology["schemaVersion"],
+            "ontology": ontology,
+        }
 
     def test_definition_is_valid_dag(self):
         self.assertEqual(len(self.definition["steps"]), 7)
@@ -125,7 +137,7 @@ class WorkflowEngineTests(unittest.TestCase):
 
     def test_factory_orchestrator_plan_is_validated_persisted_and_exposed_in_run_detail(self):
         plan = json.loads((ROOT / "contracts/examples/factory-orchestrator-plan.example.json").read_text(encoding="utf-8"))
-        binding = load_active_ontology_binding(ROOT)
+        binding = self.ontology_binding()
         run = self.engine.create_run(
             "主控计划持久化测试", "tester", "test", ontology_binding=binding
         )
