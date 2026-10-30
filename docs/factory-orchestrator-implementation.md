@@ -76,6 +76,11 @@
 
 The module manifest is a logical partition over `ontology/software-factory-ontology.json`. It is intentionally not a second ontology definition store. The canonical JSON remains the only authoritative definition until a future migration creates separately versioned module files and a deterministic composition/publishing pipeline.
 
+## Architecture decisions
+
+- [ADR-0018: Factory Plan Approval and Persisted Phase State](adr/0018-factory-plan-approval-and-phase-state.md)
+- [ADR-0019: Run-Level Harness Budget Ledger and Tool Policy Lock](adr/0019-harness-run-budget-and-policy-lock.md)
+
 ## Validation commands
 
 ```bash
