@@ -361,7 +361,6 @@ class OpenAIAgentsRuntime:
             },
             evidence_refs=[str(item) for item in task_input.get("evidence_refs", [])],
         )
-        harness_token = self._active_harness_context.set((harness, principal, run_id, task_id))
         allowed = self.effective_tool_ids(role_id, set(tools_by_id))
         tools = [tools_by_id[item] for item in allowed]
         unavailable_skill_tools = sorted({
@@ -420,6 +419,7 @@ class OpenAIAgentsRuntime:
                     role_id, allowed, self.model, self.tracing_enabled, binding["snapshotId"], binding["digest"], task_digest)
         import time
         started = time.perf_counter()
+        harness_token = self._active_harness_context.set((harness, principal, run_id, task_id))
         try:
             result = self._Runner.run_sync(agent, task_payload, max_turns=self.max_turns)
             output = result.final_output
