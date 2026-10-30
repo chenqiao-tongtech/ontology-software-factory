@@ -79,7 +79,11 @@ class WorkflowEngine:
     def get_run_detail(self, run_id: str) -> dict[str, Any]:
         run = self.get_run(run_id)
         plans = self.store.list_factory_orchestrator_plans(run_id)
-        return {"run": run, "events": self.store.get_events(run_id), "orchestratorPlans": plans}
+        return {
+            "run": run, "events": self.store.get_events(run_id),
+            "orchestratorPlans": plans,
+            "factoryAssignmentResults": self.store.list_factory_assignment_results(run_id),
+        }
 
     def submit_factory_orchestrator_plan(self, run_id: str, plan: dict[str, Any],
                                          actor: str = "factory-orchestrator") -> dict[str, Any]:
@@ -117,6 +121,69 @@ class WorkflowEngine:
         except ValueError as exc:
             raise WorkflowError(str(exc), 409) from exc
         return {"plan": record, "validation": validation, "created": created}
+
+    def apply_factory_assignment_event(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Project a terminal Assignment Worker result into the Workflow event ledger."""
+        from .integration import IntegrationEventDeferred
+
+        event_id = str(payload.get("eventId", ""))
+        run_id = str(payload.get("workflowRunId", ""))
+        plan_id = str(payload.get("factoryPlanId", ""))
+        assignment_id = str(payload.get("factoryAssignmentId", ""))
+        task_id = str(payload.get("taskId", ""))
+        if not all((event_id, run_id, plan_id, assignment_id, task_id)):
+            raise WorkflowError("Factory Assignment event is missing required identifiers", 400)
+        if self.store.has_processed_integration_event(event_id):
+            return {"run": self.get_run(run_id), "deduplicated": True, "ignored": False}
+        run = self.get_run(run_id)
+        if run.get("status") == "paused":
+            raise IntegrationEventDeferred("Workflow Run is paused; keep Factory Assignment result pending")
+        plan_record = self.store.get_factory_orchestrator_plan(plan_id)
+        if plan_record is None or plan_record.get("workflowRunId") != run_id:
+            raise WorkflowError("Factory Assignment event references an unknown plan", 404)
+        phase = next((item for item in plan_record["plan"]["phases"]
+                      if item["phaseId"] == payload.get("factoryPhaseId")), None)
+        assignment = next((item for item in phase.get("assignments", [])
+                           if item["assignmentId"] == assignment_id), None) if phase else None
+        if assignment is None:
+            raise WorkflowError("Factory Assignment event does not match the persisted plan", 409)
+        if assignment.get("roleId") != payload.get("roleId") or assignment.get("skillId") != payload.get("skillId"):
+            raise WorkflowError("Factory Assignment event Role/Skill does not match the persisted plan", 409)
+        task_status = str(payload.get("taskStatus", ""))
+        if task_status not in {"succeeded", "failed", "dead_letter"}:
+            raise WorkflowError("Factory Assignment event status is not terminal", 400)
+        output = payload.get("output") if isinstance(payload.get("output"), dict) else {}
+        evidence = payload.get("evidence") if isinstance(payload.get("evidence"), list) else []
+        error = {
+            "errorClass": payload.get("errorClass"),
+            "errorMessage": str(payload.get("errorMessage", ""))[:1000],
+        }
+        event = self._event(
+            f"factory.assignment.{task_status}",
+            f"Factory Assignment {assignment_id} completed with status {task_status}",
+            actor="factory-assignment-projector",
+            payload={
+                "planId": plan_id, "phaseId": str(payload.get("factoryPhaseId")),
+                "assignmentId": assignment_id, "taskId": task_id,
+                "roleId": assignment["roleId"], "skillId": assignment["skillId"],
+                "evidenceTypes": sorted({str(item.get("type")) for item in evidence if isinstance(item, dict)}),
+                "artifactUri": output.get("artifactUri"),
+                "artifactSha256": output.get("artifactSha256"),
+                "errorClass": error["errorClass"],
+            },
+        )
+        try:
+            saved = self.store.record_factory_assignment_result(
+                run_id=run_id, plan_id=plan_id, assignment_id=assignment_id,
+                task_id=task_id, status=task_status, output=output, evidence=evidence,
+                error=error, event_id=event_id, event=event,
+            )
+        except ValueError as exc:
+            raise WorkflowError(str(exc), 409) from exc
+        return {
+            "run": self.get_run(run_id), "deduplicated": not saved,
+            "ignored": False, "assignmentId": assignment_id, "taskStatus": task_status,
+        }
 
     def create_run(self, title: str, requested_by: str = "local-operator", environment: str = "staging",
                    ontology_binding: dict[str, Any] | None = None,
