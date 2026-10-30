@@ -25,9 +25,9 @@
 - [安全边界与当前限制](#安全边界与当前限制)
 - [验收与进一步阅读](#验收与进一步阅读)
 
-## 主控智能体与模块化本体：首轮实现
+## 主控智能体与模块化本体：计划持久化阶段
 
-已加入 `factory-orchestrator` 受限规划角色、`factory-orchestration` Skill、结构化 AgentPlan Schema/示例、Typed Output 模型，以及确定性计划校验；主控角色当前仅具备只读工具权限，不能直接派发任务或改变 Workflow 状态。软件工厂本体版本更新为 1.1.0，增加主控计划、Workflow Run、Tool/Connector、来源系统和本体生命周期概念，并通过模块清单校验类与关系的完整、唯一归属。
+已加入 `factory-orchestrator` 受限规划角色、`factory-orchestration` Skill、结构化 AgentPlan Schema/示例、Typed Output 模型和确定性计划校验。当前支持通过 `POST /api/runs/{runId}/orchestrator-plan` 将计划绑定到已有 Workflow Run；系统校验计划与运行时锁定的本体快照一致，并在 SQLite 事务中保存不可变计划、SHA-256 摘要及 `factory.plan.submitted` 事件。重复提交相同计划幂等，复用计划 ID 但修改内容会被拒绝。主控角色仍仅具备只读工具权限。软件工厂本体包含主控计划、Workflow Run、Tool/Connector、来源系统和本体生命周期概念，并通过模块清单校验类与关系的完整、唯一归属。
 
 本轮新增校验命令：
 
@@ -36,7 +36,7 @@ make orchestrator-plan
 make ontology-modules
 ```
 
-**实现边界：** 主控 Agent 尚未接入持久化 Workflow Engine 的实际计划提交/任务创建路径；本体模块清单目前是对现有单一权威 JSON 的逻辑分组，不是独立模块发布系统。详细范围见 [首轮实现说明](docs/factory-orchestrator-implementation.md)。
+**实现边界：** 当前已完成经过校验的 AgentPlan 提交与持久化；主控 Agent 尚未自动生成计划，计划中的 assignment 尚未实例化为 Worker Task，也未接管动态阶段调度。现有 Agent Proposal Workflow 仍按固定阶段运行。本体模块清单目前是对现有单一权威 JSON 的逻辑分组，不是独立模块发布系统。详细范围见 [实现说明](docs/factory-orchestrator-implementation.md)。
 
 ## 主控智能体与软件工厂本体体系设计
 
