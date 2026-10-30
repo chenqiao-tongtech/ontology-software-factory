@@ -30,7 +30,7 @@ class AgentRuntimeWorkspaceToolTests(unittest.TestCase):
             self.assertNotIn("repository.branch.write", base_tools)
             scoped = runtime._build_tools(
                 identity_function_tool,
-                WorkspaceExecution(ROOT, workspace_path, run_id="runtime-test"),
+                WorkspaceExecution(root, workspace_path, run_id="runtime-test"),
             )
             self.assertTrue({
                 "workspace.read", "repository.branch.write", "architecture.plan.write",
