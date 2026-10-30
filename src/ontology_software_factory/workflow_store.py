@@ -312,7 +312,7 @@ class SQLiteWorkflowStore:
             raise ValueError("approval decision must be approved or rejected")
         actor = str(actor).strip()
         reason = str(reason).strip()
-        if not actor or actor == "factory-orchestrator":
+        if not actor or actor.casefold() == "factory-orchestrator":
             raise ValueError("an independent human or policy actor is required")
         if not reason:
             raise ValueError("approval decision requires an auditable reason")
@@ -329,7 +329,7 @@ class SQLiteWorkflowStore:
                 if row["status"] != "pending":
                     self._conn.rollback()
                     raise ValueError(f"plan approval is already {row['status']}")
-                if actor == row["requested_by"]:
+                if actor.casefold() == str(row["requested_by"]).strip().casefold():
                     self._conn.rollback()
                     raise ValueError("Plan submitter cannot approve or reject the same Plan")
                 self._conn.execute(
