@@ -405,3 +405,6 @@ python scripts/run_ontology_discovery.py \
 
 
 本阶段 Agent 受控工作区、Run 级 Role/Skill 锁、Docker 固定测试执行和 Git Worktree 本地候选分支说明见 [controlled workspace execution](docs/controlled-workspace-execution.md)。
+
+
+本阶段进一步加入 Run 级 Workflow/Role/Skill 内容锁、Docker 固定测试执行、digest 固定的容器安全扫描与 Agent Workspace 证据门禁；Git Worktree 仅创建本地候选分支，不自动 push/PR/merge。详见 [受控工作区与执行手册](docs/controlled-workspace-execution.md)。
