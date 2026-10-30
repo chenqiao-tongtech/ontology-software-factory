@@ -1,6 +1,6 @@
 {
   "ontologyId": "software-factory-core",
-  "ontologyVersion": "1.0.0",
+  "ontologyVersion": "1.1.0",
   "schemaVersion": "1.0.0",
   "title": "Software Factory Core Ontology",
   "description": "A lightweight, machine-readable vocabulary for the first software-factory MVP. It defines business objects, typed relations, and controlled vocabularies; it is not a replacement for IAM, workflow execution, or a formal OWL reasoner.",
@@ -294,7 +294,7 @@
     "The sample dataset is illustrative, not a real Kafka build or deployment record."
   ],
   "operationalExtensions": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "purpose": "Operational concepts for governed multi-agent collaboration. These extend, but do not replace or collapse into, the eleven core software-delivery classes.",
     "classes": [
       {
@@ -368,6 +368,50 @@
       {
         "name": "OntologyRevision",
         "description": "A versioned change to the published ontology, schema mappings and regression suite."
+      },
+      {
+        "name": "FactoryOrchestrator",
+        "description": "A bounded planning role that proposes factory plans but does not own workflow state or permissions."
+      },
+      {
+        "name": "AgentPlan",
+        "description": "A structured, ontology-pinned proposal describing phases, dependencies, role assignments, acceptance criteria and limits."
+      },
+      {
+        "name": "PlanPhase",
+        "description": "A bounded phase within an AgentPlan with explicit dependencies and completion criteria."
+      },
+      {
+        "name": "AgentAssignment",
+        "description": "A proposed assignment of a registered AgentRole and compatible Skill to a bounded task objective."
+      },
+      {
+        "name": "PlanValidationDecision",
+        "description": "A deterministic validation result recording whether a proposed plan satisfies workflow, role, skill and budget constraints."
+      },
+      {
+        "name": "OntologyModule",
+        "description": "A versioned logical module grouping ontology classes, relations, constraints and competency questions."
+      },
+      {
+        "name": "OntologySnapshot",
+        "description": "An immutable, digest-addressed view of the complete ontology used by a workflow run."
+      },
+      {
+        "name": "OntologyReleaseManifest",
+        "description": "A versioned manifest pinning ontology module versions, dependencies and content digests."
+      },
+      {
+        "name": "OntologyChangeRequest",
+        "description": "A reviewed proposal to add, change, deprecate or retire ontology concepts and relations."
+      },
+      {
+        "name": "OntologySourceSnapshot",
+        "description": "A source-system revision and scan boundary used to make ontology discovery reproducible."
+      },
+      {
+        "name": "OntologyExtractionRun",
+        "description": "A parser or model execution that extracts ontology candidates from authorized source snapshots."
       }
     ],
     "relations": [
@@ -443,6 +487,61 @@
         "name": "definesCompetencyQuestion",
         "source": "OntologyCandidate",
         "target": "CompetencyQuestion"
+      },
+      {
+        "name": "proposesPlan",
+        "source": "FactoryOrchestrator",
+        "target": "AgentPlan"
+      },
+      {
+        "name": "containsPhase",
+        "source": "AgentPlan",
+        "target": "PlanPhase"
+      },
+      {
+        "name": "assignsRole",
+        "source": "PlanPhase",
+        "target": "AgentAssignment"
+      },
+      {
+        "name": "assignmentUsesRole",
+        "source": "AgentAssignment",
+        "target": "AgentRole"
+      },
+      {
+        "name": "assignmentUsesSkill",
+        "source": "AgentAssignment",
+        "target": "Skill"
+      },
+      {
+        "name": "validatesPlan",
+        "source": "PlanValidationDecision",
+        "target": "AgentPlan"
+      },
+      {
+        "name": "pinsOntologySnapshot",
+        "source": "AgentPlan",
+        "target": "OntologySnapshot"
+      },
+      {
+        "name": "containsOntologyModule",
+        "source": "OntologyReleaseManifest",
+        "target": "OntologyModule"
+      },
+      {
+        "name": "referencesOntologySnapshot",
+        "source": "WorkflowRun",
+        "target": "OntologySnapshot"
+      },
+      {
+        "name": "proposesOntologyChange",
+        "source": "OntologyCandidate",
+        "target": "OntologyChangeRequest"
+      },
+      {
+        "name": "scansSourceSnapshot",
+        "source": "OntologyExtractionRun",
+        "target": "OntologySourceSnapshot"
       }
     ],
     "invariants": [
@@ -454,7 +553,11 @@
       "LLM discovery results remain candidates until independent human approval and versioned promotion.",
       "Candidate claims require source references; provenance coverage and benchmark scores are evaluation signals, not proof of truth.",
       "A candidate digest binds the exact content reviewed; any material change invalidates approval.",
-      "External semantic catalogues and Cognee graph stores are adapters, not the production ontology authority."
+      "External semantic catalogues and Cognee graph stores are adapters, not the production ontology authority.",
+      "FactoryOrchestrator may propose a plan but cannot dispatch tasks, mutate workflow state, grant permissions or approve its own plan.",
+      "Every AgentPlan is pinned to one immutable OntologySnapshot and is validated by the deterministic Workflow Engine before task creation.",
+      "Ontology module manifests must cover every published class and relation exactly once; module manifests do not replace the canonical ontology definitions.",
+      "Ontology discovery records the source revision and scan completeness; missing objects from incomplete scans are not deletion evidence."
     ]
   }
 }
