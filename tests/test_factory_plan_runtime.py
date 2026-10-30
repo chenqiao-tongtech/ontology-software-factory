@@ -74,7 +74,7 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
             self.run["id"], self.plan["planId"], "approved",
             actor="test-reviewer", reason="Test fixture approval",
         )
-        self.dispatcher = FactoryPlanDispatcher(self.task_store, project_root=ROOT)
+        self.dispatcher = FactoryPlanDispatcher(self.task_store, project_root=ROOT, workflow_store=self.workflow_store)
 
     def tearDown(self):
         self.task_store.close()
@@ -142,7 +142,7 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
         detail = self.engine.get_run_detail(self.run["id"])
         self.assertEqual(detail["factoryAssignmentResults"][0]["assignmentId"], "analyze-requirement")
         self.assertIn("factory.assignment.succeeded", [item["action"] for item in detail["events"]])
-        execution = get_factory_plan_execution(self.task_store, self.plan_record)
+        execution = get_factory_plan_execution(self.task_store, self.plan_record, self.workflow_store)
         self.assertEqual(execution["completedAssignments"], 1)
         self.assertEqual(execution["phases"][0]["status"], "succeeded")
         self.assertEqual(
