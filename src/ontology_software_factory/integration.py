@@ -117,7 +117,10 @@ class WorkflowOutboxRelay:
         failed = []
         for event in events:
             try:
-                result = self.workflow_engine.apply_worker_event(event["payload"])
+                if event["payload"].get("factoryAssignmentId"):
+                    result = self.workflow_engine.apply_factory_assignment_event(event["payload"])
+                else:
+                    result = self.workflow_engine.apply_worker_event(event["payload"])
                 if result.get("ignored"):
                     ignored += 1
                 ok = self.task_store.mark_outbox_delivered(event["eventId"], self.relay_id)
