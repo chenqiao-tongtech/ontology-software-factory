@@ -177,10 +177,39 @@ class FactoryPlanRuntimeTests(unittest.TestCase):
 
     def test_phase_retry_requires_failed_phase_and_has_bounded_attempts(self):
         phase = self.plan["phases"][0]
+        assignment = phase["assignments"][0]
         with self.assertRaises(WorkflowError):
             self.engine.retry_factory_orchestrator_phase(
                 self.run["id"], self.plan["planId"], phase["phaseId"],
                 actor="independent-reviewer", reason="Cannot retry a pending phase",
+            )
+        for attempt in (1, 2, 3):
+            self.engine.apply_factory_assignment_event({
+                "eventId": f"EVT-PHASE-RETRY-LIMIT-{attempt}",
+                "workflowRunId": self.run["id"], "factoryPlanId": self.plan["planId"],
+                "factoryPhaseId": phase["phaseId"], "factoryPhaseAttempt": attempt,
+                "factoryAssignmentId": assignment["assignmentId"],
+                "taskId": f"failed-task-attempt-{attempt}",
+                "roleId": assignment["roleId"], "skillId": assignment["skillId"],
+                "taskStatus": "failed", "output": {}, "evidence": [],
+                "errorClass": "permanent", "errorMessage": f"attempt {attempt} failed",
+            })
+            state = next(
+                item for item in self.workflow_store.list_factory_plan_phases(self.run["id"], self.plan["planId"])
+                if item["phaseId"] == phase["phaseId"]
+            )
+            self.assertEqual(state["status"], "failed")
+            self.assertEqual(state["attempt"], attempt)
+            if attempt < 3:
+                retried = self.engine.retry_factory_orchestrator_phase(
+                    self.run["id"], self.plan["planId"], phase["phaseId"],
+                    actor="independent-reviewer", reason=f"Authorize bounded retry {attempt + 1}",
+                )
+                self.assertEqual(retried["attempt"], attempt + 1)
+        with self.assertRaisesRegex(WorkflowError, "retry limit"):
+            self.engine.retry_factory_orchestrator_phase(
+                self.run["id"], self.plan["planId"], phase["phaseId"],
+                actor="independent-reviewer", reason="Attempt limit reached",
             )
 
     def test_high_risk_or_human_approval_plan_is_not_dispatched(self):
