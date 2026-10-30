@@ -57,7 +57,7 @@ class FactoryOrchestrationTests(unittest.TestCase):
         plan = sample_plan()
         binding = copy.deepcopy(plan["ontologyBinding"])
         binding["ontologyVersion"] = "9.9.9"
-        with self.assertRaisesRegex(FactoryPlanError, "different ontology binding"):
+        with self.assertRaisesRegex(FactoryPlanError, "active ontology binding"):
             validate_factory_plan(ROOT, plan, ontology_binding=binding)
 
     def test_plan_limits_cannot_exceed_team_topology(self):
