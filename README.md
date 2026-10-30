@@ -376,6 +376,16 @@ python scripts/run_ontology_discovery.py \
 9. **观测不是生产遥测后端。** 当前以本地 JSON/JSONL 记录为主，不提供多租户账单、企业指标平台或完整审计存储。
 10. **设计资产验证不等于生产就绪。** 通过 `make validate` 表示定义和引用一致，不代表所有架构子系统已经实现。
 
+## S4–S8 下一阶段实施验收基线
+
+为避免把已有参考实现误判为生产级能力，下一阶段的硬化目标与验收条件单独维护：
+
+- [S4 多智能体运行时硬化](docs/implementation/s4-agent-runtime-hardening.md)：策略授权、上下文最小化、结构化输出、交接重放、独立验证与预算停止。
+- [S5 Workflow / State Machine 硬化](docs/implementation/s5-workflow-state-machine-hardening.md)：并行 readiness/join、租约与 attempt fencing、审批绑定、暂停恢复、取消补偿和事件重放。
+- [S6–S8 工具、Runner 与质量证据硬化](docs/implementation/s6-s8-tools-runner-quality-evidence.md)：工具契约、受限执行、MCP/HTTP 权限边界、候选摘要绑定和 fail-closed Gate。
+
+这三份文档是下一阶段的实施验收基线，不代表其中列出的所有目标能力已经完成。实际完成情况应以对应代码、测试和外部集成验收结果为准。
+
 ## 验收与进一步阅读
 
 建议按以下顺序阅读项目文档：
