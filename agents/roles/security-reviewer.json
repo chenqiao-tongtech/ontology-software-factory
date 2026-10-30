@@ -18,11 +18,13 @@
     "dependency-security-review"
   ],
   "toolIds": [
-    "catalog.read",
     "artifacts.read",
-    "security.scan",
+    "catalog.read",
+    "contract.validate",
+    "dependencies.inspect",
     "security.finding.write",
-    "contract.validate"
+    "security.scan",
+    "source.catalog.read"
   ],
   "allowedActions": [
     "catalog.read",
