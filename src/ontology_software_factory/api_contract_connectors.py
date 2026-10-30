@@ -191,3 +191,99 @@ class ProtobufConnector(_ContractFileConnector):
         if not assets:
             raise SourceConnectorError("no supported Protocol Buffers definitions were found")
         return SourceScanResult(source_id, self.source_type, "complete", tuple(assets))
+
+
+class DbtManifestConnector(_ContractFileConnector):
+    """Import dbt manifest.json and optional catalog.json metadata without running dbt."""
+
+    source_type = "dbt"
+
+    def scan(self, source_id: str, location: str | Path) -> SourceScanResult:
+        path, content, digest = self._read(location)
+        try:
+            manifest = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise SourceConnectorError("dbt manifest must be JSON") from exc
+        if not isinstance(manifest, dict) or not isinstance(manifest.get("nodes"), dict):
+            raise SourceConnectorError("dbt manifest is missing the nodes object")
+        catalog_path = path.parent / "catalog.json"
+        catalog = {}
+        if catalog_path.is_file() and not catalog_path.is_symlink():
+            try:
+                catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                catalog = {}
+        catalog_nodes = catalog.get("nodes", {}) if isinstance(catalog, dict) else {}
+        assets = []
+        for unique_id, node in sorted(manifest["nodes"].items()):
+            if not isinstance(node, dict):
+                continue
+            columns = node.get("columns", {}) if isinstance(node.get("columns"), dict) else {}
+            catalog_node = catalog_nodes.get(unique_id, {}) if isinstance(catalog_nodes, dict) else {}
+            catalog_columns = catalog_node.get("columns", {}) if isinstance(catalog_node, dict) else {}
+            assets.append(self._asset(
+                source_id, "dbt-node", str(node.get("name") or unique_id),
+                f"dbt:{path.name}#{unique_id}", digest,
+                {"uniqueId": unique_id, "resourceType": node.get("resource_type"),
+                 "packageName": node.get("package_name"), "database": node.get("database"),
+                 "schema": node.get("schema"), "description": node.get("description"),
+                 "materialized": (node.get("config") or {}).get("materialized"),
+                 "dependsOn": (node.get("depends_on") or {}).get("nodes", []),
+                 "columns": [{"name": name, "description": definition.get("description"),
+                              "dataType": (catalog_columns.get(name) or {}).get("type")}
+                             for name, definition in sorted(columns.items()) if isinstance(definition, dict)]},
+            ))
+        for unique_id, source in sorted((manifest.get("sources") or {}).items()):
+            if isinstance(source, dict):
+                assets.append(self._asset(
+                    source_id, "dbt-source", str(source.get("name") or unique_id),
+                    f"dbt:{path.name}#{unique_id}", digest,
+                    {"uniqueId": unique_id, "sourceName": source.get("source_name"),
+                     "database": source.get("database"), "schema": source.get("schema"),
+                     "description": source.get("description")},
+                ))
+        return SourceScanResult(source_id, self.source_type, "complete", tuple(assets))
+
+
+class SchemaRegistryExportConnector(_ContractFileConnector):
+    """Import an explicitly exported subject/version JSON inventory; performs no network calls."""
+
+    source_type = "schema-registry-export"
+
+    def scan(self, source_id: str, location: str | Path) -> SourceScanResult:
+        path, content, digest = self._read(location)
+        try:
+            export = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise SourceConnectorError("Schema Registry export must be JSON") from exc
+        subjects = export.get("subjects") if isinstance(export, dict) else None
+        if not isinstance(subjects, list):
+            raise SourceConnectorError("Schema Registry export requires a subjects array")
+        assets = []
+        for entry in subjects:
+            if not isinstance(entry, dict) or not entry.get("subject"):
+                continue
+            subject = str(entry["subject"])
+            version = entry.get("version", "latest")
+            schema_text = entry.get("schema")
+            schema_type = str(entry.get("schemaType", "AVRO")).upper()
+            schema_digest = hashlib.sha256(str(schema_text or "").encode("utf-8")).hexdigest()
+            schema_info: dict[str, Any] = {}
+            if isinstance(schema_text, str) and schema_type in {"AVRO", "JSON"}:
+                try:
+                    schema_obj = json.loads(schema_text)
+                    if isinstance(schema_obj, dict):
+                        schema_info = {"type": schema_obj.get("type"), "name": schema_obj.get("name"),
+                                       "namespace": schema_obj.get("namespace"),
+                                       "fields": [field.get("name") for field in schema_obj.get("fields", [])
+                                                  if isinstance(field, dict)]}
+                except json.JSONDecodeError:
+                    schema_info = {"parseStatus": "unparsed"}
+            assets.append(self._asset(
+                source_id, "event-schema", subject, f"schema-registry:{subject}@{version}", digest,
+                {"subject": subject, "version": version, "schemaId": entry.get("id"),
+                 "schemaType": schema_type, "schemaSha256": schema_digest, **schema_info},
+            ))
+        if not assets:
+            raise SourceConnectorError("Schema Registry export contains no valid subject records")
+        return SourceScanResult(source_id, self.source_type, "complete", tuple(assets))
