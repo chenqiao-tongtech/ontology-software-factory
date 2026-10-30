@@ -453,12 +453,12 @@ Agent 监控台应将 Run、Plan、Phase、Task、Attempt、Agent、Skill、Tool
 |---|---|---|
 | 核心交付本体 | 11 个核心类、关系、受控词汇和不变量 | 产品版本、架构决策、接口契约、供应链等需逐步补齐 |
 | Agent/本体发现扩展 | AgentTeam、AgentRole、Skill、AgentTask、AgentHandoff、AgentResult、CoordinationDecision、OntologyCandidate/Evidence/Evaluation/Approval/Revision 等 | 缺少统一主控 Agent/Plan/Phase/Attempt 与完整执行关系 |
-| 本体校验 | JSON Schema、跨对象语义校验、消费者引用检查 | 需扩展模块化本体依赖、关系基数和 Competency Question 回归 |
+| 本体校验 | JSON Schema、跨对象语义校验、消费者引用检查；新增 49 个类、47 个关系的逻辑模块清单和完整性校验 | 模块清单目前只是对单一权威 JSON 的逻辑分组；独立模块包、依赖解析、发布清单和自动组合仍待实现；关系基数与 Competency Question 回归需继续扩展 |
 | 版本治理 | 快照、摘要、结构 Diff、消费者影响分析、摘要绑定审批基础 | 发布清单、签名、迁移计划、模块依赖锁和自动回滚流程需加强 |
 | 自动发现 | 本地目录、数据库 Schema、Git 元数据、OpenAPI/AsyncAPI/GraphQL/Protobuf/dbt/Schema Registry 离线导入；NVIDIA/Cognee 适配器基础 | 企业文档、工单、实时事件源、增量游标、完整删除检测和统一 Connector Runtime 集成仍需推进 |
 | 候选治理 | 来源证据、Critic、Benchmark、人工审批提案 | 证据覆盖阈值、冲突队列、来源权威级别和回归门禁需统一 |
 | 图谱呈现 | Portal 已有本体关系图原型和候选证据视图 | 需多模块浏览、版本 Diff、影响路径、大图性能和完整权限过滤 |
-| 主控智能体 | 现有 Agent Team、Workflow 和主控相关协调基础 | 尚需定义 Factory Orchestrator 角色、Plan Schema、运行绑定和失败恢复闭环 |
+| 主控智能体 | 已增加 Factory Orchestrator Role/Skill、结构化 AgentPlan Schema、Pydantic Typed Output、只读工具权限、团队拓扑注册和确定性计划校验 | 尚未接入持久化 Workflow Engine 的计划提交、任务实例化、恢复与运行监控闭环；当前验证器不派发任务 |
 | Harness 集成 | 本地 HarnessRuntime 已提供上下文、预算、工具授权和审计能力 | 需成为 Agent Runtime 默认 Tool Gateway，并关联 Workflow Run/Task/Trace |
 
 以上状态区分设计定义与可运行能力。新增本体类或文档不代表对应运行时、UI 或外部连接器已经实现。
@@ -531,13 +531,10 @@ Agent 监控台应将 Run、Plan、Phase、Task、Attempt、Agent、Skill、Tool
 
 建议按实施阶段新增，不要求本次一次性落地全部代码：
 
-- ontology/modules/foundation-governance.json
-- ontology/modules/product-delivery.json
-- ontology/modules/agent-workflow.json
-- ontology/modules/tool-integration.json
-- ontology/modules/evidence-provenance.json
-- ontology/modules/quality-security.json
-- ontology/releases/manifest.schema.json
+- ontology/module-manifest.json（已实现逻辑模块分组，定义仍以 canonical JSON 为准）
+- ontology/schemas/module-manifest.schema.json（已实现）
+- ontology/modules/*.json（未来将定义独立模块内容并由发布流水线组合）
+- ontology/releases/manifest.schema.json（未来独立模块发布清单）
 - contracts/schemas/factory-orchestrator-plan.schema.json
 - contracts/schemas/ontology-module.schema.json
 - contracts/schemas/ontology-release-manifest.schema.json
