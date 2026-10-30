@@ -70,7 +70,7 @@ class OntologyRuntimeBindingTests(unittest.TestCase):
         lock = build_runtime_contract_lock(ROOT, definition, self.snapshot)
         try:
             definition["description"] = definition.get("description", "") + " changed after run creation"
-            definition_path.write_text(json.dumps(definition, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+            definition_path.write_text(json.dumps(definition, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             with self.assertRaises(OntologyBindingError):
                 validate_runtime_contract_lock(ROOT, lock, "implementation-agent", self.snapshot)
         finally:
