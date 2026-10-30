@@ -40,6 +40,24 @@ Pydantic 等 Agent SDK 传递依赖由 pip 根据包元数据安装，不要手�
 
 安装上述工具后，确认命令可从启动 Portal / 执行质量 Gate 的同一用户环境的 PATH 中找到。项目不负责管理外部 CLI 的升级、许可或供应链风险。
 
+官方安装入口：
+- Git：<https://git-scm.com/downloads>
+- GNU Make：<https://www.gnu.org/software/make/>
+- Semgrep：<https://semgrep.dev/docs/getting-started/>
+- Gitleaks：<https://github.com/gitleaks/gitleaks#installing>
+- Trivy：<https://trivy.dev/latest/getting-started/installation/>
+
+安装后可检查：
+
+```bash
+command -v git
+command -v semgrep
+command -v gitleaks
+command -v trivy
+```
+
+某个可选工具未安装不影响基础 Portal 启动；如果质量策略将其列为必需检查，则对应 Gate 必须保持 incomplete / blocked，不能用模拟报告代替。
+
 ## 4. 外部服务与连接配置
 
 | 服务 / 组件 | 连接方式 | 配置 / 凭据 | 边界 |
