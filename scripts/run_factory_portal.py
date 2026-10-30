@@ -37,6 +37,7 @@ from ontology_software_factory.remote_connectors import RemoteRepositoryConnecto
 from ontology_software_factory.database_connectors import PostgreSQLSchemaConnector, MySQLSchemaConnector
 from ontology_software_factory.ontology_versioning import create_snapshot, diff_snapshots, find_snapshot, ontology_digest
 from ontology_software_factory.ontology_governance import build_consumer_graph, analyze_consumer_impact, compatibility_report
+from ontology_software_factory.source_sync import compare_asset_manifests
 from ontology_software_factory.observability import build_platform_observability_report
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -396,6 +397,20 @@ def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> l
             result = scan_source(source, allow_remote=allow_remote)
             duration_ms = round((time.monotonic() - started) * 1000, 1)
             result["scanDurationMs"] = duration_ms
+            current_assets = result.get("assets", []) if isinstance(result.get("assets", []), list) else []
+            current_complete = (
+                result.get("status") in {"connected", "partial"}
+                and int(result.get("assetCount", 0) or 0) <= len(current_assets)
+            )
+            previous_good = isinstance(cached, dict) and cached.get("status") in {"connected", "partial"}
+            previous_assets = cached.get("assets", []) if previous_good else None
+            previous_complete = bool(cached.get("manifestComplete", False)) if previous_good else False
+            result["manifestComplete"] = current_complete
+            result["changeSummary"] = compare_asset_manifests(
+                previous_assets, current_assets,
+                previous_complete=previous_complete,
+                current_complete=current_complete,
+            )
             history = list(histories.get(source["id"], []))
             history.append({
                 "syncId": "sync-" + uuid.uuid4().hex[:10],
@@ -404,6 +419,8 @@ def source_scan_results(*, force: bool = False, allow_remote: bool = False) -> l
                 "durationMs": duration_ms,
                 "status": result.get("status", "unknown"),
                 "assetCount": int(result.get("assetCount", 0) or 0),
+                "changeSummary": result.get("changeSummary"),
+                "manifestComplete": result.get("manifestComplete", False),
                 "errorClass": _source_error_class(result),
             })
             updated_histories[source["id"]] = history[-20:]
