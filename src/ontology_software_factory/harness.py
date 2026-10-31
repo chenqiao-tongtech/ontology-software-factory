@@ -281,6 +281,7 @@ class HarnessRuntime:
         status = "denied"
         result: Any = None
         approved = False
+        approval_reserved = False
         try:
             if self.kill_switch_path and self.kill_switch_path.exists():
                 raise HarnessDenied("Harness kill switch is active")
@@ -292,12 +293,13 @@ class HarnessRuntime:
             if definition.get("approvalRequired") is True:
                 if approval_ref and self.approval_store is not None:
                     try:
-                        self.approval_store.consume(
+                        self.approval_store.reserve(
                             approval_ref, run_id=run_id, task_id=task_id,
                             tenant_id=principal.tenant_id, tool_id=tool_id,
                             payload=payload, executor=principal.principal_id,
                         )
                         approved = True
+                        approval_reserved = True
                     except PermissionError as exc:
                         raise HarnessDenied(str(exc)) from exc
                 else:
@@ -335,6 +337,9 @@ class HarnessRuntime:
                 run_id=run_id, task_id=task_id, idempotency_key=idempotency_key,
                 _harness_grant=_harness_dispatch_grant(),
             )
+            if approval_reserved:
+                self.approval_store.finalize_reservation(approval_ref, outcome="consumed")
+                approval_reserved = False
             status = "succeeded"
             return result
         except HarnessBudgetExceeded:
@@ -345,6 +350,11 @@ class HarnessRuntime:
             raise
         except Exception:
             status = "failed"
+            if approval_reserved and approval_ref and self.approval_store is not None:
+                try:
+                    self.approval_store.finalize_reservation(approval_ref, outcome="uncertain")
+                except Exception:
+                    pass
             raise
         finally:
             elapsed_ms = int((time.monotonic() - started) * 1000)
