@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .tool_registry import ToolRegistry, ToolPolicyError
+from .tool_registry import ToolRegistry, ToolPolicyError, _approval_dispatch_grant
 
 
 class HarnessDenied(PermissionError):
@@ -329,7 +329,8 @@ class HarnessRuntime:
                         raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
                     usage.tool_calls += 1
             result = self.tool_registry.invoke(
-                principal.role_id, tool_id, payload, approval_granted=approved
+                principal.role_id, tool_id, payload,
+                _approval_grant=_approval_dispatch_grant() if approved else None,
             )
             status = "succeeded"
             return result
