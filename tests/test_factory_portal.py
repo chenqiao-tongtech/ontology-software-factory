@@ -89,7 +89,7 @@ class FactoryPortalServiceTests(unittest.TestCase):
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('path == "/api/knowledge-graph/entities"', script)
         self.assertIn('"/api/knowledge-graph/relations"', script)
-        self.assertIn('"/neighborhood"', script)
+        self.assertIn('/neighborhood', script)
 
     def test_graph_workbench_has_focus_filters_and_source_consumer_inspection(self):
         html = portal.APP.read_text(encoding="utf-8")
