@@ -3,7 +3,7 @@
 > 日期：2026-10-31  
 > 阶段：P1 统一运行时与治理控制面  
 > 实施分支：work/five-phase-delivery-2026-10-31  
-> 状态：第一轮代码增量已提交；仍需本地全量测试与真实 Provider 验收。
+> 状态：Harness 预算与生命周期审计、Task 取消已实施；CI 正在验证最新提交。P1 的全局 Tool Gateway、独立审批绑定和统一 Evidence Contract 仍未全部完成。
 
 ## 1. 本轮目标
 
@@ -130,3 +130,47 @@ python -m unittest discover -s tests
 ### 7.3 第二轮验证
 
 以上修复和新增测试已推送到本 PR 分支。GitHub Actions 将对最新提交重新执行 `make validate` 与 `make test`。在新的 check run 完成前，不将 P1 标记为 CI 通过。
+
+
+## 8. 第三轮 P1 收尾验证增量（2026-10-31）
+
+### 8.1 预算测试契约修正
+
+首次 CI 在 367 项测试中有 1 项失败，定位为 tests/test_harness_governance.py 的 PersistedUsage 测试替身始终返回 allowed=True，没有遵循真实 SQLite Usage Store 的 limits + enforce_limits 契约。该替身现已按原子预算接口实现超限拒绝，并验证拒绝时不增加 usage。
+
+### 8.2 真实 SQLite 账本回归测试
+
+同一测试文件新增真实 SQLiteWorkflowStore 集成测试，验证：
+
+- 第一次工具调用成功并记账；
+- 第二次调用在 Handler 执行前被预算拒绝；
+- usage 计数仍为上限值；
+- usage event ledger 保留第二次 budget_exceeded 拒绝记录。
+
+这避免仅凭模拟对象证明预算控制有效。
+
+### 8.3 最新 CI 状态
+
+- 修正测试替身的提交：b3a1cbfeead276a90f2f2b2ead157b5ad3b57d45。
+- 增加真实 SQLite 回归测试的提交：7143697ef429af33439629cdc28507fdfaf16cae。
+- 对应 GitHub Actions：PR CI run 41165485064，最终状态以该 Run 结果为准。
+- 之前 SHA 2a7641e763bd8ad19899dd0a55785d8e562b7c97 的 CI 已失败，不能用该结果代表最新提交，也不能将其忽略。
+
+## 9. P1 收尾验收矩阵
+
+| 控制项 | 当前状态 | 说明 |
+|---|---|---|
+| OpenAI Agents SDK 工具调用经过 Harness | 已实现（限定适配器） | 其他 Agent Framework 尚未证明 |
+| Role/Skill/Policy 运行时契约锁 | 已有基础实现 | 需要跨所有执行入口统一强制 |
+| Run 工具预算持久化与拒绝审计 | 已实现，待最新 CI | SQLite 单机，不是分布式额度服务 |
+| Agent Run 生命周期 metadata-only 审计 | 已实现，待最新 CI | 不记录 Prompt/输出/Tool payload |
+| Task Lease、重试、超时和幂等入队 | 已有基础实现 | 外部副作用仍需业务幂等 |
+| Task 取消和迟到 Worker 结果隔离 | 已实现，待最新 CI | 不能强杀 Handler 或回滚已发生副作用 |
+| Workflow Plan 独立审批 | 已有基础实现 | 绑定 Plan Digest；不等于所有 Tool Invocation 的审批凭证 |
+| Tool Invocation 独立审批记录 | 未完成 | 当前 Harness validator 仍是注入式回调接口 |
+| 统一 Evidence Contract | 部分实现 | Task 级 Evidence 校验存在，尚未统一绑定输入/源码摘要、Tool 版本和报告摘要 |
+| MCP/HTTP/Portal 全部写路径统一 Tool Gateway | 未完成 | 需完成写操作清单与逐项接入 |
+| 外部副作用幂等、对账和补偿 | 未完成 | 需要 Adapter 层协议及真实系统集成测试 |
+| 跨租户/策略漂移/审批缺失等负向集成测试 | 部分实现 | 需覆盖统一 Gateway 的端到端路径 |
+
+**P1 结论：** 当前增量补齐了 Harness 的关键运行时控制，并增加 Task 取消和预算账本回归测试，但尚未达到五阶段基线中 P1 的完整退出条件。不能仅凭这轮 CI 通过（即使通过）就宣称 P1 全部完成；建议将当前工作标记为“P1 核心运行时基线完成，统一 Tool Gateway / Approval / Evidence 收尾待完成”。
