@@ -19,7 +19,7 @@ class MCPStdioTests(unittest.TestCase):
             self.assertEqual(client.list_tools()[0]["name"], "echo")
             registry = ToolRegistry(ROOT, {
                 "documents.read": lambda payload, context: client.call_tool(
-                    "echo", payload, allowed_names={"echo"}, invocation_context=context
+                    "echo", payload, allowed_names={"echo"}, allowed_tool_ids={"documents.read"}, invocation_context=context
                 )
             })
             harness = HarnessRuntime(project_root=ROOT, tool_registry=registry,
@@ -34,7 +34,7 @@ class MCPStdioTests(unittest.TestCase):
         with MCPStdioClient(command, cwd=ROOT, timeout=2) as client:
             client.start()
             with self.assertRaises(ToolPolicyError):
-                client.call_tool("echo", {}, allowed_names={"echo"})
+                client.call_tool("echo", {}, allowed_names={"echo"}, allowed_tool_ids={"documents.read"})
             with self.assertRaises(ToolPolicyError):
                 client.request("tools/call", {"name": "echo", "arguments": {}})
 
@@ -43,7 +43,7 @@ class MCPStdioTests(unittest.TestCase):
         with MCPStdioClient(command, cwd=ROOT, timeout=2) as client:
             client.start()
             with self.assertRaises(MCPTransportError):
-                client.call_tool("exec", {}, allowed_names={"echo"},
+                client.call_tool("exec", {}, allowed_names={"echo"}, allowed_tool_ids={"documents.read"},
                     invocation_context=object())
 
 
