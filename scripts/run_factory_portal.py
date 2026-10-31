@@ -36,6 +36,7 @@ from ontology_software_factory.source_connectors import (
 from ontology_software_factory.remote_connectors import RemoteRepositoryConnector
 from ontology_software_factory.database_connectors import PostgreSQLSchemaConnector, MySQLSchemaConnector
 from ontology_software_factory.ontology_versioning import create_snapshot, diff_snapshots, find_snapshot, ontology_digest
+from ontology_software_factory.ontology_registry import SQLiteOntologyRegistry, OntologyRegistryError
 from ontology_software_factory.ontology_governance import build_consumer_graph, analyze_consumer_impact, compatibility_report
 from ontology_software_factory.source_sync import compare_asset_manifests
 from ontology_software_factory.source_webhooks import verify_source_webhook, SourceWebhookError
@@ -469,6 +470,28 @@ def load_ontology() -> dict:
 
 def state_read() -> dict:
     return ensure_state()
+
+
+def ensure_ontology_registry() -> dict:
+    """Migrate local Portal snapshots into the durable registry and return its active pointer."""
+    state = state_read()
+    ontology_id = str(load_json(FORMAL_ONTOLOGY, {}).get("ontologyId", "unknown"))
+    with SQLiteOntologyRegistry(STATE_DIR / "ontology-registry.sqlite3") as registry:
+        for snapshot in reversed(state.get("ontologySnapshots", [])):
+            if isinstance(snapshot, dict) and snapshot.get("ontology"):
+                registry.register_snapshot(snapshot)
+        active_id = state.get("activeOntologySnapshotId")
+        pointer = registry.get_active_pointer(ontology_id)
+        if active_id and not pointer:
+            registry.import_legacy_active(ontology_id, active_id)
+            pointer = registry.get_active_pointer(ontology_id)
+        return {"ontologyId": ontology_id, "activePointer": pointer, "snapshots": registry.list_snapshots()}
+
+
+def get_ontology_registry_snapshot(snapshot_id: str) -> dict | None:
+    ensure_ontology_registry()
+    with SQLiteOntologyRegistry(STATE_DIR / "ontology-registry.sqlite3") as registry:
+        return registry.get_snapshot(snapshot_id)
 
 
 def state_update(mutator):
@@ -954,9 +977,14 @@ class PortalHandler(BaseHTTPRequestHandler):
             ))
         if path == "/api/sources": return self._send_json(200, {"sources": source_scan_results()})
         if path == "/api/ontology/versions":
-            snapshots = state_read().get("ontologySnapshots", [])
-            public = [{key: value for key, value in item.items() if key != "ontology"} for item in snapshots]
-            return self._send_json(200, {"snapshots": public, "currentDigest": ontology_digest(load_json(FORMAL_ONTOLOGY, {}))})
+            registry_state = ensure_ontology_registry()
+            return self._send_json(200, {"snapshots": registry_state["snapshots"], "activePointer": registry_state["activePointer"],
+                "currentDigest": ontology_digest(load_json(FORMAL_ONTOLOGY, {}))})
+        if path == "/api/ontology/registry/events":
+            registry_state = ensure_ontology_registry()
+            with SQLiteOntologyRegistry(STATE_DIR / "ontology-registry.sqlite3") as registry:
+                events = registry.list_events(registry_state["ontologyId"])
+            return self._send_json(200, {"events": events, "activePointer": registry_state["activePointer"]})
         if path == "/api/ontology/dependencies":
             ontology = load_json(FORMAL_ONTOLOGY, {})
             graph = build_consumer_graph(ROOT, ontology)
@@ -966,26 +994,26 @@ class PortalHandler(BaseHTTPRequestHandler):
             return self._send_json(200, {"graph": graph, "impact": impact})
         if path == "/api/ontology/governance":
             state = state_read()
-            snapshots = state.get("ontologySnapshots", [])
-            active_id = state.get("activeOntologySnapshotId")
-            active = next((item for item in snapshots if item.get("snapshotId") == active_id), None)
+            registry_state = ensure_ontology_registry()
+            pointer = registry_state["activePointer"]
+            active = get_ontology_registry_snapshot(pointer["snapshot_id"]) if pointer else None
             public_active = {key: value for key, value in active.items() if key != "ontology"} if active else None
-            return self._send_json(200, {"activeSnapshot": public_active,
+            return self._send_json(200, {"activeSnapshot": public_active, "activePointer": pointer,
                 "proposals": state.get("ontologyGovernanceProposals", []),
                 "releases": state.get("ontologyReleases", [])})
         if path == "/api/ontology/compatibility":
             params = parse_qs(urlparse(self.path).query)
-            snapshots = state_read().get("ontologySnapshots", [])
-            before = find_snapshot(snapshots, (params.get("from") or [""])[0])
-            after = find_snapshot(snapshots, (params.get("to") or [""])[0])
+            before = get_ontology_registry_snapshot((params.get("from") or [""])[0])
+            after = get_ontology_registry_snapshot((params.get("to") or [""])[0])
+            if not before or not after: raise KeyError("ontology snapshot not found in registry")
             return self._send_json(200, compatibility_report(before, after))
         if path == "/api/ontology/diff":
             params = parse_qs(urlparse(self.path).query)
             from_id = (params.get("from") or [""])[0]
             to_id = (params.get("to") or [""])[0]
-            snapshots = state_read().get("ontologySnapshots", [])
-            before = find_snapshot(snapshots, from_id)
-            after = find_snapshot(snapshots, to_id)
+            before = get_ontology_registry_snapshot(from_id)
+            after = get_ontology_registry_snapshot(to_id)
+            if not before or not after: raise KeyError("ontology snapshot not found in registry")
             result = diff_snapshots(before, after)
             graph = build_consumer_graph(ROOT, after.get("ontology", {}), additional_ontologies=[before.get("ontology", {})])
             result["consumerImpact"] = analyze_consumer_impact(result["impact"]["affectedClasses"], graph)
@@ -1129,15 +1157,15 @@ class PortalHandler(BaseHTTPRequestHandler):
                 actor = str(body.get("actor", "")).strip()
                 reason = str(body.get("reason", "")).strip()
                 snapshot = create_snapshot(load_json(FORMAL_ONTOLOGY, {}), actor=actor, reason=reason)
-                created = True
+                with SQLiteOntologyRegistry(STATE_DIR / "ontology-registry.sqlite3") as registry:
+                    registry_result = registry.register_snapshot(snapshot)
+                    if not registry_result["created"]:
+                        snapshot = registry.get_snapshot(snapshot["snapshotId"])
+                created = bool(registry_result["created"])
                 def save_snapshot(st):
-                    nonlocal created, snapshot
                     history = st.setdefault("ontologySnapshots", [])
                     existing = next((item for item in history if item.get("digest") == snapshot["digest"]), None)
-                    if existing:
-                        snapshot = existing
-                        created = False
-                    else:
+                    if not existing:
                         history.insert(0, snapshot)
                         del history[100:]
                 state_update(save_snapshot)
@@ -1153,9 +1181,12 @@ class PortalHandler(BaseHTTPRequestHandler):
                 if action not in {"promote", "rollback"}: raise ValueError("action must be promote or rollback")
                 if not actor or not reason: raise ValueError("actor and reason are required")
                 state = state_read()
-                snapshots = state.get("ontologySnapshots", [])
+                registry_state = ensure_ontology_registry()
+                active_pointer = registry_state["activePointer"]
+                active_id = active_pointer.get("snapshot_id") if active_pointer else None
+                with SQLiteOntologyRegistry(STATE_DIR / "ontology-registry.sqlite3") as registry:
+                    snapshots = [registry.get_snapshot(item["snapshotId"]) for item in registry.list_snapshots()]
                 target = find_snapshot(snapshots, snapshot_id)
-                active_id = state.get("activeOntologySnapshotId")
                 if action == "rollback" and (not active_id or active_id == snapshot_id):
                     raise ValueError("rollback requires a different active snapshot")
                 if action == "promote" and active_id == snapshot_id:
@@ -1236,18 +1267,22 @@ class PortalHandler(BaseHTTPRequestHandler):
                     raise ValueError("proposal must be independently approved before execution")
                 if actor in {proposal.get("requestedBy"), proposal["approval"].get("actor")}:
                     raise ValueError("executor must be independent from requester and approver")
-                if state.get("activeOntologySnapshotId") != proposal.get("expectedActiveSnapshotId"):
-                    raise ValueError("active ontology changed after proposal creation; create a fresh proposal")
-                snapshot = find_snapshot(state.get("ontologySnapshots", []), proposal["snapshotId"])
-                if snapshot.get("digest") != proposal.get("snapshotDigest"):
+                registry_state = ensure_ontology_registry()
+                active_pointer = registry_state["activePointer"]
+                registry_active_id = active_pointer.get("snapshot_id") if active_pointer else None
+                if registry_active_id != proposal.get("expectedActiveSnapshotId"):
+                    if not (registry_active_id == proposal.get("snapshotId") and active_pointer.get("proposal_id") == proposal_id):
+                        raise ValueError("active ontology changed after proposal creation; create a fresh proposal")
+                snapshot = get_ontology_registry_snapshot(proposal["snapshotId"])
+                if not snapshot or snapshot.get("digest") != proposal.get("snapshotDigest"):
                     raise ValueError("snapshot digest no longer matches approved proposal")
                 release = {"releaseId": "onr-" + uuid.uuid4().hex[:12],
                     "snapshotId": snapshot["snapshotId"], "snapshotDigest": snapshot["digest"],
                     "ontologyVersion": snapshot.get("ontologyVersion"), "action": proposal["action"],
-                    "previousSnapshotId": state.get("activeOntologySnapshotId"),
+                    "previousSnapshotId": proposal.get("expectedActiveSnapshotId"),
                     "executedAt": now_iso(), "executedBy": actor[:100], "executionReason": reason[:1000],
                     "approvalActor": proposal["approval"]["actor"], "proposalId": proposal_id,
-                    "formalFileModified": False, "runtimeActivation": "catalog-pointer-only"}
+                    "formalFileModified": False, "runtimeActivation": "sqlite-ontology-registry-pointer"}
                 def execute(st):
                     item = next(p for p in st["ontologyGovernanceProposals"] if p.get("proposalId") == proposal_id)
                     if item.get("status") != "approved":
@@ -1258,6 +1293,15 @@ class PortalHandler(BaseHTTPRequestHandler):
                     item["executedAt"] = release["executedAt"]
                     st["activeOntologySnapshotId"] = snapshot["snapshotId"]
                     st.setdefault("ontologyReleases", []).insert(0, release)
+                with SQLiteOntologyRegistry(STATE_DIR / "ontology-registry.sqlite3") as registry:
+                    pointer = registry.get_active_pointer(registry_state["ontologyId"])
+                    if not (pointer and pointer.get("snapshot_id") == snapshot["snapshotId"] and pointer.get("proposal_id") == proposal_id):
+                        registry.activate_snapshot(
+                            snapshot["snapshotId"], ontology_id=registry_state["ontologyId"],
+                            expected_active_snapshot_id=proposal.get("expectedActiveSnapshotId"),
+                            actor=actor, approval_ref="proposal:" + proposal_id,
+                            proposal_id=proposal_id, occurred_at=release["executedAt"],
+                        )
                 state_update(execute)
                 record_event("ontology.governance.executed", f"本体版本指针已更新：{snapshot['snapshotId']}",
                     {"releaseId": release["releaseId"], "snapshotId": snapshot["snapshotId"], "action": proposal["action"], "reason": reason}, actor=actor)
@@ -1377,6 +1421,8 @@ class PortalHandler(BaseHTTPRequestHandler):
             return self._send_json(404, {"error": str(exc).strip("'")})
         except ValueError as exc:
             return self._send_json(400, {"error": str(exc)})
+        except OntologyRegistryError as exc:
+            return self._send_json(409, {"error": str(exc)})
         except OntologyDiscoveryError as exc:
             return self._send_json(422, {"error": str(exc)})
         except TimeoutError as exc:

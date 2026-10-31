@@ -96,6 +96,22 @@ class FactoryPortalServiceTests(unittest.TestCase):
         self.assertIn("approvalRef", html)
         self.assertIn("查看结构化结果", html)
 
+    def test_portal_migrates_snapshot_catalog_to_durable_sqlite_registry(self):
+        snapshot = portal.create_snapshot(
+            portal.load_json(portal.FORMAL_ONTOLOGY, {}),
+            actor="legacy-operator",
+            reason="test migration",
+        )
+        def seed(state):
+            state.setdefault("ontologySnapshots", []).append(snapshot)
+            state["activeOntologySnapshotId"] = snapshot["snapshotId"]
+        portal.state_update(seed)
+        registry_state = portal.ensure_ontology_registry()
+        self.assertEqual(registry_state["activePointer"]["snapshot_id"], snapshot["snapshotId"])
+        self.assertEqual(registry_state["activePointer"]["approval_ref"], "legacy-state-import")
+        self.assertTrue((portal.STATE_DIR / "ontology-registry.sqlite3").is_file())
+        self.assertEqual(registry_state["snapshots"][0]["digest"], snapshot["digest"])
+
     def test_formal_ontology_graph_has_resolvable_endpoints(self):
         graph = portal.load_ontology()
         names = {node["name"] for node in graph["classes"]}
