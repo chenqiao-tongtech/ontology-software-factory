@@ -275,6 +275,7 @@ class HarnessRuntime:
         tool_id: str,
         payload: dict[str, Any],
         approval_ref: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         started = time.monotonic()
         status = "denied"
@@ -331,6 +332,7 @@ class HarnessRuntime:
             result = self.tool_registry.invoke(
                 principal.role_id, tool_id, payload,
                 _approval_grant=_approval_dispatch_grant() if approved else None,
+                run_id=run_id, task_id=task_id, idempotency_key=idempotency_key,
             )
             status = "succeeded"
             return result
