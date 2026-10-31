@@ -12,6 +12,11 @@ class ToolPolicyError(PermissionError):
 
 
 _APPROVAL_DISPATCH_GRANT = object()
+_HARNESS_DISPATCH_GRANT = object()
+
+
+def _harness_dispatch_grant() -> object:
+    return _HARNESS_DISPATCH_GRANT
 
 
 def _approval_dispatch_grant() -> object:
@@ -61,7 +66,10 @@ class ToolRegistry:
             return []
         return sorted(self.roles[role_id] & set(self.role_policy[role_id]) & set(self.handlers) & set(self.by_id))
     def invoke(self, role_id: str, tool_id: str, payload: dict[str, Any], *, _approval_grant: object | None = None,
-               run_id: str = "", task_id: str = "", idempotency_key: str | None = None) -> Any:
+               run_id: str = "", task_id: str = "", idempotency_key: str | None = None,
+               _harness_grant: object | None = None) -> Any:
+        if _harness_grant is not _HARNESS_DISPATCH_GRANT:
+            raise ToolPolicyError("ToolRegistry invocation is internal; use Harness/Tool Gateway")
         if tool_id not in self.effective_tools(role_id):
             raise ToolPolicyError(f'tool {tool_id!r} is not enabled for role {role_id!r}')
         if tool_id in self.approval_required and _approval_grant is not _APPROVAL_DISPATCH_GRANT:
