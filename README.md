@@ -554,3 +554,12 @@ make test
 
 
 本轮 P1 全仓库写操作路径审计与控制台网络暴露修复见 [P1 Write-Path Audit](docs/P1-write-path-audit.md)。该审计明确区分 Agent 外部动作、Portal 本地治理状态、只读数据源同步、演示 Worker 与 HTTP/MCP 传输适配器；不将本地参考实现表述为企业级 IAM 或生产级统一写操作控制面。
+
+
+### P1 治理控制面验收与动作连接器
+
+- [P1 全仓库写操作路径审计](docs/P1-write-path-audit.md)
+- [P1 统一运行时与治理控制面验收清单](docs/P1-acceptance-checklist.md)
+- [动作连接器默认拒绝策略](policies/action-connectors.json)
+
+当前 HTTP/MCP 变更调用要求 Harness/Gateway 内部上下文、工具 ID allow-list 与幂等键；ToolRegistry 不允许外部直接调用。动作连接器注册表目前为空，尚未登记生产业务动作。审批支持 reserve/consumed/uncertain 本地状态，但外部副作用恢复、IAM、签名证据与多节点生产部署仍未完成。
