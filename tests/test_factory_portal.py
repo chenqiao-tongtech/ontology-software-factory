@@ -80,6 +80,17 @@ class FactoryPortalServiceTests(unittest.TestCase):
         with sqlite3.connect(self.db_path) as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
 
+    def test_knowledge_graph_instance_explorer_is_wired_to_portal_api(self):
+        html = portal.APP.read_text(encoding="utf-8")
+        self.assertIn('id="kgTenant"', html)
+        self.assertIn('id="kgEntities"', html)
+        self.assertIn('id="kgNeighborhood"', html)
+        self.assertIn("/api/knowledge-graph/entities", html)
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('path == "/api/knowledge-graph/entities"', script)
+        self.assertIn('"/api/knowledge-graph/relations"', script)
+        self.assertIn('/neighborhood', script)
+
     def test_graph_workbench_has_focus_filters_and_source_consumer_inspection(self):
         html = portal.APP.read_text(encoding="utf-8")
         self.assertIn('id="graphFocusToggle"', html)
