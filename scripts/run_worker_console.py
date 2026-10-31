@@ -10,7 +10,8 @@ from urllib.parse import urlparse, unquote
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from ontology_software_factory.console_security import is_loopback_bind, same_origin_request  # noqa: E402\nfrom ontology_software_factory.task_runtime import (  # noqa: E402
+from ontology_software_factory.console_security import is_loopback_bind, same_origin_request  # noqa: E402
+from ontology_software_factory.task_runtime import (  # noqa: E402
     IdempotencyConflict, SQLiteTaskStore, TaskWorker, echo_handler, sample_evidence_handler,
 )
 
@@ -65,6 +66,8 @@ class WorkerConsoleHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        if not same_origin_request(self.headers.get("Origin"), self.headers.get("Host", "")):
+            return self._json(403, {"error": "cross-origin request rejected"})
         try:
             payload = self._read_json()
             if path == "/api/tasks":
@@ -98,7 +101,10 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--db", default=str(ROOT / "data/worker-runtime/worker_tasks.sqlite3"))
     parser.add_argument("--worker-id", default="local-demo-worker")
+    parser.add_argument("--unsafe-expose", action="store_true", help="allow non-loopback binding; no authentication is provided")
     args = parser.parse_args()
+    if not is_loopback_bind(args.host) and not args.unsafe_expose:
+        parser.error("refusing non-loopback bind; use a loopback host or explicitly pass --unsafe-expose after adding access controls")
     store = SQLiteTaskStore(args.db)
     worker = TaskWorker(store, {"demo.echo": echo_handler, "demo.generate-evidence": sample_evidence_handler}, worker_id=args.worker_id)
     WorkerConsoleHandler.store = store
@@ -112,11 +118,14 @@ def main() -> int:
         return 2
     print(f"Worker Console (demo) running at http://{args.host}:{args.port}")
     print(f"SQLite queue: {args.db}")
-    print("Security note: demo handlers only; no authentication or production task execution.")\n    if not is_loopback_bind(args.host):\n        print("WARNING: unsafe non-loopback exposure explicitly enabled; network access controls are your responsibility.", file=sys.stderr)
+    print("Security note: demo handlers only; no authentication or production task execution.")
+    if not is_loopback_bind(args.host):
+        print("WARNING: unsafe non-loopback exposure explicitly enabled; network access controls are your responsibility.", file=sys.stderr)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        print("
+Shutting down...")
     finally:
         server.server_close()
         store.close()
