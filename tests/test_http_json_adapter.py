@@ -44,7 +44,7 @@ class HTTPJSONAdapterTests(unittest.TestCase):
             audit_path=Path(__file__).resolve().parents[1] / ".test-http-audit.jsonl")
         principal = HarnessPrincipal("principal", "requirement-analyst", "tenant", "project")
         self.assertEqual(harness.invoke_tool(principal, run_id="run", task_id="task",
-            tool_id="documents.read", payload={"x": 1}, idempotency_key="task-1"), {"ok": True})
+            tool_id="documents.read", payload={"relativePath": "docs/architecture.md"}, idempotency_key="task-1"), {"ok": True})
         self.assertEqual(opener.request.get_header("Authorization"), "Bearer short-token")
         self.assertEqual(opener.request.get_header("Idempotency-key"), "task-1")
 
