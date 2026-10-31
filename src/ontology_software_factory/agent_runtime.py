@@ -45,10 +45,18 @@ class OpenAIAgentsRuntime:
 
     def __init__(self, *, project_root: str | Path, model: str | None = None,
                  max_turns: int = 8, tracing_enabled: bool | None = None,
-                 usage_store: Any | None = None):
+                 usage_store: Any | None = None, approval_store: Any | None = None,
+                 invocation_ledger: Any | None = None):
         self.project_root = Path(project_root).resolve()
         self._active_harness_context = ContextVar(f"agent_harness_context_{id(self)}", default=None)
         self.usage_store = usage_store
+        self.approval_store = approval_store
+        if invocation_ledger is None:
+            from .governance import SQLiteInvocationLedger
+            ledger_path = self.project_root / ".local-runs" / "tool-invocations.sqlite3"
+            ledger_path.parent.mkdir(parents=True, exist_ok=True)
+            invocation_ledger = SQLiteInvocationLedger(ledger_path)
+        self.invocation_ledger = invocation_ledger
         self.skill_registry = SkillRegistry(self.project_root)
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-6.1-sol")
         self.max_turns = max(1, min(int(max_turns), 20))
@@ -86,10 +94,13 @@ class OpenAIAgentsRuntime:
         active = self._active_harness_context.get(None)
         if active is None:
             raise AgentContractError("Harness Tool Gateway is not active for this Agent execution")
-        harness, principal, run_id, task_id = active
-        return harness.invoke_tool(
+        gateway, principal, run_id, task_id = active
+        material = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        key_material = f"{run_id}:{task_id}:{tool_id}:{material}".encode("utf-8")
+        idempotency_key = "agent:" + hashlib.sha256(key_material).hexdigest()
+        return gateway.invoke(
             principal, run_id=run_id, task_id=task_id,
-            tool_id=tool_id, payload=payload,
+            tool_id=tool_id, payload=payload, idempotency_key=idempotency_key,
         )
 
     def _build_tools(self, function_tool: Any, workspace: WorkspaceExecution | None = None) -> dict[str, Any]:
@@ -352,7 +363,8 @@ class OpenAIAgentsRuntime:
                 max_output_tokens=int(task_input.get("run_budget", {}).get("maxOutputTokens", 40_000)),
             ),
             kill_switch_path=os.getenv("FACTORY_HARNESS_KILL_SWITCH") or None,
-            usage_store=self.usage_store, policy_version=registry.policy_version,
+            usage_store=self.usage_store, approval_store=self.approval_store,
+            policy_version=registry.policy_version,
             policy_digest=registry.policy_digest,
         )
         principal = HarnessPrincipal(
@@ -460,7 +472,9 @@ class OpenAIAgentsRuntime:
             run_id=run_id, task_id=task_id, event_type="agent.run.started",
             principal=principal, metadata=lifecycle_metadata, status="started",
         )
-        harness_token = self._active_harness_context.set((harness, principal, run_id, task_id))
+        from .governance import ToolGateway
+        gateway = ToolGateway(harness, self.invocation_ledger)
+        harness_token = self._active_harness_context.set((gateway, principal, run_id, task_id))
         try:
             result = self._Runner.run_sync(agent, task_payload, max_turns=self.max_turns)
             usage_obj = getattr(getattr(result, "context_wrapper", None), "usage", None)
