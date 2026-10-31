@@ -189,7 +189,7 @@ python -m unittest discover -s tests
 
 ### 最新验证提示
 
-SHA `2802eb3fee8a4eb8cc56e2199def44a3c6218b78` 对应 CI 已通过；后续 Adapter 幂等上下文改动及其测试尚在新的 CI 队列中。最终状态必须以 PR 最新 head 的 Actions 结果为准。
+SHA `7e2f190bd53d007241658c6e4dd2a53aad4422b5`（包含 Gateway 幂等上下文向可信 Adapter Handler 传递的代码及回归测试）对应 CI 已通过；对应 Actions：https://github.com/chenqiao-tongtech/ontology-software-factory/actions/runs/41166404499。其后的文档提交 SHA `670beb8e184fc2bd0448e0177a348bfbefc28dde` 的 CI 仍需确认。最终状态必须以 PR 最新 head 的 Actions 结果为准。
 
 ### 尚未声称完成的工作
 
