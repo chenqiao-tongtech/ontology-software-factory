@@ -2,80 +2,113 @@
 
 ## 1. Goal and boundary
 
-P2 turns the existing ontology discovery, governance, versioning, source inventory and Portal graph projection into a coherent ontology/knowledge platform. It does not replace P1 Harness/Gateway controls and does not grant Agents write authority.
+P2 provides a local, runnable ontology and knowledge graph platform on top of the existing discovery, source connectors, governance, versioning and consumer-impact modules. It does not replace P1 Harness/Gateway controls and does not grant Agents write authority.
 
-The platform distinguishes four data planes:
+The platform separates four planes:
+1. Source plane — read-only inventory and snapshots from repositories, documents, SQL schemas and API contracts.
+2. Candidate plane — LLM-assisted terms, relations, constraints and competency questions with source evidence. Candidates are not executable ontology.
+3. Ontology plane — reviewed, versioned canonical definitions and immutable snapshots. Runtime consumers pin a snapshot digest.
+4. Knowledge plane — instance entities and relation facts, each tied to a tenant, source provenance and an ontology snapshot.
 
-1. **Source plane** — read-only inventory and snapshots from repositories, documents, SQL schemas and API contracts.
-2. **Candidate plane** — LLM-assisted terms, relations, constraints and competency questions with verifiable source evidence. Candidates are not executable ontology.
-3. **Ontology plane** — reviewed, versioned canonical definitions and immutable snapshots. Runtime consumers pin a snapshot digest.
-4. **Knowledge plane** — instance entities and relation facts, each tied to a tenant, source provenance and an ontology snapshot.
+## 2. Implemented capabilities
 
-## 2. Existing repository capabilities retained
-
-| Capability | Current implementation | Boundary |
+| Capability | Implementation | Boundary |
 |---|---|---|
 | Ontology definition | Canonical JSON + logical module manifest | Manifest is an index, not a second source of truth |
-| Discovery | Structured LLM pipeline + deterministic validation + critic | Produces review candidates only |
-| Source ingestion | Local repository/document + SQLite/PostgreSQL/MySQL schema connectors and optional adapters | Read-only metadata; live external systems require explicit credentials and network configuration |
-| Governance | Candidate digest approval, change proposal, version snapshots and structural diff | CLI/local Portal approval is not enterprise IAM |
-| Consumer impact | Explicit typed dependency graph for Roles, Skills, Workflows, Tools and schemas | Unregistered or implicit natural-language dependencies may be missed |
+| Discovery | Structured LLM pipeline + deterministic validation + critic; local deterministic extraction | Produces review candidates only |
+| Source ingestion | Local repository/document + SQLite/PostgreSQL/MySQL schema connectors; GitHub/GitLab metadata adapters; API contract connector | Live systems require explicit credentials and network configuration |
+| Incremental sync | Asset manifest diff, source revision metadata, GitHub/GitLab webhook verification and delivery dedupe | Deletion known only when both scans are complete; metadata fingerprints are not content hashes |
+| Governance | Candidate digest approval, change proposal, version snapshots, promotion/rollback proposals and structural diff | Portal state is local JSON; actor strings are not enterprise IAM identities |
+| Consumer impact | Explicit typed dependency graph for Roles, Skills, Workflows, Tools and schemas | Implicit prose dependencies may be missed |
 | Runtime binding | Snapshot digest and role/skill contract checks | Consumers must explicitly use the binding |
-| Ontology visualization | Portal SVG graph projection and inspector | Read-only ontology view; not a general graph explorer |
-| Knowledge graph instances | SQLite reference store added in P2 | Local single-node reference backend only |
+| Ontology visualization | Portal SVG ontology-definition graph, focus/filter and inspector | Visualizes definitions and registered consumers |
+| Knowledge graph instances | SQLite KnowledgeGraphStore, Portal API and instance explorer | Local single-node reference backend; one-hop neighborhood |
+| Provenance | Source ID, locator, content SHA-256 on entity and relation records | Hash proves supplied bytes, not source authenticity or truth |
 
-## 3. P2 architecture contract
-
-### Ontology metadata
-Every published ontology snapshot must carry ontology ID, semantic version, schema version, deterministic digest, actor, reason and creation time. A consumer must pin the snapshot ID and digest; silently switching an in-flight run to a newer version is forbidden.
+## 3. Architecture and safety contract
 
 ### Discovery and evidence
-Every discovered term/relation/constraint must cite one or more source fragments. Evidence references must be checked against submitted source material. Model confidence is a triage hint, never a truth probability or publication authorization.
+Every discovered term/relation/constraint should cite source fragments. Evidence references are checked against submitted material by the discovery pipeline. Model confidence is a triage hint, never a truth probability or publication authorization.
+
+### Ontology lifecycle
+A snapshot is immutable and carries ontology ID/version, schema version, deterministic digest, actor, reason and creation time. Promotion and rollback are explicit governance actions; a proposal requires independent approval and a distinct executor. In-flight consumers pin snapshot ID and digest.
 
 ### Knowledge graph
-An entity must have a stable ID, tenant, class, property object, ontology snapshot binding and provenance. A relation must have a stable ID, relation type, source and target entity, the same tenant and snapshot binding, and provenance. Writes fail closed on unknown classes, unknown relation types, endpoint type mismatch, missing endpoints, cross-tenant references or digest mismatch.
+An entity has stable ID, tenant, class, properties, ontology snapshot binding and provenance. A relation has stable ID, type, endpoints, same tenant and snapshot binding, and provenance. Writes fail closed on unknown classes, relation types, endpoint type mismatch, missing endpoints, cross-tenant references or digest mismatch.
 
-### Integration
-Agent/Skill/Workflow contracts consume approved ontology snapshots. Knowledge graph queries may provide context, but retrieved facts remain evidence-bearing data and do not override policy, permissions, workflow state or human approval.
+### Runtime integration
+Agent/Skill/Workflow contracts consume approved ontology snapshots. Graph facts may enrich context but do not override policy, permissions, workflow state or human approval.
 
-## 4. Implemented P2 increment in this branch
+## 4. Knowledge graph Portal API
 
-- Added KnowledgeGraphStore backed by SQLite.
-- Added tenant-scoped entity and relation persistence.
-- Added pinned ontology snapshot digest checks.
-- Added class and relation endpoint type validation.
-- Added provenance source ID, locator and content SHA-256.
-- Added entity search and bounded one-hop neighborhood query.
-- Added unit tests for tenant isolation, relation validation, tampered snapshots and provenance.
-- Added usage and limitation documentation; linked it from README.
+All endpoints are part of the local reference Portal. The server binds to loopback by default. Do not expose them to an untrusted network.
 
-## 5. Acceptance checklist
+### Create/update an entity
+```http
+POST /api/knowledge-graph/entities
+Content-Type: application/json
 
-### Automated checks in this branch
-- [ ] All repository CI tests pass.
-- [x] Reject unknown entity classes.
-- [x] Reject unknown/tampered ontology snapshot bindings.
-- [x] Reject relation endpoint class mismatch.
-- [x] Reject missing/cross-tenant relation endpoints.
-- [x] Persist source locator and source content digest.
-- [x] Bound graph search and neighborhood result sizes.
-- [x] Parameterize SQL values and tenant-scope graph queries.
+{
+  "tenantId": "local-reference",
+  "entityId": "product:demo",
+  "entityType": "Product",
+  "properties": {"name": "Demo Product"},
+  "ontologySnapshotId": "ont-<snapshot-digest-prefix>",
+  "source": {"sourceId": "repo:factory", "locator": "docs/domain-model.md", "content": "Product is a software product."},
+  "actor": "local-operator"
+}
+```
 
-### Remaining P2 exit criteria (not claimed complete)
-- [ ] Run the new tests and full suite in GitHub Actions on this branch.
-- [ ] Integrate graph query APIs into the Portal service and UI.
-- [ ] Add visual graph interactions for instance graph: zoom/pan, neighborhood expansion, filters, clustering and large-graph handling.
-- [ ] Add a durable ontology release registry and promotion transaction rather than relying on local Portal state/CLI artifacts.
-- [ ] Add source revision/webhook sync, incremental scan and deletion/tombstone reconciliation.
-- [ ] Add API contract, event-schema and additional enterprise source adapters with security review.
-- [ ] Add PostgreSQL/Neo4j/Neptune production backend decision, migrations, backup/restore and concurrency tests.
-- [ ] Add SHACL validation and optional RDF/OWL export/import round-trip tests.
-- [ ] Add resource-level authorization and audit integration before exposing graph data to multiple users/tenants.
-- [ ] Add graph retention, source content retention and provenance re-verification policy.
-- [ ] Add end-to-end tests from source scan → candidate → human approval → ontology snapshot → graph ingest → Agent context retrieval.
+If ontologySnapshotId is omitted, the active snapshot is used. The selected snapshot must exist in Portal snapshot history. Source content is hashed by the service; only digest, source ID and locator are persisted.
 
-## 6. Operational notes
+### Create/update a relation
+```http
+POST /api/knowledge-graph/relations
+Content-Type: application/json
 
-The SQLite store is suitable for local development, demos and deterministic tests. It is not a horizontally scalable graph database, a multi-writer service or a security boundary. Do not expose it directly to untrusted clients. The tenant key is a data partition key; caller identity and tenant authorization must be enforced by the surrounding authenticated service.
+{
+  "tenantId": "local-reference",
+  "relationId": "product:demo/contains/component:api",
+  "relationType": "containsComponent",
+  "sourceEntityId": "product:demo",
+  "targetEntityId": "component:api",
+  "properties": {},
+  "ontologySnapshotId": "ont-<snapshot-digest-prefix>",
+  "source": {"sourceId": "repo:factory", "locator": "docs/domain-model.md", "content": "Product contains Component."},
+  "actor": "local-operator"
+}
+```
 
-The current graph search is a bounded substring search over serialized properties, not semantic vector search. Neighborhood queries are one-hop only. No inference, transitive closure or ontology reasoning is performed.
+Both endpoint entities must already exist in the same tenant and be bound to the same snapshot.
+
+### Search and neighborhood
+```http
+GET /api/knowledge-graph/entities?tenantId=local-reference&q=demo&entityType=Product&limit=100
+GET /api/knowledge-graph/entities/product%3Ademo/neighborhood?tenantId=local-reference&limit=100
+```
+
+Limits are 1–500. Search is a bounded substring search over serialized properties, not vector/semantic search. Neighborhood is one hop.
+
+## 5. Local usage
+
+Run python scripts/run_factory_portal.py and open http://127.0.0.1:8770. In the Ontology section, use the Knowledge Graph · Instance Explorer panel to filter entities by tenant, type and property text, then select an entity to inspect its one-hop graph and provenance.
+
+The local graph database is stored at .local-portal/knowledge-graph.sqlite3. Do not commit real customer data or source text into this local state directory.
+
+## 6. P2 validation in this branch
+
+- Knowledge graph unit tests cover tenant scoping, snapshot digest checks, unknown classes, relation endpoint validation, missing/cross-tenant endpoints and provenance.
+- Portal tests cover the presence of the instance explorer and its API wiring.
+- First graph-store integration checkpoint: 387 tests passed, 2 skipped, 0 failures. Re-run CI after the latest Portal API/UI commits before treating the final branch state as validated.
+
+## 7. Explicit production gap
+
+- PostgreSQL/Neo4j/Neptune backend decision, migrations, concurrent writers, backup/restore and scale testing.
+- Enterprise IAM/SSO and resource-level tenant/project authorization; current Portal is local-only and actor strings are self-reported.
+- Durable release registry and transactional promotion across multiple service instances; current Portal governance history is local JSON state.
+- Retained content-addressed source artifacts and independent authenticity/signature verification; current graph stores a digest and locator only.
+- Full OWL/RDF reasoning, SHACL engine, SPARQL endpoint and semantic/vector retrieval.
+- Multi-hop graph exploration, clustering, graph layout optimization and large-graph performance.
+- Full e2e proof from live source webhook through discovery, independent approval, release, graph ingestion and Agent retrieval.
+
+Do not interpret the local SQLite backend, local Portal approval or tenant partition key as a production security boundary.
