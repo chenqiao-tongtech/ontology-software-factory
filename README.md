@@ -548,3 +548,6 @@ make test
 ```
 
 当前实现边界：Harness 尚未作为 OpenAI Agents Runtime 的默认工具中介；SkillRegistry 尚未替换 Agent Workflow 当前的 Skill 装载路径；ConnectorRuntime 尚未统一接管 Portal 全部数据源路径。API 契约解析只接受显式提供的文件，OpenAPI/AsyncAPI 当前解析 JSON，GraphQL 使用受限 SDL 解析，Protobuf 不执行 protoc 或导入解析；dbt 与 Schema Registry 连接器仅导入显式提供的 JSON 导出文件，不连接实时服务。企业 SSO、OAuth/Secret Broker、分布式预算、跨节点连接器任务、Webhook 增量同步、企业 ACL 传播和防篡改审计仍需后续建设。
+
+
+- [P1 Tool Gateway, Approval and Evidence Contract](docs/P1-tool-gateway-approval-evidence.md)
