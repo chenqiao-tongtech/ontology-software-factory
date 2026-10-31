@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from ontology_software_factory.llm_provider import LLMProviderError, LLMRequest, OpenAIResponsesProvider  # noqa: E402
+from ontology_software_factory.console_security import is_loopback_bind, same_origin_request  # noqa: E402\nfrom ontology_software_factory.llm_provider import LLMProviderError, LLMRequest, OpenAIResponsesProvider  # noqa: E402
 
 
 class Handler(BaseHTTPRequestHandler):
