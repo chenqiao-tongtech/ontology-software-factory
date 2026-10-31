@@ -262,7 +262,7 @@ class ToolGateway:
         try:
             result = self.harness.invoke_tool(
                 principal, run_id=run_id, task_id=task_id, tool_id=tool_id,
-                payload=payload, approval_ref=approval_ref,
+                payload=payload, approval_ref=approval_ref, idempotency_key=idempotency_key,
             )
             try:
                 self.ledger.complete(idempotency_key, result)
