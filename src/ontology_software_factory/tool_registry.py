@@ -8,6 +8,14 @@ from jsonschema import Draft202012Validator
 class ToolPolicyError(PermissionError):
     pass
 
+
+_APPROVAL_DISPATCH_GRANT = object()
+
+
+def _approval_dispatch_grant() -> object:
+    """Internal capability issued only after Harness approval validation."""
+    return _APPROVAL_DISPATCH_GRANT
+
 class ToolRegistry:
     """Default-deny in-process tool registry. Tool handlers are injected by trusted code."""
     def __init__(self, root: str | Path, handlers: dict[str, Callable[[dict[str, Any]], Any]]):
@@ -30,10 +38,10 @@ class ToolRegistry:
         if role_id not in self.roles or role_id not in self.role_policy:
             return []
         return sorted(self.roles[role_id] & set(self.role_policy[role_id]) & set(self.handlers) & set(self.by_id))
-    def invoke(self, role_id: str, tool_id: str, payload: dict[str, Any], *, approval_granted: bool=False) -> Any:
+    def invoke(self, role_id: str, tool_id: str, payload: dict[str, Any], *, _approval_grant: object | None = None) -> Any:
         if tool_id not in self.effective_tools(role_id):
             raise ToolPolicyError(f'tool {tool_id!r} is not enabled for role {role_id!r}')
-        if tool_id in self.approval_required and not approval_granted:
+        if tool_id in self.approval_required and _approval_grant is not _APPROVAL_DISPATCH_GRANT:
             raise ToolPolicyError(f'tool {tool_id!r} requires an independent approval record')
         definition=self.by_id[tool_id]
         errors=list(Draft202012Validator(definition['inputSchema']).iter_errors(payload))
