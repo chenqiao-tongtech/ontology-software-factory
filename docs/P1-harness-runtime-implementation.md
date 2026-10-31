@@ -174,3 +174,26 @@ python -m unittest discover -s tests
 | 跨租户/策略漂移/审批缺失等负向集成测试 | 部分实现 | 需覆盖统一 Gateway 的端到端路径 |
 
 **P1 结论：** 当前增量补齐了 Harness 的关键运行时控制，并增加 Task 取消和预算账本回归测试，但尚未达到五阶段基线中 P1 的完整退出条件。不能仅凭这轮 CI 通过（即使通过）就宣称 P1 全部完成；建议将当前工作标记为“P1 核心运行时基线完成，统一 Tool Gateway / Approval / Evidence 收尾待完成”。
+
+
+## 10. P1 最后三项实现增量（2026-10-31）
+
+详见 [P1 Tool Gateway、Approval 与 Evidence Contract 实施说明](P1-tool-gateway-approval-evidence.md)。本轮新增：
+
+- `governance.py`：SQLite ApprovalStore、SQLiteInvocationLedger、ToolGateway 和版本化 Evidence Contract 校验。
+- `HarnessRuntime`：高影响 Tool 在执行前消费绑定到 Run/Task/Tenant/Tool/参数摘要的一次性审批凭证；审批人、申请人、执行人必须分离。
+- `ToolRegistry`：移除可由普通布尔值伪造的 `approval_granted=True` 通道，改为 Harness 审批验证后发放内部 dispatch capability。
+- `AgentRuntime`：Agent 工具函数通过 ToolGateway；幂等键贯穿 Gateway、Harness、ToolRegistry，并以 `ToolInvocationContext` 提供给可信双参数 Adapter Handler。
+- `SQLiteTaskStore.complete`：任务选择配置 `evidenceContract` 后，校验 Run/Task/Input SHA-256/Tool Version/Exit Code/Report SHA-256 的来源绑定；旧任务不配置契约时保持兼容。
+- 新增 `tests/test_governance.py`，覆盖审批分离/过期/绑定/重放、Gateway 幂等、Evidence 来源绑定及 Adapter 幂等上下文。
+
+### 最新验证提示
+
+SHA `2802eb3fee8a4eb8cc56e2199def44a3c6218b78` 对应 CI 已通过；后续 Adapter 幂等上下文改动及其测试尚在新的 CI 队列中。最终状态必须以 PR 最新 head 的 Actions 结果为准。
+
+### 尚未声称完成的工作
+
+- 全仓库 MCP/HTTP/Portal/CLI 写操作入口仍需逐项盘点和迁移；当前 Agent Runtime 路径已切到 Gateway，但这不代表所有入口都已统一。
+- 生产身份认证、IAM/SSO、MFA 和审批角色授权尚未实现；当前 actor 是调用方提供的身份标识。
+- 外部系统是否支持幂等必须由适配器和对端契约证明；MCP 没有通用幂等协议。
+- Evidence 远端制品抓取、签名、内容寻址和 Attestation 尚未实现。
