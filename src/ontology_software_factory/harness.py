@@ -74,6 +74,7 @@ class HarnessRuntime:
         approval_validator: Callable[[str, str, str], bool] | None = None,
         kill_switch_path: str | Path | None = None,
         usage_store: Any | None = None,
+        approval_store: Any | None = None,
         policy_version: str = "unknown",
         policy_digest: str = "unknown",
     ):
@@ -84,6 +85,7 @@ class HarnessRuntime:
         self.approval_validator = approval_validator or (lambda _ref, _run, _tool: False)
         self.kill_switch_path = Path(kill_switch_path).resolve() if kill_switch_path else None
         self.usage_store = usage_store
+        self.approval_store = approval_store
         self.policy_version = str(policy_version)
         self.policy_digest = str(policy_digest)
         self._usage: dict[str, _Usage] = {}
@@ -287,10 +289,23 @@ class HarnessRuntime:
             if definition is None:
                 raise HarnessDenied(f"unknown tool: {tool_id}")
             if definition.get("approvalRequired") is True:
-                approved = bool(
-                    approval_ref
-                    and self.approval_validator(approval_ref, run_id, tool_id)
-                )
+                if approval_ref and self.approval_store is not None:
+                    try:
+                        self.approval_store.consume(
+                            approval_ref, run_id=run_id, task_id=task_id,
+                            tenant_id=principal.tenant_id, tool_id=tool_id,
+                            payload=payload, executor=principal.principal_id,
+                        )
+                        approved = True
+                    except PermissionError as exc:
+                        raise HarnessDenied(str(exc)) from exc
+                else:
+                    # Compatibility path for older integrations. New high-impact
+                    # integrations should inject ApprovalStore and use its bound records.
+                    approved = bool(
+                        approval_ref
+                        and self.approval_validator(approval_ref, run_id, tool_id)
+                    )
                 if not approved:
                     raise HarnessDenied("valid independent approval record is required")
             # Persistent stores perform the budget check and counter increment atomically,
