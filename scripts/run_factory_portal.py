@@ -957,7 +957,7 @@ class PortalHandler(BaseHTTPRequestHandler):
         if path == "/api/knowledge-graph/entities":
             params = parse_qs(urlparse(self.path).query)
             tenant_id = (params.get("tenantId") or ["local-reference"])[0]
-            entity_type = (params.get("entityType") or [None])[0]
+            entity_type = (params.get("entityType") or [None])[0] or None
             query = (params.get("q") or [None])[0]
             limit = int((params.get("limit") or ["100"])[0])
             store = KnowledgeGraphStore(STATE_DIR / "knowledge-graph.sqlite3")
