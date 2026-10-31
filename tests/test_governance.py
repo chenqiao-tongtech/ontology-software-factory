@@ -52,6 +52,27 @@ class GovernanceTests(unittest.TestCase):
                           tenant_id="tenant-a", tool_id="release.simulation.promote",
                           payload=payload, executor="executor", now=105)
 
+
+    def test_approval_reservation_is_finalized_or_left_uncertain(self):
+        store = ApprovalStore(self.db)
+        self.addCleanup(store.close)
+        payload = {"releaseId": "rel-reserve", "targetEnvironment": "prod"}
+        store.request(approval_id="APR-reserve", run_id="run-r", task_id="task-r",
+            tenant_id="tenant-r", tool_id="release.simulation.promote",
+            payload=payload, requested_by="requester", now=100)
+        store.decide("APR-reserve", decision="approved", actor="approver",
+            reason="reviewed", now=101)
+        reserved = store.reserve("APR-reserve", run_id="run-r", task_id="task-r",
+            tenant_id="tenant-r", tool_id="release.simulation.promote",
+            payload=payload, executor="executor", now=102)
+        self.assertEqual(reserved["status"], "reserved")
+        uncertain = store.finalize_reservation("APR-reserve", outcome="uncertain")
+        self.assertEqual(uncertain["status"], "uncertain")
+        with self.assertRaises(ApprovalError):
+            store.reserve("APR-reserve", run_id="run-r", task_id="task-r",
+                tenant_id="tenant-r", tool_id="release.simulation.promote",
+                payload=payload, executor="executor", now=103)
+
     def test_expired_approval_cannot_be_used(self):
         store = ApprovalStore(self.db)
         self.addCleanup(store.close)
