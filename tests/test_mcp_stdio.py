@@ -35,6 +35,8 @@ class MCPStdioTests(unittest.TestCase):
             client.start()
             with self.assertRaises(ToolPolicyError):
                 client.call_tool("echo", {}, allowed_names={"echo"})
+            with self.assertRaises(ToolPolicyError):
+                client.request("tools/call", {"name": "echo", "arguments": {}})
 
     def test_tool_not_allowlisted_is_blocked(self):
         command = [sys.executable, str(ROOT / "tests/fixtures/fake_mcp_server.py")]
