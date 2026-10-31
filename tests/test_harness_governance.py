@@ -27,11 +27,24 @@ class PersistedUsage:
         return dict(self.value)
 
     def record_harness_usage(self, **event):
+        # Match the SQLite usage-store contract: limit check and increment are
+        # one atomic operation, and rejected attempts remain in the audit ledger.
         self.events.append(event)
-        self.value["toolCalls"] += event.get("tool_calls", 0)
-        self.value["contextBytes"] += event.get("context_bytes", 0)
-        self.value["inputTokens"] += event.get("input_tokens", 0)
-        self.value["outputTokens"] += event.get("output_tokens", 0)
+        limits = event.get("limits") or {}
+        deltas = {
+            "toolCalls": event.get("tool_calls", 0),
+            "contextBytes": event.get("context_bytes", 0),
+            "inputTokens": event.get("input_tokens", 0),
+            "outputTokens": event.get("output_tokens", 0),
+        }
+        exceeded = any(
+            self.value.get(key, 0) + deltas.get(key, 0) > limit
+            for key, limit in limits.items()
+        )
+        if exceeded and event.get("enforce_limits"):
+            return {"allowed": False, "usage": dict(self.value)}
+        for key, delta in deltas.items():
+            self.value[key] += delta
         return {"allowed": True, "usage": dict(self.value)}
 
 
@@ -59,6 +72,10 @@ class HarnessGovernanceTests(unittest.TestCase):
                     tool_id="documents.read", payload={"relativePath": "README.md"},
                 )
         self.assertEqual(calls, [])
+        self.assertEqual(usage.value["toolCalls"], 1)
+        self.assertEqual(len(usage.events), 1)
+        self.assertTrue(usage.events[0]["enforce_limits"])
+        self.assertEqual(usage.events[0]["limits"], {"toolCalls": 1})
 
     def test_lifecycle_audit_is_metadata_only_and_allowlisted(self):
         with tempfile.TemporaryDirectory() as temp:
