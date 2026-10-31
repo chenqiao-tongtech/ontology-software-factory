@@ -215,6 +215,11 @@ class SQLiteTaskStore:
                     self._conn.commit()
                     return _task_from_row(existing), True
                 task_id = f"TASK-{uuid4().hex[:12].upper()}"
+                evidence_contract = payload.get("evidenceContract")
+                if isinstance(evidence_contract, dict) and evidence_contract.get("taskId") == "$TASK_ID":
+                    payload = {**payload, "evidenceContract": {**evidence_contract, "taskId": task_id}}
+                    payload_json = _canonical_json(payload)
+                    payload_hash = _sha256(payload_json)
                 self._conn.execute("""INSERT INTO worker_tasks(
                     task_id,idempotency_key,task_type,queue_name,payload_json,payload_sha256,status,attempts,
                     max_attempts,timeout_seconds,retryable_errors_json,required_evidence_json,created_at,updated_at,
