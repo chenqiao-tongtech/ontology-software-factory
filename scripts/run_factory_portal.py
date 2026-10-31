@@ -36,6 +36,7 @@ from ontology_software_factory.source_connectors import (
 from ontology_software_factory.remote_connectors import RemoteRepositoryConnector
 from ontology_software_factory.database_connectors import PostgreSQLSchemaConnector, MySQLSchemaConnector
 from ontology_software_factory.ontology_versioning import create_snapshot, diff_snapshots, find_snapshot, ontology_digest
+from ontology_software_factory.knowledge_graph import KnowledgeGraphStore, KnowledgeGraphError
 from ontology_software_factory.ontology_governance import build_consumer_graph, analyze_consumer_impact, compatibility_report
 from ontology_software_factory.source_sync import compare_asset_manifests
 from ontology_software_factory.source_webhooks import verify_source_webhook, SourceWebhookError
@@ -953,6 +954,24 @@ class PortalHandler(BaseHTTPRequestHandler):
                 harness_audit_path=harness_audit, connector_audit_path=connector_audit,
             ))
         if path == "/api/sources": return self._send_json(200, {"sources": source_scan_results()})
+        if path == "/api/knowledge-graph/entities":
+            params = parse_qs(urlparse(self.path).query)
+            tenant_id = (params.get("tenantId") or ["local-reference"])[0]
+            entity_type = (params.get("entityType") or [None])[0] or None
+            query = (params.get("q") or [None])[0]
+            limit = int((params.get("limit") or ["100"])[0])
+            store = KnowledgeGraphStore(STATE_DIR / "knowledge-graph.sqlite3")
+            return self._send_json(200, {"entities": store.search_entities(
+                tenant_id=tenant_id, entity_type=entity_type, text=query, limit=limit)})
+        graph_match = re.fullmatch(r"/api/knowledge-graph/entities/([^/]+)/neighborhood", path)
+        if graph_match:
+            params = parse_qs(urlparse(self.path).query)
+            tenant_id = (params.get("tenantId") or ["local-reference"])[0]
+            limit = int((params.get("limit") or ["100"])[0])
+            store = KnowledgeGraphStore(STATE_DIR / "knowledge-graph.sqlite3")
+            return self._send_json(200, store.neighborhood(
+                tenant_id=tenant_id, entity_id=unquote(graph_match.group(1)), limit=limit))
+
         if path == "/api/ontology/versions":
             snapshots = state_read().get("ontologySnapshots", [])
             public = [{key: value for key, value in item.items() if key != "ontology"} for item in snapshots]
@@ -1065,6 +1084,43 @@ class PortalHandler(BaseHTTPRequestHandler):
             if path.startswith("/api/webhooks/"):
                 body = self._body(max_bytes=1_000_000)
                 return self._handle_source_webhook(path, body)
+
+            if path == "/api/knowledge-graph/entities":
+                body = self._body()
+                tenant_id = str(body.get("tenantId", "local-reference")).strip()
+                entity_id = str(body.get("entityId", "")).strip()
+                entity_type = str(body.get("entityType", "")).strip()
+                source = body.get("source")
+                if not isinstance(source, dict): raise ValueError("source provenance object is required")
+                state = state_read()
+                snapshot_id = str(body.get("ontologySnapshotId") or state.get("activeOntologySnapshotId") or "")
+                binding = find_snapshot(state.get("ontologySnapshots", []), snapshot_id)
+                result = KnowledgeGraphStore(STATE_DIR / "knowledge-graph.sqlite3").put_entity(
+                    tenant_id=tenant_id, entity_id=entity_id, entity_type=entity_type,
+                    properties=body.get("properties", {}), binding=binding, source=source)
+                record_event("knowledge-graph.entity.upserted", "知识图谱实体已写入", {
+                    "tenantId": tenant_id, "entityId": entity_id, "entityType": entity_type,
+                    "ontologySnapshotId": snapshot_id}, actor=str(body.get("actor", "local-operator")))
+                return self._send_json(201, result)
+            if path == "/api/knowledge-graph/relations":
+                body = self._body()
+                tenant_id = str(body.get("tenantId", "local-reference")).strip()
+                source = body.get("source")
+                if not isinstance(source, dict): raise ValueError("source provenance object is required")
+                state = state_read()
+                snapshot_id = str(body.get("ontologySnapshotId") or state.get("activeOntologySnapshotId") or "")
+                binding = find_snapshot(state.get("ontologySnapshots", []), snapshot_id)
+                result = KnowledgeGraphStore(STATE_DIR / "knowledge-graph.sqlite3").put_relation(
+                    tenant_id=tenant_id, relation_id=str(body.get("relationId", "")),
+                    relation_type=str(body.get("relationType", "")),
+                    source_entity_id=str(body.get("sourceEntityId", "")),
+                    target_entity_id=str(body.get("targetEntityId", "")),
+                    properties=body.get("properties", {}), binding=binding, source=source)
+                record_event("knowledge-graph.relation.upserted", "知识图谱关系已写入", {
+                    "tenantId": tenant_id, "relationId": result["relationId"],
+                    "ontologySnapshotId": snapshot_id}, actor=str(body.get("actor", "local-operator")))
+                return self._send_json(201, result)
+
             body = self._body()
             if path == "/api/sources":
                 source_type = body.get("type")

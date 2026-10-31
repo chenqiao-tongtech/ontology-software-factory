@@ -15,6 +15,8 @@
 - [五阶段实施与验收基线](docs/2026-10-31-five-phase-implementation-and-acceptance.md)
 - [P1 Harness 运行时治理实施记录](docs/P1-harness-runtime-implementation.md)
 - [S2 本体与语义契约子系统说明](docs/S2-ontology-and-semantic-contracts.md)
+- [P2 本体与知识图谱平台交付说明](docs/P2-ontology-knowledge-platform.md)
+- [P2 知识图谱实例存储说明](docs/P2-knowledge-graph-store.md)
 - [主要功能](#主要功能)
 - [多智能体与本体自动发现](#多智能体与本体自动发现)
 - [项目结构](#项目结构)
@@ -563,3 +565,8 @@ make test
 - [动作连接器默认拒绝策略](policies/action-connectors.json)
 
 当前 HTTP/MCP 变更调用要求 Harness/Gateway 内部上下文、工具 ID allow-list 与幂等键；ToolRegistry 不允许外部直接调用。动作连接器注册表目前为空，尚未登记生产业务动作。审批支持 reserve/consumed/uncertain 本地状态，但外部副作用恢复、IAM、签名证据与多节点生产部署仍未完成。
+
+
+### P2 Knowledge Graph Store
+
+A local, provenance-aware graph instance store is available in `src/ontology_software_factory/knowledge_graph.py`. It validates entity classes and relation endpoint types against a pinned ontology snapshot, enforces tenant-scoped endpoints, and returns provenance-aware neighborhoods. See [`docs/P2-knowledge-graph-store.md`](docs/P2-knowledge-graph-store.md). This is a SQLite reference implementation, not a production distributed graph service.
