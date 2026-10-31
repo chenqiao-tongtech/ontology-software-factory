@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+
+from .governance import validate_evidence_contract
 from uuid import uuid4
 
 TERMINAL_STATUSES = {"succeeded", "failed", "dead_letter", "cancelled"}
@@ -213,6 +215,11 @@ class SQLiteTaskStore:
                     self._conn.commit()
                     return _task_from_row(existing), True
                 task_id = f"TASK-{uuid4().hex[:12].upper()}"
+                evidence_contract = payload.get("evidenceContract")
+                if isinstance(evidence_contract, dict) and evidence_contract.get("taskId") == "$TASK_ID":
+                    payload = {**payload, "evidenceContract": {**evidence_contract, "taskId": task_id}}
+                    payload_json = _canonical_json(payload)
+                    payload_hash = _sha256(payload_json)
                 self._conn.execute("""INSERT INTO worker_tasks(
                     task_id,idempotency_key,task_type,queue_name,payload_json,payload_sha256,status,attempts,
                     max_attempts,timeout_seconds,retryable_errors_json,required_evidence_json,created_at,updated_at,
@@ -239,6 +246,47 @@ class SQLiteTaskStore:
         with self._lock:
             row = self._conn.execute("SELECT * FROM worker_tasks WHERE task_id=?", (task_id,)).fetchone()
         return _task_from_row(row) if row else None
+
+    def cancel(self, task_id: str, *, actor: str, reason: str = "cancelled by operator",
+               now: float | None = None) -> dict[str, Any]:
+        """Cancel a queued/running task and fence off any late Worker completion.
+
+        A running Python handler is cooperative: this method cannot safely kill its
+        thread or reverse an external side effect. Clearing the lease and moving the
+        task to a terminal state ensures its eventual complete()/fail() call is rejected.
+        """
+        if not actor or not actor.strip():
+            raise ValueError("actor must be non-empty")
+        current = time.time() if now is None else float(now)
+        with self._lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                row = self._conn.execute("SELECT * FROM worker_tasks WHERE task_id=?", (task_id,)).fetchone()
+                if row is None:
+                    self._conn.rollback()
+                    raise TaskRuntimeError(f"unknown task: {task_id}")
+                task = _task_from_row(row)
+                if task["status"] in TERMINAL_STATUSES:
+                    self._conn.commit()
+                    return task
+                self._conn.execute(
+                    """UPDATE worker_tasks SET status='cancelled', updated_at=?,
+                       lease_owner=NULL, lease_expires_at=NULL, error_class='cancelled',
+                       error_message=?, revision=revision+1 WHERE task_id=?""",
+                    (current, (reason or "cancelled")[:4000], task_id),
+                )
+                self._event_locked(task_id, current, actor, "task.cancelled",
+                    "任务被取消；后续迟到的 Worker 结果将被拒绝",
+                    {"reason": (reason or "cancelled")[:1000], "previousStatus": task["status"],
+                     "previousWorker": task["leaseOwner"]})
+                updated = self._conn.execute("SELECT * FROM worker_tasks WHERE task_id=?", (task_id,)).fetchone()
+                self._conn.commit()
+                return _task_from_row(updated)
+            except TaskRuntimeError:
+                raise
+            except Exception:
+                self._conn.rollback()
+                raise
 
     def list_tasks(self, limit: int = 100) -> list[dict[str, Any]]:
         with self._lock:
@@ -325,6 +373,24 @@ class SQLiteTaskStore:
                     raise LeaseLost("cannot complete: Worker lease is missing, expired or no longer owned")
                 task = _task_from_row(row)
                 self._validate_evidence(task["requiredEvidence"], evidence)
+                evidence_contract = task.get("payload", {}).get("evidenceContract")
+                if evidence_contract is not None:
+                    if not isinstance(evidence_contract, dict):
+                        raise EvidenceContractError("task evidenceContract must be an object")
+                    try:
+                        validate_evidence_contract(evidence_contract, evidence)
+                    except ValueError as exc:
+                        raise EvidenceContractError(str(exc)) from exc
+                    if evidence_contract.get("taskId") != task_id:
+                        raise EvidenceContractError("evidence contract taskId does not match the current Task")
+                    bound_run_id = task.get("payload", {}).get("runId") or task.get("payload", {}).get("workflowRunId")
+                    if bound_run_id and evidence_contract.get("runId") != bound_run_id:
+                        raise EvidenceContractError("evidence contract runId does not match the Task payload")
+                    task_input = task.get("payload", {}).get("input")
+                    if task_input is not None:
+                        expected_input_digest = _sha256(_canonical_json(task_input))
+                        if evidence_contract.get("inputSha256") != expected_input_digest:
+                            raise EvidenceContractError("evidence contract inputSha256 does not match the Task input")
                 existing = self._conn.execute("SELECT * FROM worker_task_results WHERE idempotency_key=?", (task["idempotencyKey"],)).fetchone()
                 if existing:
                     if existing["payload_sha256"] != task["payloadSha256"]:
@@ -355,6 +421,8 @@ class SQLiteTaskStore:
                 self._conn.commit()
                 return _task_from_row(result)
             except (LeaseLost, IdempotencyConflict, EvidenceContractError):
+                if self._conn.in_transaction:
+                    self._conn.rollback()
                 raise
             except Exception:
                 self._conn.rollback()

@@ -10,6 +10,7 @@ from ontology_software_factory.harness import (
 )
 from ontology_software_factory.tool_registry import ToolRegistry
 from ontology_software_factory.workflow_store import SQLiteWorkflowStore
+from ontology_software_factory.governance import ApprovalStore
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -87,6 +88,14 @@ class HarnessRuntimeTests(unittest.TestCase):
                 payload={"releaseId": "rel-1", "targetEnvironment": "test"},
                 approval_ref="bad"
             )
+        approvals = ApprovalStore(self.root / "approvals.sqlite3")
+        self.addCleanup(approvals.close)
+        approved_payload = {"releaseId": "rel-1", "targetEnvironment": "test"}
+        approvals.request(approval_id="approval-1", run_id="run-1", task_id="task-1",
+            tenant_id="tenant-a", tool_id="release.simulation.promote", payload=approved_payload,
+            requested_by="requester")
+        approvals.decide("approval-1", decision="approved", actor="approver", reason="test approval")
+        self.harness.approval_store = approvals
         result = self.harness.invoke_tool(
             release_principal, run_id="run-1", task_id="task-1",
             tool_id="release.simulation.promote",

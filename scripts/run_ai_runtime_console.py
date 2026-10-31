@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
+from ontology_software_factory.console_security import is_loopback_bind, same_origin_request  # noqa: E402
 from ontology_software_factory.llm_provider import LLMProviderError, LLMRequest, OpenAIResponsesProvider  # noqa: E402
 
 
@@ -67,6 +68,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
     def do_POST(self) -> None:  # noqa: N802
+        if not same_origin_request(self.headers.get("Origin"), self.headers.get("Host", "")):
+            self._json(403, {"error": "cross_origin_request_rejected"})
+            return
         length = int(self.headers.get("Content-Length", "0"))
         if length < 1 or length > 40_000:
             self._json(413, {"error": "invalid_body_size"})
@@ -123,9 +127,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8768)
+    parser.add_argument("--unsafe-expose", action="store_true", help="allow non-loopback binding; no authentication is provided")
     args = parser.parse_args()
-    if args.host not in {"127.0.0.1", "localhost", "::1"}:
-        print("WARNING: non-loopback binding exposes this unauthenticated console. Add auth before use.", file=sys.stderr)
+    if not is_loopback_bind(args.host) and not args.unsafe_expose:
+        parser.error("refusing non-loopback bind; use a loopback host or explicitly pass --unsafe-expose after adding access controls")
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"AI Runtime Console: http://{args.host}:{args.port}")
     print("Press Ctrl+C to stop. API key is read from the process environment; it is not stored here.")

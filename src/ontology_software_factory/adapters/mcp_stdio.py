@@ -7,6 +7,7 @@ from __future__ import annotations
 import json, os, queue, subprocess, threading, time
 from pathlib import Path
 from typing import Any
+from ..tool_registry import require_gateway_context
 
 class MCPTransportError(RuntimeError): pass
 
@@ -33,7 +34,9 @@ class MCPStdioClient:
             msg_id=message.get('id')
             if isinstance(msg_id,int) and msg_id in self._pending:
                 self._pending[msg_id].put(message)
-    def request(self, method: str, params: dict[str,Any] | None=None) -> dict[str,Any]:
+    def request(self, method: str, params: dict[str,Any] | None=None, *, _gateway_context: object | None = None) -> dict[str,Any]:
+        if method == 'tools/call':
+            require_gateway_context(_gateway_context)
         if self.proc is None or self.proc.stdin is None: raise MCPTransportError('client is not started')
         with self._lock:
             self._next_id+=1; msg_id=self._next_id; waiter=queue.Queue(maxsize=1); self._pending[msg_id]=waiter
@@ -58,9 +61,14 @@ class MCPStdioClient:
         tools=result.get('tools')
         if not isinstance(tools,list): raise MCPTransportError('tools/list did not return a tools array')
         return tools
-    def call_tool(self, name: str, arguments: dict[str,Any], *, allowed_names: set[str]) -> dict[str,Any]:
+    def call_tool(self, name: str, arguments: dict[str,Any], *, allowed_names: set[str], allowed_tool_ids: set[str], invocation_context: object | None = None) -> dict[str,Any]:
+        context = require_gateway_context(invocation_context)
+        if context.tool_id not in allowed_tool_ids:
+            raise MCPTransportError('tool is not allow-listed for this MCP action connector')
+        if context.idempotency_key is None:
+            raise MCPTransportError('MCP tool invocation requires a Gateway idempotency key')
         if name not in allowed_names: raise MCPTransportError(f'MCP tool is not allow-listed: {name}')
-        return self.request('tools/call',{'name':name,'arguments':arguments})
+        return self.request('tools/call',{'name':name,'arguments':arguments},_gateway_context=context)
     def close(self) -> None:
         proc=self.proc; self.proc=None
         if proc is None: return

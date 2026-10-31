@@ -1,12 +1,47 @@
 from __future__ import annotations
 import json
 import hashlib
+import inspect
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 from jsonschema import Draft202012Validator
 
 class ToolPolicyError(PermissionError):
     pass
+
+
+_APPROVAL_DISPATCH_GRANT = object()
+_HARNESS_DISPATCH_GRANT = object()
+
+
+def _harness_dispatch_grant() -> object:
+    return _HARNESS_DISPATCH_GRANT
+
+
+def _approval_dispatch_grant() -> object:
+    """Internal capability issued only after Harness approval validation."""
+    return _APPROVAL_DISPATCH_GRANT
+
+
+@dataclass(frozen=True)
+class ToolInvocationContext:
+    run_id: str
+    task_id: str
+    tool_id: str
+    idempotency_key: str | None
+    payload_sha256: str
+    _gateway_token: object | None = field(default=None, repr=False, compare=False)
+
+
+_GATEWAY_DISPATCH_TOKEN = object()
+
+
+def require_gateway_context(context: object | None) -> ToolInvocationContext:
+    if not isinstance(context, ToolInvocationContext) or context._gateway_token is not _GATEWAY_DISPATCH_TOKEN:
+        raise ToolPolicyError("external tool side effects must be dispatched through Tool Gateway and Harness")
+    return context
+
 
 class ToolRegistry:
     """Default-deny in-process tool registry. Tool handlers are injected by trusted code."""
@@ -30,14 +65,31 @@ class ToolRegistry:
         if role_id not in self.roles or role_id not in self.role_policy:
             return []
         return sorted(self.roles[role_id] & set(self.role_policy[role_id]) & set(self.handlers) & set(self.by_id))
-    def invoke(self, role_id: str, tool_id: str, payload: dict[str, Any], *, approval_granted: bool=False) -> Any:
+    def invoke(self, role_id: str, tool_id: str, payload: dict[str, Any], *, _approval_grant: object | None = None,
+               run_id: str = "", task_id: str = "", idempotency_key: str | None = None,
+               _harness_grant: object | None = None) -> Any:
+        if _harness_grant is not _HARNESS_DISPATCH_GRANT:
+            raise ToolPolicyError("ToolRegistry invocation is internal; use Harness/Tool Gateway")
         if tool_id not in self.effective_tools(role_id):
             raise ToolPolicyError(f'tool {tool_id!r} is not enabled for role {role_id!r}')
-        if tool_id in self.approval_required and not approval_granted:
+        if tool_id in self.approval_required and _approval_grant is not _APPROVAL_DISPATCH_GRANT:
             raise ToolPolicyError(f'tool {tool_id!r} requires an independent approval record')
         definition=self.by_id[tool_id]
         errors=list(Draft202012Validator(definition['inputSchema']).iter_errors(payload))
         if errors:
             raise ValueError(f'invalid tool input: {errors[0].message}')
         # Never permit the caller to select a Python callable or shell command from payload.
-        return self.handlers[tool_id](payload)
+        handler = self.handlers[tool_id]
+        context = ToolInvocationContext(
+            run_id=run_id, task_id=task_id, tool_id=tool_id,
+            idempotency_key=idempotency_key,
+            payload_sha256=hashlib.sha256(
+                json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest(),
+            _gateway_token=_GATEWAY_DISPATCH_TOKEN,
+        )
+        try:
+            inspect.signature(handler).bind(payload, context)
+        except (TypeError, ValueError):
+            return handler(payload)
+        return handler(payload, context)

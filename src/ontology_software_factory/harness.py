@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .tool_registry import ToolRegistry, ToolPolicyError
+from .tool_registry import ToolRegistry, ToolPolicyError, _approval_dispatch_grant, _harness_dispatch_grant
 
 
 class HarnessDenied(PermissionError):
@@ -74,6 +74,7 @@ class HarnessRuntime:
         approval_validator: Callable[[str, str, str], bool] | None = None,
         kill_switch_path: str | Path | None = None,
         usage_store: Any | None = None,
+        approval_store: Any | None = None,
         policy_version: str = "unknown",
         policy_digest: str = "unknown",
     ):
@@ -84,6 +85,7 @@ class HarnessRuntime:
         self.approval_validator = approval_validator or (lambda _ref, _run, _tool: False)
         self.kill_switch_path = Path(kill_switch_path).resolve() if kill_switch_path else None
         self.usage_store = usage_store
+        self.approval_store = approval_store
         self.policy_version = str(policy_version)
         self.policy_digest = str(policy_digest)
         self._usage: dict[str, _Usage] = {}
@@ -103,6 +105,43 @@ class HarnessRuntime:
 
     def _usage_for(self, run_id: str) -> _Usage:
         return self._usage.setdefault(run_id, _Usage())
+
+    def record_lifecycle_event(
+        self, *, run_id: str, task_id: str, event_type: str,
+        principal: HarnessPrincipal, metadata: dict[str, Any] | None = None,
+        status: str = "recorded",
+    ) -> dict[str, Any]:
+        """Append a metadata-only lifecycle event to the same audit stream as tool calls.
+
+        Payloads, prompts, model outputs and secret values are deliberately excluded.
+        """
+        if not run_id or not task_id or not principal.principal_id:
+            raise HarnessDenied("principal, run_id and task_id are required")
+        safe_metadata = {
+            str(key): value for key, value in (metadata or {}).items()
+            if key in {
+                "workflowId", "workflowVersion", "ontologySnapshotId",
+                "ontologyDigest", "runtimeContractLockDigest", "model",
+                "provider", "latencyMs", "errorType", "toolCount",
+            }
+            and isinstance(value, (str, int, float, bool, type(None)))
+        }
+        event = {
+            "occurredAt": datetime.now(timezone.utc).isoformat(),
+            "eventType": str(event_type),
+            "runId": run_id, "taskId": task_id,
+            "principalId": principal.principal_id, "roleId": principal.role_id,
+            "tenantId": principal.tenant_id, "projectId": principal.project_id,
+            "policyVersion": self.policy_version, "policyDigest": self.policy_digest,
+            "status": status, "metadata": safe_metadata,
+        }
+        self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
+        with self._lock:
+            with self.audit_path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+                handle.flush()
+        return event
 
     def usage(self, run_id: str) -> dict[str, int]:
         if self.usage_store is not None:
@@ -236,11 +275,13 @@ class HarnessRuntime:
         tool_id: str,
         payload: dict[str, Any],
         approval_ref: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         started = time.monotonic()
         status = "denied"
         result: Any = None
         approved = False
+        approval_reserved = False
         try:
             if self.kill_switch_path and self.kill_switch_path.exists():
                 raise HarnessDenied("Harness kill switch is active")
@@ -250,32 +291,50 @@ class HarnessRuntime:
             if definition is None:
                 raise HarnessDenied(f"unknown tool: {tool_id}")
             if definition.get("approvalRequired") is True:
-                approved = bool(
-                    approval_ref
-                    and self.approval_validator(approval_ref, run_id, tool_id)
-                )
+                if approval_ref and self.approval_store is not None:
+                    try:
+                        self.approval_store.reserve(
+                            approval_ref, run_id=run_id, task_id=task_id,
+                            tenant_id=principal.tenant_id, tool_id=tool_id,
+                            payload=payload, executor=principal.principal_id,
+                        )
+                        approved = True
+                        approval_reserved = True
+                    except PermissionError as exc:
+                        raise HarnessDenied(str(exc)) from exc
+                else:
+                    approved = False
                 if not approved:
                     raise HarnessDenied("valid independent approval record is required")
-            with self._lock:
-                usage = self._usage_for(run_id)
-                if usage.tool_calls >= min(self.budget.max_tool_calls, self.budget.max_run_tool_calls):
-                    status = "budget_exceeded"
-                    raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
+            # Persistent stores perform the budget check and counter increment atomically,
+            # and retain a budget_exceeded event for audit. A read-then-write check here
+            # would race across HarnessRuntime instances.
             if self.usage_store is not None:
                 recorded = self._record_usage(
                     run_id=run_id, task_id=task_id, event_type="tool.invoked",
                     tool_calls=1, tool_id=tool_id,
-                    limits={"toolCalls": self.budget.max_run_tool_calls},
+                    limits={"toolCalls": min(self.budget.max_tool_calls, self.budget.max_run_tool_calls)},
                     enforce_limits=True, metadata={"roleId": principal.role_id},
                 )
                 if not recorded.get("allowed"):
                     status = "budget_exceeded"
-                    raise HarnessBudgetExceeded("Workflow Run tool call budget exceeded")
-            with self._lock:
-                self._usage_for(run_id).tool_calls += 1
+                    raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
+            else:
+                with self._lock:
+                    usage = self._usage_for(run_id)
+                    if usage.tool_calls >= min(self.budget.max_tool_calls, self.budget.max_run_tool_calls):
+                        status = "budget_exceeded"
+                        raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
+                    usage.tool_calls += 1
             result = self.tool_registry.invoke(
-                principal.role_id, tool_id, payload, approval_granted=approved
+                principal.role_id, tool_id, payload,
+                _approval_grant=_approval_dispatch_grant() if approved else None,
+                run_id=run_id, task_id=task_id, idempotency_key=idempotency_key,
+                _harness_grant=_harness_dispatch_grant(),
             )
+            if approval_reserved:
+                self.approval_store.finalize_reservation(approval_ref, outcome="consumed")
+                approval_reserved = False
             status = "succeeded"
             return result
         except HarnessBudgetExceeded:
@@ -286,6 +345,11 @@ class HarnessRuntime:
             raise
         except Exception:
             status = "failed"
+            if approval_reserved and approval_ref and self.approval_store is not None:
+                try:
+                    self.approval_store.finalize_reservation(approval_ref, outcome="uncertain")
+                except Exception:
+                    pass
             raise
         finally:
             elapsed_ms = int((time.monotonic() - started) * 1000)

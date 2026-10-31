@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json,urllib.error,urllib.parse,urllib.request
 from typing import Any,Callable
+from ..tool_registry import require_gateway_context
 
 class APIAdapterError(RuntimeError): pass
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -9,16 +10,26 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.HTTPError(req.full_url,code,'redirect refused',headers,fp)
 
 class HTTPSJSONAdapter:
-    def __init__(self, base_url:str, *, allowed_hosts:set[str], token_provider:Callable[[],str|None]|None=None, timeout_seconds:float=10, max_response_bytes:int=1_000_000, opener=None):
+    def __init__(self, base_url:str, *, allowed_hosts:set[str], token_provider:Callable[[],str|None]|None=None, timeout_seconds:float=10, max_response_bytes:int=1_000_000, opener=None, allowed_tool_ids:set[str]|None=None):
         parsed=urllib.parse.urlsplit(base_url)
         if parsed.scheme!='https' or not parsed.hostname or parsed.hostname.lower() not in {x.lower() for x in allowed_hosts}:
             raise ValueError('base_url must be HTTPS and its hostname must be explicitly allow-listed')
         if parsed.username or parsed.password: raise ValueError('credentials must not be embedded in URL')
         self.base_url=base_url.rstrip('/')+'/'; self.host=parsed.hostname.lower(); self.token_provider=token_provider
+        self.allowed_tool_ids=set(allowed_tool_ids or set())
         self.timeout=float(timeout_seconds); self.max_response_bytes=int(max_response_bytes)
         if self.timeout<=0 or self.max_response_bytes<1: raise ValueError('timeouts and response limits must be positive')
         self.opener=opener or urllib.request.build_opener(_NoRedirect())
-    def request_json(self, method:str, relative_path:str, payload:dict[str,Any]|None=None, *, idempotency_key:str|None=None)->dict[str,Any]:
+    def request_json(self, method:str, relative_path:str, payload:dict[str,Any]|None=None, *, idempotency_key:str|None=None, invocation_context:object|None=None)->dict[str,Any]:
+        if method.upper() != 'GET':
+            context = require_gateway_context(invocation_context)
+            if context.tool_id not in self.allowed_tool_ids:
+                raise ValueError('tool is not allow-listed for this HTTP action connector')
+            if not context.idempotency_key:
+                raise ValueError('mutating HTTP calls require a Gateway idempotency key')
+            if idempotency_key and context.idempotency_key != idempotency_key:
+                raise ValueError('idempotency key must match the Gateway invocation context')
+            idempotency_key = context.idempotency_key
         if method.upper() not in {'GET','POST','PUT','PATCH','DELETE'}: raise ValueError('unsupported HTTP method')
         rel=urllib.parse.urlsplit(relative_path)
         if rel.scheme or rel.netloc or relative_path.startswith('/') or '..' in rel.path.split('/') or '\\' in relative_path:

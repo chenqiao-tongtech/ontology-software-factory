@@ -12,6 +12,9 @@
 - [系统解决什么问题](#系统解决什么问题)
 - [总体架构](#总体架构)
 - [系统设计说明书](docs/system-design-specification.md)
+- [五阶段实施与验收基线](docs/2026-10-31-five-phase-implementation-and-acceptance.md)
+- [P1 Harness 运行时治理实施记录](docs/P1-harness-runtime-implementation.md)
+- [S2 本体与语义契约子系统说明](docs/S2-ontology-and-semantic-contracts.md)
 - [主要功能](#主要功能)
 - [多智能体与本体自动发现](#多智能体与本体自动发现)
 - [项目结构](#项目结构)
@@ -109,6 +112,8 @@ OpenAI Agents Runtime 的工具调用、上下文大小和模型 Token 用量写
 ## 系统设计说明书
 
 系统现状、逻辑架构、子系统职责、核心数据对象、接口协议、安全边界、部署形态、第三方依赖和六项后续建设计划统一见 [《系统设计说明书》](docs/system-design-specification.md)。该文档以 2026-10-30 main 分支为基线，明确区分已实现、部分实现、规划建设和外部验收待完成能力。
+
+本轮五阶段的目标架构、已有模块映射、关键缺口和退出验收条件见 [《五阶段实施与验收基线》](docs/2026-10-31-five-phase-implementation-and-acceptance.md)。S2 的建模原理、契约机制、关键代码和边界见 [《S2 本体与语义契约子系统说明》](docs/S2-ontology-and-semantic-contracts.md)。
 
 ## 系统解决什么问题
 
@@ -543,3 +548,18 @@ make test
 ```
 
 当前实现边界：Harness 尚未作为 OpenAI Agents Runtime 的默认工具中介；SkillRegistry 尚未替换 Agent Workflow 当前的 Skill 装载路径；ConnectorRuntime 尚未统一接管 Portal 全部数据源路径。API 契约解析只接受显式提供的文件，OpenAPI/AsyncAPI 当前解析 JSON，GraphQL 使用受限 SDL 解析，Protobuf 不执行 protoc 或导入解析；dbt 与 Schema Registry 连接器仅导入显式提供的 JSON 导出文件，不连接实时服务。企业 SSO、OAuth/Secret Broker、分布式预算、跨节点连接器任务、Webhook 增量同步、企业 ACL 传播和防篡改审计仍需后续建设。
+
+
+- [P1 Tool Gateway, Approval and Evidence Contract](docs/P1-tool-gateway-approval-evidence.md)
+
+
+本轮 P1 全仓库写操作路径审计与控制台网络暴露修复见 [P1 Write-Path Audit](docs/P1-write-path-audit.md)。该审计明确区分 Agent 外部动作、Portal 本地治理状态、只读数据源同步、演示 Worker 与 HTTP/MCP 传输适配器；不将本地参考实现表述为企业级 IAM 或生产级统一写操作控制面。
+
+
+### P1 治理控制面验收与动作连接器
+
+- [P1 全仓库写操作路径审计](docs/P1-write-path-audit.md)
+- [P1 统一运行时与治理控制面验收清单](docs/P1-acceptance-checklist.md)
+- [动作连接器默认拒绝策略](policies/action-connectors.json)
+
+当前 HTTP/MCP 变更调用要求 Harness/Gateway 内部上下文、工具 ID allow-list 与幂等键；ToolRegistry 不允许外部直接调用。动作连接器注册表目前为空，尚未登记生产业务动作。审批支持 reserve/consumed/uncertain 本地状态，但外部副作用恢复、IAM、签名证据与多节点生产部署仍未完成。

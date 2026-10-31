@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "1.0.0",
+  "defaultDecision": "deny",
+  "description": "Reviewed registry for outbound action connectors. Read-only source connectors are registered separately.",
+  "connectors": []
+}
