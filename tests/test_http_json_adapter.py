@@ -3,6 +3,7 @@ from pathlib import Path
 
 from ontology_software_factory.adapters.http_json import HTTPSJSONAdapter, APIAdapterError
 from ontology_software_factory.tool_registry import ToolRegistry, ToolPolicyError
+from ontology_software_factory.harness import HarnessPrincipal, HarnessRuntime
 
 
 class FakeResponse:
@@ -39,10 +40,11 @@ class HTTPJSONAdapterTests(unittest.TestCase):
                 "POST", "tasks", payload, invocation_context=context
             )},
         )
-        self.assertEqual(registry.invoke(
-            "requirement-analyst", "documents.read", {"x": 1},
-            run_id="run", task_id="task", idempotency_key="task-1",
-        ), {"ok": True})
+        harness = HarnessRuntime(project_root=Path(__file__).resolve().parents[1], tool_registry=registry,
+            audit_path=Path(__file__).resolve().parents[1] / ".test-http-audit.jsonl")
+        principal = HarnessPrincipal("principal", "requirement-analyst", "tenant", "project")
+        self.assertEqual(harness.invoke_tool(principal, run_id="run", task_id="task",
+            tool_id="documents.read", payload={"x": 1}, idempotency_key="task-1"), {"ok": True})
         self.assertEqual(opener.request.get_header("Authorization"), "Bearer short-token")
         self.assertEqual(opener.request.get_header("Idempotency-key"), "task-1")
 
