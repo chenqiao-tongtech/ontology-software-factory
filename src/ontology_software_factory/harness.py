@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .tool_registry import ToolRegistry, ToolPolicyError, _approval_dispatch_grant
+from .tool_registry import ToolRegistry, ToolPolicyError, _approval_dispatch_grant, _harness_dispatch_grant
 
 
 class HarnessDenied(PermissionError):
@@ -333,6 +333,7 @@ class HarnessRuntime:
                 principal.role_id, tool_id, payload,
                 _approval_grant=_approval_dispatch_grant() if approved else None,
                 run_id=run_id, task_id=task_id, idempotency_key=idempotency_key,
+                _harness_grant=_harness_dispatch_grant(),
             )
             status = "succeeded"
             return result
