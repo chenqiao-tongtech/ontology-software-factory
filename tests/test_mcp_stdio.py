@@ -26,7 +26,7 @@ class MCPStdioTests(unittest.TestCase):
                 audit_path=Path(temp) / "audit.jsonl")
             principal = HarnessPrincipal("principal", "requirement-analyst", "tenant", "project")
             result = harness.invoke_tool(principal, run_id="run", task_id="task",
-                tool_id="documents.read", payload={"x": 1}, idempotency_key="mcp-call-1")
+                tool_id="documents.read", payload={"relativePath": "README.md"}, idempotency_key="mcp-call-1")
             self.assertFalse(result["isError"])
 
     def test_mcp_mutation_cannot_be_called_without_gateway_context(self):
