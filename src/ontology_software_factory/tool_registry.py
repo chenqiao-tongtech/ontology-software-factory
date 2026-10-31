@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 import hashlib
 import inspect
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 from jsonschema import Draft202012Validator
@@ -26,6 +26,17 @@ class ToolInvocationContext:
     tool_id: str
     idempotency_key: str | None
     payload_sha256: str
+    _gateway_token: object | None = field(default=None, repr=False, compare=False)
+
+
+_GATEWAY_DISPATCH_TOKEN = object()
+
+
+def require_gateway_context(context: object | None) -> ToolInvocationContext:
+    if not isinstance(context, ToolInvocationContext) or context._gateway_token is not _GATEWAY_DISPATCH_TOKEN:
+        raise ToolPolicyError("external tool side effects must be dispatched through Tool Gateway and Harness")
+    return context
+
 
 class ToolRegistry:
     """Default-deny in-process tool registry. Tool handlers are injected by trusted code."""
