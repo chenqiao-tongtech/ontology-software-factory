@@ -62,8 +62,10 @@ class MCPStdioClient:
         tools=result.get('tools')
         if not isinstance(tools,list): raise MCPTransportError('tools/list did not return a tools array')
         return tools
-    def call_tool(self, name: str, arguments: dict[str,Any], *, allowed_names: set[str], invocation_context: object | None = None) -> dict[str,Any]:
+    def call_tool(self, name: str, arguments: dict[str,Any], *, allowed_names: set[str], allowed_tool_ids: set[str], invocation_context: object | None = None) -> dict[str,Any]:
         context = require_gateway_context(invocation_context)
+        if context.tool_id not in allowed_tool_ids:
+            raise MCPTransportError('tool is not allow-listed for this MCP action connector')
         if context.idempotency_key is None:
             raise MCPTransportError('MCP tool invocation requires a Gateway idempotency key')
         if name not in allowed_names: raise MCPTransportError(f'MCP tool is not allow-listed: {name}')
