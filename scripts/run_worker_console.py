@@ -10,7 +10,7 @@ from urllib.parse import urlparse, unquote
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from ontology_software_factory.task_runtime import (  # noqa: E402
+from ontology_software_factory.console_security import is_loopback_bind, same_origin_request  # noqa: E402\nfrom ontology_software_factory.task_runtime import (  # noqa: E402
     IdempotencyConflict, SQLiteTaskStore, TaskWorker, echo_handler, sample_evidence_handler,
 )
 
@@ -112,7 +112,7 @@ def main() -> int:
         return 2
     print(f"Worker Console (demo) running at http://{args.host}:{args.port}")
     print(f"SQLite queue: {args.db}")
-    print("Security note: demo handlers only; localhost-only; no authentication or production task execution.")
+    print("Security note: demo handlers only; no authentication or production task execution.")\n    if not is_loopback_bind(args.host):\n        print("WARNING: unsafe non-loopback exposure explicitly enabled; network access controls are your responsibility.", file=sys.stderr)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
