@@ -446,6 +446,20 @@ class OpenAIAgentsRuntime:
         started = time.perf_counter()
         usage_record = None
         harness.assert_model_budget_available(run_id)
+        lifecycle_metadata = {
+            "workflowId": runtime_contract_lock.get("workflowId"),
+            "workflowVersion": runtime_contract_lock.get("workflowVersion"),
+            "ontologySnapshotId": binding.get("snapshotId"),
+            "ontologyDigest": binding.get("digest"),
+            "runtimeContractLockDigest": runtime_contract_lock.get("digest"),
+            "model": self.model,
+            "provider": "openai-agents",
+            "toolCount": len(allowed),
+        }
+        harness.record_lifecycle_event(
+            run_id=run_id, task_id=task_id, event_type="agent.run.started",
+            principal=principal, metadata=lifecycle_metadata, status="started",
+        )
         harness_token = self._active_harness_context.set((harness, principal, run_id, task_id))
         try:
             result = self._Runner.run_sync(agent, task_payload, max_turns=self.max_turns)
@@ -473,8 +487,22 @@ class OpenAIAgentsRuntime:
             if not isinstance(output, dict):
                 raise AgentContractError("Agent output must be a typed object")
             validate_agent_output(output, role=role, binding=binding)
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            harness.record_lifecycle_event(
+                run_id=run_id, task_id=task_id, event_type="agent.run.completed",
+                principal=principal,
+                metadata={**lifecycle_metadata, "latencyMs": latency_ms},
+                status="succeeded",
+            )
         except Exception as exc:
             LOGGER.error("agent.run.failed role_id=%s error_type=%s", role_id, type(exc).__name__)
+            harness.record_lifecycle_event(
+                run_id=run_id, task_id=task_id, event_type="agent.run.failed",
+                principal=principal,
+                metadata={**lifecycle_metadata, "errorType": type(exc).__name__,
+                          "latencyMs": int((time.perf_counter() - started) * 1000)},
+                status="failed",
+            )
             raise
         finally:
             self._active_harness_context.reset(harness_token)
