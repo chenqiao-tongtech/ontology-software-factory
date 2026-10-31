@@ -165,6 +165,61 @@ class ApprovalStore:
         return self.get(approval_id)  # type: ignore[return-value]
 
 
+    def reserve(self, approval_id: str, *, run_id: str, task_id: str, tenant_id: str,
+                tool_id: str, payload: dict[str, Any], executor: str,
+                now: float | None = None) -> dict[str, Any]:
+        """Reserve an approved action before dispatch; reservation is never auto-reusable."""
+        current = time.time() if now is None else float(now)
+        digest = payload_digest(payload)
+        with self._lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                row = self._conn.execute("SELECT * FROM tool_approvals WHERE approval_id=?", (approval_id,)).fetchone()
+                if row is None:
+                    raise ApprovalError("approval record does not exist")
+                expected = (run_id, task_id, tenant_id, tool_id, digest)
+                actual = (row["run_id"], row["task_id"], row["tenant_id"], row["tool_id"], row["payload_sha256"])
+                if actual != expected:
+                    raise ApprovalError("approval binding does not match this invocation")
+                if row["status"] != "approved" or row["consumed_at"] is not None:
+                    raise ApprovalError("approval is not approved or has already been reserved/consumed")
+                if row["expires_at"] <= current:
+                    self._conn.execute("UPDATE tool_approvals SET status='expired' WHERE approval_id=?", (approval_id,))
+                    self._conn.commit()
+                    raise ApprovalError("approval has expired")
+                if not executor or executor.casefold() in {row["requested_by"].casefold(), str(row["decided_by"]).casefold()}:
+                    raise ApprovalError("executor must be distinct from requester and approver")
+                self._conn.execute(
+                    "UPDATE tool_approvals SET status='reserved',consumed_at=? WHERE approval_id=? AND status='approved' AND consumed_at IS NULL",
+                    (current, approval_id),
+                )
+                if self._conn.total_changes < 1:
+                    raise ApprovalError("approval reservation lost a concurrent race")
+                self._conn.commit()
+            except ApprovalError:
+                if self._conn.in_transaction:
+                    self._conn.rollback()
+                raise
+            except Exception:
+                self._conn.rollback()
+                raise
+        return self.get(approval_id)  # type: ignore[return-value]
+
+    def finalize_reservation(self, approval_id: str, *, outcome: str) -> dict[str, Any]:
+        """Finalize a reserved action as consumed or uncertain; uncertain approvals stay blocked."""
+        if outcome not in {"consumed", "uncertain"}:
+            raise ApprovalError("reservation outcome must be consumed or uncertain")
+        with self._lock:
+            cursor = self._conn.execute(
+                "UPDATE tool_approvals SET status=? WHERE approval_id=? AND status='reserved'",
+                (outcome, approval_id),
+            )
+            if cursor.rowcount != 1:
+                raise ApprovalError("no active approval reservation to finalize")
+            self._conn.commit()
+        return self.get(approval_id)  # type: ignore[return-value]
+
+
 class InvocationError(RuntimeError):
     pass
 
