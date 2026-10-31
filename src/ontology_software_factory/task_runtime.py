@@ -240,6 +240,47 @@ class SQLiteTaskStore:
             row = self._conn.execute("SELECT * FROM worker_tasks WHERE task_id=?", (task_id,)).fetchone()
         return _task_from_row(row) if row else None
 
+    def cancel(self, task_id: str, *, actor: str, reason: str = "cancelled by operator",
+               now: float | None = None) -> dict[str, Any]:
+        """Cancel a queued/running task and fence off any late Worker completion.
+
+        A running Python handler is cooperative: this method cannot safely kill its
+        thread or reverse an external side effect. Clearing the lease and moving the
+        task to a terminal state ensures its eventual complete()/fail() call is rejected.
+        """
+        if not actor or not actor.strip():
+            raise ValueError("actor must be non-empty")
+        current = time.time() if now is None else float(now)
+        with self._lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                row = self._conn.execute("SELECT * FROM worker_tasks WHERE task_id=?", (task_id,)).fetchone()
+                if row is None:
+                    self._conn.rollback()
+                    raise TaskRuntimeError(f"unknown task: {task_id}")
+                task = _task_from_row(row)
+                if task["status"] in TERMINAL_STATUSES:
+                    self._conn.commit()
+                    return task
+                self._conn.execute(
+                    """UPDATE worker_tasks SET status='cancelled', updated_at=?,
+                       lease_owner=NULL, lease_expires_at=NULL, error_class='cancelled',
+                       error_message=?, revision=revision+1 WHERE task_id=?""",
+                    (current, (reason or "cancelled")[:4000], task_id),
+                )
+                self._event_locked(task_id, current, actor, "task.cancelled",
+                    "任务被取消；后续迟到的 Worker 结果将被拒绝",
+                    {"reason": (reason or "cancelled")[:1000], "previousStatus": task["status"],
+                     "previousWorker": task["leaseOwner"]})
+                updated = self._conn.execute("SELECT * FROM worker_tasks WHERE task_id=?", (task_id,)).fetchone()
+                self._conn.commit()
+                return _task_from_row(updated)
+            except TaskRuntimeError:
+                raise
+            except Exception:
+                self._conn.rollback()
+                raise
+
     def list_tasks(self, limit: int = 100) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute("SELECT * FROM worker_tasks ORDER BY updated_at DESC LIMIT ?", (max(1, min(limit, 500)),)).fetchall()
