@@ -383,6 +383,14 @@ class SQLiteTaskStore:
                         raise EvidenceContractError(str(exc)) from exc
                     if evidence_contract.get("taskId") != task_id:
                         raise EvidenceContractError("evidence contract taskId does not match the current Task")
+                    bound_run_id = task.get("payload", {}).get("runId") or task.get("payload", {}).get("workflowRunId")
+                    if bound_run_id and evidence_contract.get("runId") != bound_run_id:
+                        raise EvidenceContractError("evidence contract runId does not match the Task payload")
+                    task_input = task.get("payload", {}).get("input")
+                    if task_input is not None:
+                        expected_input_digest = _sha256(_canonical_json(task_input))
+                        if evidence_contract.get("inputSha256") != expected_input_digest:
+                            raise EvidenceContractError("evidence contract inputSha256 does not match the Task input")
                 existing = self._conn.execute("SELECT * FROM worker_task_results WHERE idempotency_key=?", (task["idempotencyKey"],)).fetchone()
                 if existing:
                     if existing["payload_sha256"] != task["payloadSha256"]:
