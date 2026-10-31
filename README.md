@@ -12,6 +12,8 @@
 - [系统解决什么问题](#系统解决什么问题)
 - [总体架构](#总体架构)
 - [系统设计说明书](docs/system-design-specification.md)
+- [五阶段实施与验收基线](docs/2026-10-31-five-phase-implementation-and-acceptance.md)
+- [S2 本体与语义契约子系统说明](docs/S2-ontology-and-semantic-contracts.md)
 - [主要功能](#主要功能)
 - [多智能体与本体自动发现](#多智能体与本体自动发现)
 - [项目结构](#项目结构)
@@ -109,6 +111,8 @@ OpenAI Agents Runtime 的工具调用、上下文大小和模型 Token 用量写
 ## 系统设计说明书
 
 系统现状、逻辑架构、子系统职责、核心数据对象、接口协议、安全边界、部署形态、第三方依赖和六项后续建设计划统一见 [《系统设计说明书》](docs/system-design-specification.md)。该文档以 2026-10-30 main 分支为基线，明确区分已实现、部分实现、规划建设和外部验收待完成能力。
+
+本轮五阶段的目标架构、已有模块映射、关键缺口和退出验收条件见 [《五阶段实施与验收基线》](docs/2026-10-31-five-phase-implementation-and-acceptance.md)。S2 的建模原理、契约机制、关键代码和边界见 [《S2 本体与语义契约子系统说明》](docs/S2-ontology-and-semantic-contracts.md)。
 
 ## 系统解决什么问题
 
