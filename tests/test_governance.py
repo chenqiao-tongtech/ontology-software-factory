@@ -102,10 +102,11 @@ class GovernanceTests(unittest.TestCase):
             captured.append((payload, context))
             return {"accepted": True}
         registry = ToolRegistry(ROOT, {"documents.read": adapter_handler})
-        result = registry.invoke(
-            "requirement-analyst", "documents.read", {"relativePath": "README.md"},
-            run_id="run-context", task_id="task-context", idempotency_key="idem-context",
-        )
+        principal = HarnessPrincipal("principal", "requirement-analyst", "tenant-a", "project-a")
+        harness = HarnessRuntime(project_root=ROOT, tool_registry=registry,
+            audit_path=Path(self.temp.name) / "context-audit.jsonl")
+        result = harness.invoke_tool(principal, run_id="run-context", task_id="task-context",
+            tool_id="documents.read", payload={"relativePath": "README.md"}, idempotency_key="idem-context")
         self.assertEqual(result, {"accepted": True})
         self.assertEqual(captured[0][1].run_id, "run-context")
         self.assertEqual(captured[0][1].task_id, "task-context")
