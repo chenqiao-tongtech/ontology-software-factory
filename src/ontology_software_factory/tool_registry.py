@@ -78,6 +78,7 @@ class ToolRegistry:
             payload_sha256=hashlib.sha256(
                 json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
             ).hexdigest(),
+            _gateway_token=_GATEWAY_DISPATCH_TOKEN,
         )
         try:
             inspect.signature(handler).bind(payload, context)
