@@ -42,8 +42,7 @@ class MCPStdioClient:
             self._next_id+=1; msg_id=self._next_id; waiter=queue.Queue(maxsize=1); self._pending[msg_id]=waiter
             payload={'jsonrpc':'2.0','id':msg_id,'method':method,'params':params or {}}
             try:
-                self.proc.stdin.write(json.dumps(payload,separators=(',',':'))+'
-'); self.proc.stdin.flush()
+                self.proc.stdin.write(json.dumps(payload,separators=(',',':'))+'\n'); self.proc.stdin.flush()
             except (OSError, BrokenPipeError) as exc:
                 self._pending.pop(msg_id,None); raise MCPTransportError('failed to write MCP request') from exc
         try: response=waiter.get(timeout=self.timeout)
