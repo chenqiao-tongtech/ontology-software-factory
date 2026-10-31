@@ -1,7 +1,8 @@
 """Configured-origin HTTPS JSON client with bounded response size and no redirects."""
 from __future__ import annotations
 import json,urllib.error,urllib.parse,urllib.request
-from typing import Any,Callable\nfrom ..tool_registry import require_gateway_context
+from typing import Any,Callable
+from ..tool_registry import require_gateway_context
 
 class APIAdapterError(RuntimeError): pass
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -18,7 +19,12 @@ class HTTPSJSONAdapter:
         self.timeout=float(timeout_seconds); self.max_response_bytes=int(max_response_bytes)
         if self.timeout<=0 or self.max_response_bytes<1: raise ValueError('timeouts and response limits must be positive')
         self.opener=opener or urllib.request.build_opener(_NoRedirect())
-    def request_json(self, method:str, relative_path:str, payload:dict[str,Any]|None=None, *, idempotency_key:str|None=None)->dict[str,Any]:
+    def request_json(self, method:str, relative_path:str, payload:dict[str,Any]|None=None, *, idempotency_key:str|None=None, invocation_context:object|None=None)->dict[str,Any]:
+        if method.upper() != 'GET':
+            context = require_gateway_context(invocation_context)
+            if idempotency_key and context.idempotency_key != idempotency_key:
+                raise ValueError('idempotency key must match the Gateway invocation context')
+            idempotency_key = context.idempotency_key
         if method.upper() not in {'GET','POST','PUT','PATCH','DELETE'}: raise ValueError('unsupported HTTP method')
         rel=urllib.parse.urlsplit(relative_path)
         if rel.scheme or rel.netloc or relative_path.startswith('/') or '..' in rel.path.split('/') or '\\' in relative_path:
