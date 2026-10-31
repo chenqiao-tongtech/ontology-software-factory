@@ -1,7 +1,7 @@
 """Configured-origin HTTPS JSON client with bounded response size and no redirects."""
 from __future__ import annotations
 import json,urllib.error,urllib.parse,urllib.request
-from typing import Any,Callable
+from typing import Any,Callable\nfrom ..tool_registry import require_gateway_context
 
 class APIAdapterError(RuntimeError): pass
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
