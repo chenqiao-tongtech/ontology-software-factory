@@ -134,7 +134,7 @@ class HarnessRuntime:
             "status": status, "metadata": safe_metadata,
         }
         self.audit_path.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(event, ensure_ascii=False, sort_keys=True) + "\\n"
+        line = json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
         with self._lock:
             with self.audit_path.open("a", encoding="utf-8") as handle:
                 handle.write(line)
