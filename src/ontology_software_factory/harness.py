@@ -104,6 +104,43 @@ class HarnessRuntime:
     def _usage_for(self, run_id: str) -> _Usage:
         return self._usage.setdefault(run_id, _Usage())
 
+    def record_lifecycle_event(
+        self, *, run_id: str, task_id: str, event_type: str,
+        principal: HarnessPrincipal, metadata: dict[str, Any] | None = None,
+        status: str = "recorded",
+    ) -> dict[str, Any]:
+        """Append a metadata-only lifecycle event to the same audit stream as tool calls.
+
+        Payloads, prompts, model outputs and secret values are deliberately excluded.
+        """
+        if not run_id or not task_id or not principal.principal_id:
+            raise HarnessDenied("principal, run_id and task_id are required")
+        safe_metadata = {
+            str(key): value for key, value in (metadata or {}).items()
+            if key in {
+                "workflowId", "workflowVersion", "ontologySnapshotId",
+                "ontologyDigest", "runtimeContractLockDigest", "model",
+                "provider", "latencyMs", "errorType", "toolCount",
+            }
+            and isinstance(value, (str, int, float, bool, type(None)))
+        }
+        event = {
+            "occurredAt": datetime.now(timezone.utc).isoformat(),
+            "eventType": str(event_type),
+            "runId": run_id, "taskId": task_id,
+            "principalId": principal.principal_id, "roleId": principal.role_id,
+            "tenantId": principal.tenant_id, "projectId": principal.project_id,
+            "policyVersion": self.policy_version, "policyDigest": self.policy_digest,
+            "status": status, "metadata": safe_metadata,
+        }
+        self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(event, ensure_ascii=False, sort_keys=True) + "\\n"
+        with self._lock:
+            with self.audit_path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+                handle.flush()
+        return event
+
     def usage(self, run_id: str) -> dict[str, int]:
         if self.usage_store is not None:
             return self.usage_store.get_harness_usage(run_id)
@@ -256,11 +293,12 @@ class HarnessRuntime:
                 )
                 if not approved:
                     raise HarnessDenied("valid independent approval record is required")
-            with self._lock:
-                usage = self._usage_for(run_id)
-                if usage.tool_calls >= min(self.budget.max_tool_calls, self.budget.max_run_tool_calls):
-                    status = "budget_exceeded"
-                    raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
+            # Read the authoritative persisted counter when configured. The in-memory
+            # cache alone is insufficient because a new HarnessRuntime may resume a Run.
+            current_tool_calls = self.usage(run_id)["toolCalls"]
+            if current_tool_calls >= min(self.budget.max_tool_calls, self.budget.max_run_tool_calls):
+                status = "budget_exceeded"
+                raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
             if self.usage_store is not None:
                 recorded = self._record_usage(
                     run_id=run_id, task_id=task_id, event_type="tool.invoked",
