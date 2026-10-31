@@ -30,7 +30,7 @@ class HTTPJSONAdapterTests(unittest.TestCase):
         opener = FakeOpener(FakeResponse(b'{"ok":true}'))
         adapter = HTTPSJSONAdapter(
             "https://api.example.invalid/v1", allowed_hosts={"api.example.invalid"},
-            token_provider=lambda: "short-token", opener=opener,
+            token_provider=lambda: "short-token", opener=opener, allowed_tool_ids={"documents.read"},
         )
         with self.assertRaises(ToolPolicyError):
             adapter.request_json("POST", "tasks", {"x": 1}, idempotency_key="task-1")
