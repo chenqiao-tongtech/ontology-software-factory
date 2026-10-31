@@ -293,24 +293,26 @@ class HarnessRuntime:
                 )
                 if not approved:
                     raise HarnessDenied("valid independent approval record is required")
-            # Read the authoritative persisted counter when configured. The in-memory
-            # cache alone is insufficient because a new HarnessRuntime may resume a Run.
-            current_tool_calls = self.usage(run_id)["toolCalls"]
-            if current_tool_calls >= min(self.budget.max_tool_calls, self.budget.max_run_tool_calls):
-                status = "budget_exceeded"
-                raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
+            # Persistent stores perform the budget check and counter increment atomically,
+            # and retain a budget_exceeded event for audit. A read-then-write check here
+            # would race across HarnessRuntime instances.
             if self.usage_store is not None:
                 recorded = self._record_usage(
                     run_id=run_id, task_id=task_id, event_type="tool.invoked",
                     tool_calls=1, tool_id=tool_id,
-                    limits={"toolCalls": self.budget.max_run_tool_calls},
+                    limits={"toolCalls": min(self.budget.max_tool_calls, self.budget.max_run_tool_calls)},
                     enforce_limits=True, metadata={"roleId": principal.role_id},
                 )
                 if not recorded.get("allowed"):
                     status = "budget_exceeded"
-                    raise HarnessBudgetExceeded("Workflow Run tool call budget exceeded")
-            with self._lock:
-                self._usage_for(run_id).tool_calls += 1
+                    raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
+            else:
+                with self._lock:
+                    usage = self._usage_for(run_id)
+                    if usage.tool_calls >= min(self.budget.max_tool_calls, self.budget.max_run_tool_calls):
+                        status = "budget_exceeded"
+                        raise HarnessBudgetExceeded("Agent/Run tool call budget exceeded")
+                    usage.tool_calls += 1
             result = self.tool_registry.invoke(
                 principal.role_id, tool_id, payload, approval_granted=approved
             )
