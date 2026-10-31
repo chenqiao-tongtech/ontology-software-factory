@@ -101,3 +101,32 @@ python -m unittest discover -s tests
 ## 6. 安全与部署边界
 
 本轮依旧是单机参考实现。SQLite usage ledger 不能替代多节点原子预算服务；本地 JSONL audit 文件不能替代防篡改审计存储；OpenAI Agents SDK 的执行接入不能证明其他 Agent Framework、MCP Server 或 Portal 路径均已受控。生产部署仍需要 IAM/SSO、PDP、Secret Broker、隔离执行器、集中式事件/证据存储和外部安全验收。
+
+
+## 7. 第二轮 P1 增量（2026-10-31）
+
+### 7.1 CI 失败定位与修复
+
+首次 PR CI 执行 364 项测试时发现两处问题：
+
+- 生命周期审计写入使用了双重转义换行，导致 JSONL 文件的多条事件被拼接为一行；已修正为标准单行 JSON + LF。
+- 持久化预算检查在调用 Usage Store 原子记账前做了 read-then-check，预算拒绝没有写入 `budget_exceeded` 账本事件；已改为持久化模式由 Usage Store 在同一原子操作中完成预算判断和计数，保留拒绝事件，并将单 Agent/Run 的有效限制设为两个配置上限的较小值。本地内存模式仍在锁内检查和递增。
+
+### 7.2 Task 取消与迟到结果隔离
+
+文件：`src/ontology_software_factory/task_runtime.py`
+
+新增 `SQLiteTaskStore.cancel(task_id, actor, reason)`：
+
+- 通过 SQLite `BEGIN IMMEDIATE` 事务完成状态检查、状态更新和事件写入。
+- 已进入终态的任务保持原状态，不重复取消。
+- 取消运行中任务时清除 Worker Lease，后续 Worker 调用 `complete()` 或 `fail()` 将因 Lease/状态不匹配而失败，不能复活任务。
+- 未知 Task 拒绝关闭（fail closed）。
+
+限制：Python Handler 线程不能被安全强杀。取消会阻止迟到结果提交，但不能撤销已经发生的外部副作用；Handler 必须检查取消/截止状态，并对外部写操作使用幂等键和补偿/对账机制。
+
+新增 `tests/test_task_runtime_cancellation.py` 覆盖排队任务取消、运行任务取消后的迟到完成拒绝和未知任务拒绝。
+
+### 7.3 第二轮验证
+
+以上修复和新增测试已推送到本 PR 分支。GitHub Actions 将对最新提交重新执行 `make validate` 与 `make test`。在新的 check run 完成前，不将 P1 标记为 CI 通过。
