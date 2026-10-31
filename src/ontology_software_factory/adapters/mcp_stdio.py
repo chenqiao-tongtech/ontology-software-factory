@@ -55,8 +55,7 @@ class MCPStdioClient:
         return result
     def notify(self, method: str, params: dict[str,Any] | None=None) -> None:
         if self.proc is None or self.proc.stdin is None: raise MCPTransportError('client is not started')
-        self.proc.stdin.write(json.dumps({'jsonrpc':'2.0','method':method,'params':params or {}},separators=(',',':'))+'
-'); self.proc.stdin.flush()
+        self.proc.stdin.write(json.dumps({'jsonrpc':'2.0','method':method,'params':params or {}},separators=(',',':'))+'\n'); self.proc.stdin.flush()
     def list_tools(self) -> list[dict[str,Any]]:
         result=self.request('tools/list',{})
         tools=result.get('tools')
