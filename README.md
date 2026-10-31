@@ -13,6 +13,7 @@
 - [总体架构](#总体架构)
 - [系统设计说明书](docs/system-design-specification.md)
 - [五阶段实施与验收基线](docs/2026-10-31-five-phase-implementation-and-acceptance.md)
+- [P1 Harness 运行时治理实施记录](docs/P1-harness-runtime-implementation.md)
 - [S2 本体与语义契约子系统说明](docs/S2-ontology-and-semantic-contracts.md)
 - [主要功能](#主要功能)
 - [多智能体与本体自动发现](#多智能体与本体自动发现)
