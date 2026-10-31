@@ -2,6 +2,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from ontology_software_factory.tool_registry import ToolRegistry, ToolPolicyError
+from ontology_software_factory.harness import HarnessPrincipal, HarnessRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,17 +22,22 @@ class AgentMetadataToolTests(unittest.TestCase):
         self.assertIn("dependencies.inspect", self.registry.effective_tools("security-reviewer"))
         self.assertNotIn("dependencies.inspect", self.registry.effective_tools("requirement-analyst"))
 
+    def _harness(self):
+        return HarnessRuntime(project_root=ROOT, tool_registry=self.registry, audit_path=ROOT / ".metadata-test-audit.jsonl")
+
     def test_tool_input_schemas_reject_extra_fields(self):
+        harness = self._harness()
+        principal = HarnessPrincipal("principal", "solution-architect", "tenant", "project")
         with self.assertRaises(ValueError):
-            self.registry.invoke("solution-architect", "ontology.definition.read",
-                                 {"conceptName": "Product", "path": "/etc/passwd"})
+            harness.invoke_tool(principal, run_id="r", task_id="t", tool_id="ontology.definition.read",
+                                payload={"conceptName": "Product", "path": "/etc/passwd"})
         with self.assertRaises(ValueError):
-            self.registry.invoke("ontology-discovery-agent", "source.catalog.read",
-                                 {"category": "unknown"})
+            harness.invoke_tool(HarnessPrincipal("principal", "ontology-discovery-agent", "tenant", "project"),
+                run_id="r", task_id="t", tool_id="source.catalog.read", payload={"category": "unknown"})
 
     def test_read_tool_invocation_uses_injected_handler(self):
-        result = self.registry.invoke("solution-architect", "ontology.definition.read",
-                                       {"conceptName": "Product"})
+        result = self._harness().invoke_tool(HarnessPrincipal("principal", "solution-architect", "tenant", "project"),
+            run_id="r", task_id="t", tool_id="ontology.definition.read", payload={"conceptName": "Product"})
         self.assertEqual(result, {"classes": []})
         self.assertEqual(self.calls[0][0], "ontology")
 
