@@ -189,11 +189,11 @@ class ApprovalStore:
                     raise ApprovalError("approval has expired")
                 if not executor or executor.casefold() in {row["requested_by"].casefold(), str(row["decided_by"]).casefold()}:
                     raise ApprovalError("executor must be distinct from requester and approver")
-                self._conn.execute(
+                cursor = self._conn.execute(
                     "UPDATE tool_approvals SET status='reserved',consumed_at=? WHERE approval_id=? AND status='approved' AND consumed_at IS NULL",
                     (current, approval_id),
                 )
-                if self._conn.total_changes < 1:
+                if cursor.rowcount != 1:
                     raise ApprovalError("approval reservation lost a concurrent race")
                 self._conn.commit()
             except ApprovalError:
