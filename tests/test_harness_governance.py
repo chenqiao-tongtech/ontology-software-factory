@@ -9,6 +9,7 @@ from ontology_software_factory.harness import (
     HarnessBudget, HarnessBudgetExceeded, HarnessPrincipal, HarnessRuntime,
 )
 from ontology_software_factory.tool_registry import ToolRegistry
+from ontology_software_factory.workflow_store import SQLiteWorkflowStore
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -76,6 +77,36 @@ class HarnessGovernanceTests(unittest.TestCase):
         self.assertEqual(len(usage.events), 1)
         self.assertTrue(usage.events[0]["enforce_limits"])
         self.assertEqual(usage.events[0]["limits"], {"toolCalls": 1})
+
+    def test_sqlite_usage_store_atomically_rejects_and_audits_budget_overrun(self):
+        calls = []
+        registry = ToolRegistry(ROOT, {"documents.read": lambda payload: calls.append(payload) or "ok"})
+        with tempfile.TemporaryDirectory() as temp:
+            store = SQLiteWorkflowStore(Path(temp) / "workflow.db")
+            try:
+                harness = HarnessRuntime(
+                    project_root=ROOT, tool_registry=registry,
+                    audit_path=Path(temp) / "audit.jsonl",
+                    budget=HarnessBudget(max_tool_calls=1, max_run_tool_calls=10),
+                    usage_store=store,
+                )
+                harness.invoke_tool(
+                    self.principal, run_id="run-sqlite", task_id="task-1",
+                    tool_id="documents.read", payload={"relativePath": "README.md"},
+                )
+                with self.assertRaises(HarnessBudgetExceeded):
+                    harness.invoke_tool(
+                        self.principal, run_id="run-sqlite", task_id="task-2",
+                        tool_id="documents.read", payload={"relativePath": "README.md"},
+                    )
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(store.get_harness_usage("run-sqlite")["toolCalls"], 1)
+                events = store.list_harness_usage_events("run-sqlite")
+                self.assertEqual(len(events), 2)
+                self.assertEqual(events[-1]["status"], "budget_exceeded")
+                self.assertEqual(events[-1]["toolCalls"], 1)
+            finally:
+                store.close()
 
     def test_lifecycle_audit_is_metadata_only_and_allowlisted(self):
         with tempfile.TemporaryDirectory() as temp:
