@@ -88,6 +88,18 @@ Evidence Store + Event Ledger
 
 当前 Harness、Tool Registry、Runtime Contract Lock 已有本地实现，但不能据此认定所有 Provider、Agent Framework、MCP Server、Workflow Handler 和 Portal 写操作都已统一经过控制面。SQLite 单机预算账本也不是分布式预算服务；本地 actor 字段不是企业身份认证。
 
+### 2.6 第一轮代码实施进度（2026-10-31）
+
+已在工作分支补充第一轮 P1 代码：
+
+- `harness.py`：Run 级工具预算在派发前读取持久化 usage ledger，避免 HarnessRuntime 重建后仅凭空内存计数放宽预算。
+- `harness.py`：新增 metadata-only 生命周期审计方法，白名单过滤 Workflow、本体快照、Runtime Contract Lock、Provider/Model、耗时和错误类型等字段。
+- `agent_runtime.py`：OpenAI Agents SDK 执行前后记录 `agent.run.started/completed/failed`，与 Tool Invocation 审计写入同一 JSONL 审计流。
+- `tests/test_harness_governance.py`：新增持久化预算拒绝和审计敏感字段排除测试。
+- `docs/P1-harness-runtime-implementation.md`：记录实现、执行链路、验证状态和剩余缺口。
+
+**本轮未完成 P1 全部退出条件。** MCP/HTTP/Portal 写路径统一接入、跨进程幂等、副作用去重、Run 取消传播、完整 Evidence Contract 和企业级审批身份仍待实施。新增测试尚未在本轮环境实际执行；必须以本地 `make validate`、`make test` 和后续 CI 结果为准。
+
 ## 3. P2：本体与知识图谱平台
 
 ### 3.1 目标架构
