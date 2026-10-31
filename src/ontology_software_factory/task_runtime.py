@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+
+from .governance import validate_evidence_contract
 from uuid import uuid4
 
 TERMINAL_STATUSES = {"succeeded", "failed", "dead_letter", "cancelled"}
@@ -366,6 +368,16 @@ class SQLiteTaskStore:
                     raise LeaseLost("cannot complete: Worker lease is missing, expired or no longer owned")
                 task = _task_from_row(row)
                 self._validate_evidence(task["requiredEvidence"], evidence)
+                evidence_contract = task.get("payload", {}).get("evidenceContract")
+                if evidence_contract is not None:
+                    if not isinstance(evidence_contract, dict):
+                        raise EvidenceContractError("task evidenceContract must be an object")
+                    try:
+                        validate_evidence_contract(evidence_contract, evidence)
+                    except ValueError as exc:
+                        raise EvidenceContractError(str(exc)) from exc
+                    if evidence_contract.get("taskId") != task_id:
+                        raise EvidenceContractError("evidence contract taskId does not match the current Task")
                 existing = self._conn.execute("SELECT * FROM worker_task_results WHERE idempotency_key=?", (task["idempotencyKey"],)).fetchone()
                 if existing:
                     if existing["payload_sha256"] != task["payloadSha256"]:
