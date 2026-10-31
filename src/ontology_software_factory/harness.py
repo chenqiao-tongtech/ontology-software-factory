@@ -303,12 +303,7 @@ class HarnessRuntime:
                     except PermissionError as exc:
                         raise HarnessDenied(str(exc)) from exc
                 else:
-                    # Compatibility path for older integrations. New high-impact
-                    # integrations should inject ApprovalStore and use its bound records.
-                    approved = bool(
-                        approval_ref
-                        and self.approval_validator(approval_ref, run_id, tool_id)
-                    )
+                    approved = False
                 if not approved:
                     raise HarnessDenied("valid independent approval record is required")
             # Persistent stores perform the budget check and counter increment atomically,
