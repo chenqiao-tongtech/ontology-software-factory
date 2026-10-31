@@ -34,7 +34,9 @@ class MCPStdioClient:
             msg_id=message.get('id')
             if isinstance(msg_id,int) and msg_id in self._pending:
                 self._pending[msg_id].put(message)
-    def request(self, method: str, params: dict[str,Any] | None=None) -> dict[str,Any]:
+    def request(self, method: str, params: dict[str,Any] | None=None, *, _gateway_context: object | None = None) -> dict[str,Any]:
+        if method == 'tools/call':
+            require_gateway_context(_gateway_context)
         if self.proc is None or self.proc.stdin is None: raise MCPTransportError('client is not started')
         with self._lock:
             self._next_id+=1; msg_id=self._next_id; waiter=queue.Queue(maxsize=1); self._pending[msg_id]=waiter
@@ -66,7 +68,7 @@ class MCPStdioClient:
         if context.idempotency_key is None:
             raise MCPTransportError('MCP tool invocation requires a Gateway idempotency key')
         if name not in allowed_names: raise MCPTransportError(f'MCP tool is not allow-listed: {name}')
-        return self.request('tools/call',{'name':name,'arguments':arguments})
+        return self.request('tools/call',{'name':name,'arguments':arguments},_gateway_context=context)
     def close(self) -> None:
         proc=self.proc; self.proc=None
         if proc is None: return
