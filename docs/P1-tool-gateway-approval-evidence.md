@@ -56,11 +56,11 @@ Agent / Workflow / Connector Adapter
 - 状态为 `started` 或 `failed`：拒绝自动再次派发，要求对账/人工确认。进程可能在外部系统完成写入后、写回本地账本前崩溃；自动重试会造成重复副作用。
 - 结果必须可 JSON 序列化才能缓存；非 JSON 结果保留 fail-closed 状态，不做不安全重放。
 
-Agent Runtime 已将工具函数回调改为经 ToolGateway，幂等键由 Run、Task、Tool 和规范化参数摘要生成。Harness 仍执行权限、预算、审批和审计；Gateway 不能绕过 Harness。
+Agent Runtime 已将工具函数回调改为经 ToolGateway，幂等键由 Run、Task、Tool 和规范化参数摘要生成。Gateway 将幂等键继续传入 Harness 和 ToolRegistry；可信 Adapter Handler 可声明第二个参数接收 ToolInvocationContext（Run/Task/Tool/Idempotency Key/Payload Digest），并将该键传给外部服务。单参数 Handler 保持兼容。Harness 仍执行权限、预算、审批和审计；Gateway 不能绕过 Harness。
 
 ### 2.3 外部适配器规则
 
-HTTP JSON Adapter 已支持 `Idempotency-Key` 请求头。接入外部写 API 时，可信 Handler 必须将 Gateway 提供的业务幂等键传给远端服务，并确认远端服务确实执行去重；仅发送请求头并不能证明远端支持幂等。
+HTTP JSON Adapter 已支持 `Idempotency-Key` 请求头。接入外部写 API 时，可信 Handler 从 ToolInvocationContext 读取幂等键，并传给 `HTTPSJSONAdapter.request_json(..., idempotency_key=...)`；同时确认远端服务确实执行去重。仅发送请求头并不能证明远端支持幂等。
 
 MCP 协议本身没有通用的工具调用幂等语义。MCP Server 必须在其工具 schema/业务 API 中定义幂等键，Adapter 将其映射到服务器端去重机制；若不支持，Gateway 只能提供本地防重复派发和人工对账保护，不能承诺跨系统 exactly-once。
 
