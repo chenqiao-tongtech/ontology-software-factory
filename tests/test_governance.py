@@ -117,6 +117,26 @@ class GovernanceTests(unittest.TestCase):
             )
         self.assertEqual(len(calls), 1)
 
+
+    def test_harness_marks_reserved_approval_uncertain_when_handler_raises(self):
+        approvals = ApprovalStore(self.db)
+        self.addCleanup(approvals.close)
+        payload = {"releaseId": "rel-fail", "targetEnvironment": "prod"}
+        approvals.request(approval_id="APR-fail", run_id="run-f", task_id="task-f",
+            tenant_id="tenant-a", tool_id="release.simulation.promote",
+            payload=payload, requested_by="requester")
+        approvals.decide("APR-fail", decision="approved", actor="approver", reason="reviewed")
+        def failing_handler(_payload):
+            raise RuntimeError("simulated remote timeout")
+        registry = ToolRegistry(ROOT, {"release.simulation.promote": failing_handler})
+        harness = HarnessRuntime(project_root=ROOT, tool_registry=registry,
+            audit_path=Path(self.temp.name) / "failure-audit.jsonl", approval_store=approvals)
+        principal = HarnessPrincipal("executor", "release-coordinator", "tenant-a", "project-a")
+        with self.assertRaises(RuntimeError):
+            harness.invoke_tool(principal, run_id="run-f", task_id="task-f",
+                tool_id="release.simulation.promote", payload=payload, approval_ref="APR-fail")
+        self.assertEqual(approvals.get("APR-fail")["status"], "uncertain")
+
     def test_tool_registry_passes_idempotency_context_to_adapter_handler(self):
         captured = []
         def adapter_handler(payload, context):
