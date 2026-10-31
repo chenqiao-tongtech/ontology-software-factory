@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ontology_software_factory.agent_runtime import OpenAIAgentsRuntime
 from ontology_software_factory.harness import HarnessPrincipal, HarnessRuntime
+from ontology_software_factory.governance import SQLiteInvocationLedger, ToolGateway
 from ontology_software_factory.tool_registry import ToolRegistry
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,8 +39,11 @@ class AgentRuntimeHarnessTests(unittest.TestCase):
                 principal, run_id="RUN-HARNESS", task_id="sf:task:test-harness",
                 shared={"tenant_id": "tenant-test", "project_id": "project-test", "task_id": "sf:task:test-harness"},
             )
+            ledger = SQLiteInvocationLedger(Path(temp) / "invocations.sqlite3")
+            self.addCleanup(ledger.close)
+            gateway = ToolGateway(harness, ledger)
             token = runtime._active_harness_context.set((
-                harness, principal, "RUN-HARNESS", "sf:task:test-harness"
+                gateway, principal, "RUN-HARNESS", "sf:task:test-harness"
             ))
             try:
                 result = tools["documents.read"]("docs/architecture-principles-and-constraints.md")
