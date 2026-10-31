@@ -96,6 +96,22 @@ class GovernanceTests(unittest.TestCase):
             )
         self.assertEqual(len(calls), 1)
 
+    def test_tool_registry_passes_idempotency_context_to_adapter_handler(self):
+        captured = []
+        def adapter_handler(payload, context):
+            captured.append((payload, context))
+            return {"accepted": True}
+        registry = ToolRegistry(ROOT, {"documents.read": adapter_handler})
+        result = registry.invoke(
+            "requirement-analyst", "documents.read", {"relativePath": "README.md"},
+            run_id="run-context", task_id="task-context", idempotency_key="idem-context",
+        )
+        self.assertEqual(result, {"accepted": True})
+        self.assertEqual(captured[0][1].run_id, "run-context")
+        self.assertEqual(captured[0][1].task_id, "task-context")
+        self.assertEqual(captured[0][1].idempotency_key, "idem-context")
+        self.assertEqual(len(captured[0][1].payload_sha256), 64)
+
     def test_tool_gateway_replays_completed_result_without_second_dispatch(self):
         class FakeHarness:
             def __init__(self):
