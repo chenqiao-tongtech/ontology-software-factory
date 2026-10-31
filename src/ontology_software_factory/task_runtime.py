@@ -413,6 +413,8 @@ class SQLiteTaskStore:
                 self._conn.commit()
                 return _task_from_row(result)
             except (LeaseLost, IdempotencyConflict, EvidenceContractError):
+                if self._conn.in_transaction:
+                    self._conn.rollback()
                 raise
             except Exception:
                 self._conn.rollback()
