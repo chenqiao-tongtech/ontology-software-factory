@@ -551,3 +551,6 @@ make test
 
 
 - [P1 Tool Gateway, Approval and Evidence Contract](docs/P1-tool-gateway-approval-evidence.md)
+
+
+本轮 P1 全仓库写操作路径审计与控制台网络暴露修复见 [P1 Write-Path Audit](docs/P1-write-path-audit.md)。该审计明确区分 Agent 外部动作、Portal 本地治理状态、只读数据源同步、演示 Worker 与 HTTP/MCP 传输适配器；不将本地参考实现表述为企业级 IAM 或生产级统一写操作控制面。
