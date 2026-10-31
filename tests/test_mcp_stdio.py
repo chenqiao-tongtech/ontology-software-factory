@@ -42,7 +42,7 @@ class MCPStdioTests(unittest.TestCase):
         command = [sys.executable, str(ROOT / "tests/fixtures/fake_mcp_server.py")]
         with MCPStdioClient(command, cwd=ROOT, timeout=2) as client:
             client.start()
-            with self.assertRaises(MCPTransportError):
+            with self.assertRaises(ToolPolicyError):
                 client.call_tool("exec", {}, allowed_names={"echo"}, allowed_tool_ids={"documents.read"},
                     invocation_context=object())
 
