@@ -124,8 +124,7 @@ def main() -> int:
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("
-Shutting down...")
+        print("\nShutting down...")
     finally:
         server.server_close()
         store.close()
